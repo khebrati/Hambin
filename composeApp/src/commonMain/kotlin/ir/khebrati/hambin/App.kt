@@ -22,6 +22,7 @@ import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.resources.vectorResource
 import org.koin.core.Koin
 import org.koin.core.context.KoinContext
+import org.koin.compose.koinInject
 
 @Composable
 fun App(koin: Koin) = AppTheme {
