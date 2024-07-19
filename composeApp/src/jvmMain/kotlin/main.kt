@@ -4,6 +4,7 @@ import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import java.awt.Dimension
 import ir.khebrati.hambin.App
+import ir.khebrati.hambin.di.initKoin
 
 fun main() = application {
     Window(
@@ -12,6 +13,7 @@ fun main() = application {
         onCloseRequest = ::exitApplication,
     ) {
         window.minimumSize = Dimension(350, 600)
-        App()
+        val koinApplication = initKoin(emptyList())
+        App(koinApplication.koin)
     }
 }

@@ -1,12 +1,16 @@
 package ir.khebrati.hambin
 
+import android.app.Activity
 import android.app.Application
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import ir.khebrati.hambin.di.initKoin
+import org.koin.dsl.module
 
 class AndroidApp : Application() {
     companion object {
@@ -23,16 +27,14 @@ class AppActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContent { App() }
+        val koin = initKoin(
+            listOf(
+                module {
+                    single<Context> { applicationContext }
+                    single<Activity> { this@AppActivity }
+                }
+            )
+        ).koin
+        setContent { App(koin = koin) }
     }
-}
-
-internal actual fun openUrl(url: String?) {
-    val uri = url?.let { Uri.parse(it) } ?: return
-    val intent = Intent().apply {
-        action = Intent.ACTION_VIEW
-        data = uri
-        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    }
-    AndroidApp.INSTANCE.startActivity(intent)
 }

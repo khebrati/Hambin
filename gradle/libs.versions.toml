@@ -14,7 +14,7 @@ composeIcons = "1.1.0"
 kotlinx-serialization = "1.7.0-RC"
 kotlinx-datetime = "0.6.0"
 multiplatformSettings = "1.1.1"
-koin = "3.6.0-wasm-alpha2"
+koin = "3.5.6"
 sqlDelight = "2.0.2"
 
 [libraries]
