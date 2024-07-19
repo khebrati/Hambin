@@ -4,7 +4,7 @@ import androidx.compose.runtime.*
 import cafe.adriel.voyager.navigator.Navigator
 import io.github.aakira.napier.DebugAntilog
 import io.github.aakira.napier.Napier
-import ir.khebrati.hambin.presentation.HomeScreen
+import ir.khebrati.hambin.presentation.homeScreen.HomeScreen
 import ir.khebrati.hambin.theme.AppTheme
 import org.koin.core.Koin
 
