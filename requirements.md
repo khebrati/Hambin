@@ -20,9 +20,7 @@ Syncronization rules:
 2. Only room owner can fully abort the stream for everyone and start with another URL in that same room.
 2. When a stream is started, everyone can pause, play, forward/backward for themselves. This does not 
 effect the streaming process for others (streaming is done on device for each client.)
-3. There is a button that is used for synchronization. Whenever anyone clicks it,
-their playback is fast forwarded to the first person (being ahead of the rest in playback)
-
+3. A Sync button is available. When tapped, the user's playback is fast forwarded to match the playback position of the leading participant (the one currently furthest ahead).
 Other notes:
 1. Users are able to speak in the chatroom and when they do so there should be an indicator on their icon.
 2. Video playback has play/pause forware/backward and volume set capabilities. 
