@@ -9,7 +9,21 @@ export type StreamStatus =
   | 'buffering'
   | 'error';
 
-export type AvatarId = 'comet' | 'mint' | 'sunny' | 'berry' | 'cloud' | 'ember';
+export type AvatarId =
+  | 'comet'
+  | 'mint'
+  | 'sunny'
+  | 'berry'
+  | 'cloud'
+  | 'ember'
+  | 'nova'
+  | 'orbit'
+  | 'prism'
+  | 'echo'
+  | 'spark'
+  | 'bloom'
+  | 'pixel'
+  | 'luna';
 
 export interface Identity {
   name: string;
@@ -42,4 +56,3 @@ export interface PreviewState {
   streamStatus?: StreamStatus;
   identity?: Partial<Identity>;
 }
-

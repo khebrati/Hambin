@@ -47,27 +47,6 @@
   --app-color-scene-station: #f2e9e7;
   --app-color-scene-window: #f7bb4d;
 
-  --app-avatar-comet-bg: #ffced4;
-  --app-avatar-comet-face: #9f5a46;
-  --app-avatar-comet-hair: #341f2d;
-  --app-avatar-mint-bg: #b9e9dd;
-  --app-avatar-mint-face: #6c4438;
-  --app-avatar-mint-hair: #172f2a;
-  --app-avatar-sunny-bg: #ffe290;
-  --app-avatar-sunny-face: #b96c42;
-  --app-avatar-sunny-hair: #5a2d1e;
-  --app-avatar-berry-bg: #d9c7ef;
-  --app-avatar-berry-face: #744234;
-  --app-avatar-berry-hair: #42295d;
-  --app-avatar-cloud-bg: #c9dfed;
-  --app-avatar-cloud-face: #be7657;
-  --app-avatar-cloud-hair: #253845;
-  --app-avatar-ember-bg: #f5c4a4;
-  --app-avatar-ember-face: #76402f;
-  --app-avatar-ember-hair: #6c221f;
-  --app-avatar-line: #2f2527;
-  --app-avatar-eye: #21191a;
-
   --md-ref-typeface-brand: "Roboto Flex", Roboto, "Segoe UI", sans-serif;
   --md-ref-typeface-plain: "Roboto Flex", Roboto, "Segoe UI", sans-serif;
 
@@ -712,12 +691,9 @@ strong {
   letter-spacing: 0;
 }
 
-/* Illustrated avatars */
+/* Image avatars */
 .avatar {
   --avatar-size: 56px;
-  --avatar-bg: var(--app-avatar-comet-bg);
-  --avatar-face: var(--app-avatar-comet-face);
-  --avatar-hair: var(--app-avatar-comet-hair);
   position: relative;
   width: var(--avatar-size);
   height: var(--avatar-size);
@@ -725,9 +701,8 @@ strong {
   display: inline-block;
   border: 2px solid var(--md-sys-color-surface-container-lowest);
   border-radius: var(--md-sys-shape-corner-full);
-  background: var(--avatar-bg);
+  background: var(--md-sys-color-surface-container-high);
   overflow: hidden;
-  isolation: isolate;
   transition:
     transform var(--md-sys-motion-duration-medium) var(--md-sys-motion-easing-emphasized),
     border-radius var(--md-sys-motion-duration-medium) var(--md-sys-motion-easing-emphasized);
@@ -741,166 +716,14 @@ strong {
   --avatar-size: 76px;
 }
 
-.avatar--mint {
-  --avatar-bg: var(--app-avatar-mint-bg);
-  --avatar-face: var(--app-avatar-mint-face);
-  --avatar-hair: var(--app-avatar-mint-hair);
-}
-
-.avatar--sunny {
-  --avatar-bg: var(--app-avatar-sunny-bg);
-  --avatar-face: var(--app-avatar-sunny-face);
-  --avatar-hair: var(--app-avatar-sunny-hair);
-}
-
-.avatar--berry {
-  --avatar-bg: var(--app-avatar-berry-bg);
-  --avatar-face: var(--app-avatar-berry-face);
-  --avatar-hair: var(--app-avatar-berry-hair);
-}
-
-.avatar--cloud {
-  --avatar-bg: var(--app-avatar-cloud-bg);
-  --avatar-face: var(--app-avatar-cloud-face);
-  --avatar-hair: var(--app-avatar-cloud-hair);
-}
-
-.avatar--ember {
-  --avatar-bg: var(--app-avatar-ember-bg);
-  --avatar-face: var(--app-avatar-ember-face);
-  --avatar-hair: var(--app-avatar-ember-hair);
-}
-
-.avatar__backdrop {
-  position: absolute;
-  inset: 60% -15% -20%;
-  z-index: -1;
-  border-radius: 50% 50% 0 0;
-  background: var(--avatar-hair);
-  opacity: 0.5;
-}
-
-.avatar__face {
-  position: absolute;
-  width: 58%;
-  height: 64%;
-  left: 21%;
-  top: 21%;
-  border-radius: 46% 46% 48% 48%;
-  background: var(--avatar-face);
-  border: max(1px, calc(var(--avatar-size) * 0.026)) solid var(--app-avatar-line);
-}
-
-.avatar__hair {
-  position: absolute;
-  inset: -12% -10% 62%;
-  border-radius: 50% 45% 35% 35%;
-  background: var(--avatar-hair);
-}
-
-.avatar--mint .avatar__hair {
-  inset: -14% -16% 56%;
-  border-radius: 42% 58% 28% 48%;
-}
-
-.avatar--sunny .avatar__hair {
-  inset: -8% -8% 60%;
-  border-radius: 60% 35% 44% 30%;
-}
-
-.avatar--berry .avatar__hair {
-  inset: -18% -14% 50%;
-  border-radius: 50%;
-}
-
-.avatar--cloud .avatar__hair {
-  inset: -16% -16% 58%;
-  border-radius: 38% 62% 36% 45%;
-}
-
-.avatar--ember .avatar__hair {
-  inset: -18% -8% 57%;
-  border-radius: 60% 30% 48% 30%;
-}
-
-.avatar__eye {
-  position: absolute;
-  width: 10%;
-  aspect-ratio: 1;
-  top: 49%;
-  border-radius: var(--md-sys-shape-corner-full);
-  background: var(--app-avatar-eye);
-}
-
-.avatar__eye--left {
-  left: 26%;
-}
-
-.avatar__eye--right {
-  right: 26%;
-}
-
-.avatar__nose {
-  position: absolute;
-  width: 7%;
-  height: 8%;
-  left: 47%;
-  top: 60%;
-  border-radius: var(--md-sys-shape-corner-full);
-  background: color-mix(in srgb, var(--avatar-face) 70%, var(--app-avatar-line));
-}
-
-.avatar__smile {
-  position: absolute;
-  width: 24%;
-  height: 12%;
-  left: 38%;
-  top: 72%;
-  border-bottom: max(1px, calc(var(--avatar-size) * 0.027)) solid var(--app-avatar-line);
-  border-radius: 0 0 50% 50%;
-}
-
-.avatar__ear {
-  position: absolute;
-  width: 12%;
-  height: 16%;
-  top: 49%;
-  border-radius: var(--md-sys-shape-corner-full);
-  background: var(--avatar-face);
-  border: 1px solid var(--app-avatar-line);
-}
-
-.avatar__ear--left {
-  left: 17%;
-}
-
-.avatar__ear--right {
-  right: 17%;
-}
-
-.avatar__accessory {
-  position: absolute;
-  width: 24%;
-  height: 10%;
-  right: 7%;
-  top: 18%;
-  border-radius: var(--md-sys-shape-corner-full);
-  background: var(--md-sys-color-tertiary);
-  transform: rotate(24deg);
-}
-
-.avatar--mint .avatar__accessory {
-  background: var(--md-sys-color-primary);
-  transform: rotate(-20deg);
-  left: 6%;
-  right: auto;
-}
-
-.avatar--cloud .avatar__accessory {
-  width: 18%;
-  height: 18%;
-  border-radius: var(--md-sys-shape-corner-small);
-  background: var(--md-sys-color-secondary);
+.avatar__image {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border-radius: inherit;
+  object-fit: cover;
+  object-position: center;
+  user-select: none;
 }
 
 .avatar.is-selected {
@@ -914,10 +737,6 @@ strong {
   border: 4px solid var(--app-color-speaker);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--app-color-speaker) 24%, transparent);
   animation: speaker-pulse 1.6s var(--md-sys-motion-easing-emphasized) infinite;
-}
-
-.avatar.is-speaking > * {
-  overflow: hidden;
 }
 
 @keyframes speaker-pulse {
@@ -1314,38 +1133,6 @@ strong {
 .manager-visual__seat--three {
   left: calc(50% + 23px);
   background: var(--md-sys-color-tertiary);
-}
-
-.manager-visual--join {
-  display: grid;
-  place-items: center;
-  background: var(--md-sys-color-tertiary-container);
-  color: var(--md-sys-color-on-tertiary-container);
-  border: 2px dashed var(--md-sys-color-tertiary);
-}
-
-.manager-visual--join strong {
-  font-family: var(--md-ref-typeface-brand);
-  font-size: 2rem;
-  line-height: 2.5rem;
-  letter-spacing: 0;
-}
-
-.ticket-cut {
-  position: absolute;
-  width: 36px;
-  height: 36px;
-  top: calc(50% - 18px);
-  border-radius: var(--md-sys-shape-corner-full);
-  background: var(--md-sys-color-surface-container-low);
-}
-
-.ticket-cut--left {
-  left: -20px;
-}
-
-.ticket-cut--right {
-  right: -20px;
 }
 
 /* Cinema */

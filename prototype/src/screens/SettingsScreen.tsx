@@ -1,6 +1,6 @@
 import { Check } from 'lucide-react';
 import { useState } from 'react';
-import { avatarOptions } from '../data/fakeRepository';
+import { avatarOptions } from '../data/avatarCatalog';
 import type { Identity } from '../types';
 import { AppBar } from '../components/AppBar';
 import { Avatar } from '../components/Avatar';
@@ -125,4 +125,3 @@ export function SettingsScreen({
     </div>
   );
 }
-

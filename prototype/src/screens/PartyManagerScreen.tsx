@@ -97,11 +97,6 @@ export function PartyManagerScreen({
           </section>
         ) : (
           <section className="manager-panel" aria-labelledby="join-title">
-            <div className="manager-visual manager-visual--join" aria-hidden="true">
-              <span className="ticket-cut ticket-cut--left" />
-              <span className="ticket-cut ticket-cut--right" />
-              <strong>MOON-42</strong>
-            </div>
             <p className="eyebrow">A friend has the code</p>
             <h2 id="join-title">Step into their room</h2>
             <TextField
@@ -137,4 +132,3 @@ export function PartyManagerScreen({
     </div>
   );
 }
-

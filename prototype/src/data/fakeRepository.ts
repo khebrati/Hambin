@@ -3,15 +3,6 @@ import type { Identity, Party, Participant } from '../types';
 export const sampleVideoUrl =
   'https://media.example.org/films/aurora-station.mp4';
 
-export const avatarOptions = [
-  { id: 'comet', label: 'Comet' },
-  { id: 'mint', label: 'Mint' },
-  { id: 'sunny', label: 'Sunny' },
-  { id: 'berry', label: 'Berry' },
-  { id: 'cloud', label: 'Cloud' },
-  { id: 'ember', label: 'Ember' },
-] as const;
-
 const delay = (duration: number) =>
   new Promise<void>((resolve) => window.setTimeout(resolve, duration));
 
@@ -85,4 +76,3 @@ export const fakePartyRepository = {
     await delay(520);
   },
 };
-

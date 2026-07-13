@@ -1,4 +1,5 @@
 import { Mic, MicOff, Star } from 'lucide-react';
+import { avatarImageById } from '../data/avatarCatalog';
 import type { AvatarId, Participant } from '../types';
 
 interface AvatarProps {
@@ -22,17 +23,14 @@ export function Avatar({
       role="img"
       aria-label={`${label}${speaking ? ', speaking' : ''}`}
     >
-      <span className="avatar__backdrop" />
-      <span className="avatar__ear avatar__ear--left" />
-      <span className="avatar__ear avatar__ear--right" />
-      <span className="avatar__face">
-        <span className="avatar__hair" />
-        <span className="avatar__eye avatar__eye--left" />
-        <span className="avatar__eye avatar__eye--right" />
-        <span className="avatar__nose" />
-        <span className="avatar__smile" />
-      </span>
-      <span className="avatar__accessory" />
+      <img
+        className="avatar__image"
+        src={avatarImageById[avatarId]}
+        alt=""
+        aria-hidden="true"
+        draggable={false}
+        decoding="async"
+      />
     </span>
   );
 }
@@ -69,4 +67,3 @@ export function ParticipantItem({ participant }: { participant: Participant }) {
     </div>
   );
 }
-
