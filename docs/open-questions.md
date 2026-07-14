@@ -60,6 +60,18 @@ Resolved questions are preserved with their answers for traceability.
    - Answer: No. Proceed only with English in designs.
    - Design decision affected: Current design examples can be English-only. This conflicts with repository guidance that asks for RTL support, so RTL status remains a project-level uncertainty.
 
+9. [Resolved] Should the product include an invite/share flow?
+   - Answer: Yes. Current party members can use a prominent action to copy the party code or a mock invite link.
+   - Design decision affected: The party screen needs an accessible invite/share surface with copied and copy-failure feedback, without requiring production deep links or native share infrastructure.
+
+10. [Resolved] Should invitees see the room before joining?
+   - Answer: Yes. Show party title, current owner status, participant count, and stream status before the invitee confirms or cancels joining.
+   - Design decision affected: Joining becomes a two-step flow with loading, available, owner-absent, full, ended/unavailable, and join-confirmation states.
+
+11. [Resolved] What happens when the room owner leaves?
+   - Answer: The room remains active without an owner until that same owner rejoins. Other users retain local playback but cannot start, replace, or abort the shared video. Ownership does not transfer.
+   - Design decision affected: Add a persistent owner-absent room state, keep owner-only controls unavailable, and restore them only when the original owner returns.
+
 ## Can be deferred
 
 1. What exact name length, character rules, and avatar limits should settings enforce?
@@ -77,13 +89,10 @@ Resolved questions are preserved with their answers for traceability.
 5. Should the app show video title, thumbnail, duration, or loading metadata?
    - Affects the populated player state and pre-play preview.
 
-6. What should happen when the room owner leaves a party?
-   - Affects ownership transfer, room lifecycle, and confirmation copy.
-
-7. What voice-chat control model should be used: open mic, mute/unmute, push-to-talk, or listen-only until enabled?
+6. What voice-chat control model should be used: open mic, mute/unmute, push-to-talk, or listen-only until enabled?
    - Affects party screen control density, permission prompts, accessibility labels, and speaking indicators.
 
-8. What should the screen show immediately after the owner aborts a stream?
+7. What should the screen show immediately after the owner aborts a stream?
    - Affects whether the player becomes an aborted state, an empty URL-entry state, or a transition state.
 
 ## Remaining Uncertainty Summary
@@ -91,5 +100,5 @@ Resolved questions are preserved with their answers for traceability.
 - Production runtime is still unspecified, even though the design target is cross-platform mobile.
 - RTL is currently excluded from designs, but repository guidance still asks for RTL support.
 - Voice-chat details are not yet defined beyond "voice only."
-- Party ownership lifecycle is not fully defined.
+- Initial owner assignment is still inferred from party creation, but the owner-absent and returning-owner lifecycle is defined.
 - Direct video URL validation rules remain undefined.

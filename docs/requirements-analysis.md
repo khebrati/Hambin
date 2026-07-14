@@ -51,6 +51,9 @@ Existing requirement IDs are preserved. New confirmed requirements from stakehol
 | REQ-039 | Playback controls should be custom-designed based on Material Design 3 Expressive guidelines rather than using default platform/browser controls as the primary design. | Visual requirement | Explicit | REQ-013, REQ-026, REQ-027, REQ-028, REQ-029 | Implementation feasibility is outside this design-analysis phase. | Relevant |
 | REQ-040 | The design should not include text chat. | Functional requirement | Explicit | REQ-024, REQ-025 | None. | Relevant |
 | REQ-041 | Current design work should proceed only in English and does not need RTL examples now. | Content requirement | Explicit | REQ-006, REQ-030 | This conflicts with repository guidance to support RTL; whether RTL is deferred or removed remains uncertain. | Relevant |
+| REQ-042 | Party members can invite others through a prominent share action that copies the party code or a mock invite link. | Functional requirement | Explicit | REQ-010, REQ-011, REQ-031 | Native share integration and production deep linking are outside the prototype scope. | Relevant |
+| REQ-043 | Before joining, an invitee can preview the party title, current owner status, participant count, and stream status, then confirm or cancel joining. | Navigation requirement | Explicit | REQ-010, REQ-023, REQ-042 | The preview uses local mock data and does not require production room lookup. | Relevant |
+| REQ-044 | If the room owner leaves, the room remains active without an owner until that same owner rejoins. Participants retain local playback controls but cannot start, replace, or abort the shared video while the owner is absent; the returning owner regains owner controls. | Business rule | Explicit | REQ-015, REQ-016, REQ-017, REQ-018, REQ-037 | No ownership transfer or temporary promotion occurs. | Relevant |
 
 ## Dependencies
 
@@ -64,6 +67,9 @@ Existing requirement IDs are preserved. New confirmed requirements from stakehol
 - REQ-034 and REQ-037 depend on being inside an active party.
 - REQ-039 depends on the Material 3 Expressive design direction in REQ-029.
 - REQ-030 and REQ-041 are in tension: the prototype should retain accessibility-minded design, but current visual examples are English-only.
+- REQ-042 leads into REQ-043 when a recipient opens an invite link or enters a valid party code.
+- REQ-043 depends on enough mock room information to show a meaningful preview before the join is confirmed.
+- REQ-044 preserves the local controls in REQ-017 and REQ-018 while suspending the owner-only controls in REQ-015 and REQ-016.
 
 ## Resolved Conflicts and Clarifications
 
@@ -77,13 +83,15 @@ Existing requirement IDs are preserved. New confirmed requirements from stakehol
 - Playback controls should be custom-designed using Material Design 3 Expressive guidance.
 - Local playback position differences should not be visible to users.
 - Current design work should proceed only in English without RTL examples.
+- Party members can share the party code or a mock invite link through a prominent invite action.
+- Invitees see a room preview before joining, including party title, owner status, participant count, and stream status.
+- When the owner leaves, the room becomes ownerless without transferring privileges; only the returning original owner restores owner controls.
 
 ## Remaining Uncertainty
 
 - Whether the cross-platform mobile prototype should be implemented as React/Vite mobile web, React Native, Flutter, or another cross-platform runtime later.
 - Party ID format, expiration behavior, and exact error copy.
-- Owner assignment and whether ownership can transfer.
-- What happens when the room owner leaves a party.
+- Initial owner assignment remains inferred from party creation; ownership does not transfer after the owner leaves.
 - Exact visual state after owner aborts a stream.
 - Direct video URL format support and validation rules.
 - Voice chat details: mute, push-to-talk/open mic, permission prompts, speaking indicator duration, and failure states.

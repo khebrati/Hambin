@@ -25,5 +25,10 @@ Other notes:
 1. Users are able to speak in the chatroom and when they do so there should be an indicator on their icon.
 2. Video playback has play/pause forware/backward and volume set capabilities. 
 
+Confirmed additions:
+1. Party members can invite others by copying the party ID or a shareable prototype link.
+2. Before joining, users see a room preview with the party title, owner status, participant count, and current stream status, then confirm or cancel joining.
+3. If the room owner leaves, the room stays active without an owner. Remaining users keep their local playback controls but cannot start, replace, or abort the shared video. Ownership does not transfer; owner controls return only when the same owner rejoins.
+
 
 

@@ -29,11 +29,13 @@ These previous assumptions are no longer active assumptions because stakeholder 
 | ASM-010 | Confirmed | REQ-007, REQ-023 | "Logo" means personal avatar from a fun illustrated cartoonic avatar list. |
 | ASM-011 | Confirmed | REQ-024, REQ-025, REQ-040 | Chatroom is voice-only; text chat should not be designed. |
 | ASM-013 | Superseded | REQ-041 | Current designs should proceed only in English and do not need RTL examples now. |
+| ASM-017 | Confirmed | REQ-042, REQ-043 | Parties support invite/share and a room preview before an invitee confirms joining. |
+| ASM-018 | Confirmed | REQ-044 | The room remains ownerless after the owner leaves; permissions do not transfer and return only with the same owner. |
 
 ## Remaining Uncertainty
 
 - Production runtime for the cross-platform mobile product remains undefined.
-- Party owner lifecycle is undefined after owner leave, disconnect, or transfer.
+- Initial owner assignment remains inferred from party creation; behavior for an owner disconnect without an explicit leave remains undefined.
 - Exact post-abort stream state remains undefined.
 - Voice chat interaction model is undefined beyond "voice only."
 - Direct video URL validation rules and supported formats remain undefined.

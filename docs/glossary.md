@@ -10,9 +10,12 @@
 | Simple name | The user's chosen display name. | Length, uniqueness, and character rules are unspecified. |
 | Logo | A chosen visual identity item. | Could mean user avatar, room logo, or app logo. Current analysis treats it as ambiguous. |
 | Party manager | A section where users create or join a party. | The exact screen layout and whether create/join are separate flows are unspecified. |
-| Party | A shared room/session that users create or join to watch from a URL. | Room lifetime, maximum size, ownership transfer, and leave behavior are unspecified. |
+| Party | A shared room/session that users create or join to watch from a URL. | The room can remain active without an owner; maximum size and broader room lifetime rules remain unspecified. |
 | Party ID | An identifier used to join a party. | Format, length, expiration, and error states are unspecified. |
-| Room owner | The user allowed to paste/start URLs and abort the stream for everyone. | The source does not define how ownership is assigned; creation implies ownership but does not state it directly. |
+| Invite link | A mock shareable link that leads to a pre-join room preview in the prototype. | Production deep linking and native share integration are outside the design phase. |
+| Pre-join room preview | A confirmation step showing party title, owner status, participant count, and stream status before membership changes. | Uses local mock room data in the prototype. |
+| Room owner | The user allowed to paste/start URLs and abort the stream for everyone. | Creation implies initial ownership. If the owner leaves, ownership does not transfer and only returns when that same owner rejoins. |
+| Owner-absent room | A room that remains active after its owner leaves. | Participants keep local playback, Sync, voice, URL inspection, and invite actions but cannot start, replace, or abort the shared stream. |
 | Party screen | The screen shown after creating or joining a party. | Contains URL/player behavior, participant icons, chatroom behavior, and sync controls. |
 | URL input field | A field on the party screen where a URL is pasted and played. | It is unclear whether manual typing is allowed or only paste interaction. |
 | Video player | The playback UI that appears after a URL is provided. | Could be native player controls, custom controls, or a hybrid. |

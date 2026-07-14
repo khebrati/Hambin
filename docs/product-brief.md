@@ -22,7 +22,7 @@ The design value is a cross-platform mobile-focused experience using Material De
 
 ## Primary Journey
 
-The primary journey is: user lands on home, configures identity if needed, creates or joins a party, reaches the party screen, watches a direct video URL, joins voice presence, uses local controls, and optionally syncs to the leading participant. Supported by REQ-004, REQ-005, REQ-007, REQ-008, REQ-009, REQ-010, REQ-011, REQ-013, REQ-020, REQ-021, REQ-022, REQ-024.
+The primary journey is: user lands on home, configures identity if needed, creates a party or opens an invite/enters a party code, previews the room, confirms joining, reaches the party screen, watches a direct video URL, joins voice presence, uses local controls, and optionally syncs to the leading participant. Supported by REQ-004, REQ-005, REQ-007, REQ-008, REQ-009, REQ-010, REQ-011, REQ-013, REQ-020, REQ-021, REQ-022, REQ-024, REQ-042, REQ-043.
 
 The owner version of the primary journey includes pasting or typing a direct video URL, starting playback, and optionally aborting the stream for everyone. Supported by REQ-012, REQ-015, REQ-016, REQ-035.
 
@@ -32,7 +32,9 @@ The non-owner version of the primary journey includes viewing, copying, or inspe
 
 - Set or update language, name, and personal avatar from settings. Supported by REQ-005, REQ-006, REQ-007.
 - Join a party by ID and recover from a simple join error. Supported by REQ-010, REQ-033, REQ-036.
+- Invite others by copying the party code or a mock invite link, and preview room details before confirming entry. Supported by REQ-042, REQ-043.
 - Leave a party through a visible leave affordance and confirmation prompt. Supported by REQ-034, REQ-037.
+- Continue watching in an ownerless room after the owner leaves; wait for the same owner to return before the shared video can be started, replaced, or aborted. Supported by REQ-044.
 - Use voice chat and show speaking activity on participant avatars. Supported by REQ-023, REQ-024, REQ-025, ASM-016.
 - Use local video controls for play/pause, forward/backward, and volume. Supported by REQ-017, REQ-026, REQ-027, REQ-028, REQ-039.
 
@@ -46,7 +48,7 @@ The interface should make global actions feel materially different from local ac
 
 ## Scope
 
-In scope for the current design phase: product experience documentation, screen structure, core user flows, role-specific states, custom Material 3 Expressive playback controls, voice-only party presence, settings, party creation/joining, simple errors, and leave confirmation. Supported by REQ-003, REQ-004, REQ-005, REQ-008, REQ-011, REQ-024, REQ-030, REQ-033, REQ-034, REQ-039, ASM-012.
+In scope for the current design phase: product experience documentation, screen structure, core user flows, invite/share and pre-join preview states, role-specific and owner-absent states, custom Material 3 Expressive playback controls, voice-only party presence, settings, party creation/joining, simple errors, and leave confirmation. Supported by REQ-003, REQ-004, REQ-005, REQ-008, REQ-011, REQ-024, REQ-030, REQ-033, REQ-034, REQ-039, REQ-042, REQ-043, REQ-044, ASM-012.
 
 The prototype direction can be represented as a mobile-first browser prototype while targeting a cross-platform mobile product direction. Temporary decision based on ASM-001 and supported by REQ-001.
 
@@ -63,7 +65,7 @@ The current design pass proceeds in English only while avoiding decisions that w
 ## Known Uncertainties
 
 - Production runtime remains unknown even though the design target is cross-platform mobile. Supported by REQ-001 and temporary decision based on ASM-001.
-- Owner lifecycle after leaving, disconnecting, or transferring ownership is undefined. Supported by REQ-037 and remaining uncertainty from ASM-004, ASM-005.
+- Initial owner assignment is still inferred from party creation, but behavior after the owner leaves is defined: the room remains ownerless until that same owner returns. Supported by REQ-044 and remaining uncertainty from ASM-004.
 - The exact post-abort stream state is undefined. Supported by REQ-016, REQ-035 and temporary decision based on ASM-009.
 - Voice chat behavior beyond "voice only" is undefined, including mute model, permissions, and push-to-talk versus open mic. Supported by REQ-024, REQ-025 and temporary decision based on ASM-016.
 - Party ID format, avatar catalog size, name validation, volume control form, seek interval, and direct video URL validation rules remain undefined. Supported by REQ-007, REQ-010, REQ-027, REQ-028 and temporary decision based on ASM-014.

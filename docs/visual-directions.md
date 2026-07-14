@@ -20,6 +20,9 @@ Every direction must preserve the following behaviors and distinctions:
 - Non-owners can inspect and copy the current URL without receiving edit or start controls. Supported by REQ-015 and REQ-032.
 - Owner abort is visually distinct from local pause because it stops the stream for everyone. Supported by REQ-016, REQ-018, and REQ-035.
 - A visible leave action is available and leads to confirmation. Supported by REQ-034 and REQ-037.
+- A prominent invite action opens a share surface for the party code and mock invite link, with text feedback for copy success or failure. Supported by REQ-042.
+- Invitees encounter a separate room preview before joining; party title, owner status, participant count, and stream status remain legible in light, dark, and large-text presentations. Supported by REQ-030 and REQ-043.
+- If the owner leaves, a persistent owner-absent status replaces owner-only stream actions without interrupting local playback, Sync, voice, URL inspection, or inviting. Supported by REQ-017, REQ-018, REQ-032, REQ-042, and REQ-044.
 - The composition is cross-platform mobile-focused, Material 3 Expressive, responsive, and capable of light, dark, and large-text presentations. Supported by REQ-001, REQ-029, and REQ-030.
 
 ## Direction 1: Immersive Cinema

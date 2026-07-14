@@ -11,6 +11,8 @@
 | Voice-only presence | Social communication should be designed around voice chat, participant avatars, and speaking indicators, not text chat. | Supported by REQ-023, REQ-024, REQ-025, REQ-040. |
 | Playful identity | Personalization should use simple names and fun illustrated cartoonic avatars. | Supported by REQ-007, REQ-023. |
 | Simple recovery | Join failures can use a simple error model; leave and abort actions should use clear confirmation or impact messaging. | Supported by REQ-033, REQ-034, REQ-035, REQ-036, REQ-037. |
+| Shareable entry | Make inviting easy, but let recipients verify room identity and availability before joining. | Supported by REQ-042, REQ-043. |
+| Stable ownership | Leaving does not silently promote another participant; owner-only controls disappear until the original owner returns. | Supported by REQ-044. |
 | Design-phase restraint | Design should focus on product experience, not production backend, database, authentication, or streaming infrastructure. | Supported by REQ-031. |
 
 ## Material 3 Expressive Principles
@@ -29,7 +31,7 @@
 | Choice | Rationale | Risk if wrong |
 | --- | --- | --- |
 | Represent the first prototype as mobile-first browser-based while targeting cross-platform mobile. | Repository guidance points to React, TypeScript, Vite, and mobile-first layouts; product direction is cross-platform mobile. Temporary decision based on ASM-001 and supported by REQ-001. | If a native runtime is selected, navigation and media-control conventions may need adjustment. |
-| Treat room creator as owner and ID joiners as non-owners. | Ownership is required for URL start and abort, and creation is the only available ownership cue. Temporary decision based on ASM-004, ASM-005 and supported by REQ-015, REQ-016. | If ownership can transfer or multiple owners exist, role states and controls must expand. |
+| Treat room creator as owner and ID or invite-link joiners as non-owners. | Ownership is required for URL start and abort, and creation is the only available initial ownership cue. Temporary decision based on ASM-004, ASM-005 and supported by REQ-015, REQ-016, REQ-043, REQ-044. | If initial ownership is assigned differently, role labels and party creation behavior must change; ownership does not transfer after leave. |
 | Use a simple mute/unmute voice model until voice behavior is clarified. | Voice chat is confirmed, but detailed interaction model is not. Temporary decision based on ASM-016 and supported by REQ-024, REQ-025. | Push-to-talk or open-mic requirements could change party screen controls. |
 | Show a post-abort party state that keeps the room available for another URL. | The owner can start another URL in the same room, but exact post-abort state is undefined. Temporary decision based on ASM-009 and supported by REQ-016, REQ-035. | If abort ends the room, navigation should return to party manager or home. |
 | Keep designs English-only for now while avoiding choices that block future RTL support. | Stakeholder clarified English-only for current designs, while repository guidance still mentions RTL. Temporary decision based on ASM-015 and supported by REQ-041. | If RTL returns, layout mirroring and language states must be added. |
@@ -41,4 +43,5 @@
 - Do not expose visible playback drift or participant timelines for sync. Supported by REQ-038.
 - Do not make non-owner URL controls look editable or start-capable. Supported by REQ-015, REQ-032.
 - Do not make owner abort look like a personal pause action. Supported by REQ-016, REQ-017, REQ-018, REQ-035.
+- Do not transfer owner permissions or expose shared-stream controls to remaining participants when the owner leaves. Supported by REQ-044.
 - Do not introduce production backend, database, authentication, or real-time infrastructure into the design phase. Supported by REQ-031.
