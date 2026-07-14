@@ -13,7 +13,7 @@ interface PartyManagerScreenProps {
   onToggleTheme: () => void;
   onBack: () => void;
   onCreate: () => void;
-  onJoin: (code: string) => void;
+  onPreview: (code: string) => void;
   onResetError: () => void;
 }
 
@@ -24,7 +24,7 @@ export function PartyManagerScreen({
   onToggleTheme,
   onBack,
   onCreate,
-  onJoin,
+  onPreview,
   onResetError,
 }: PartyManagerScreenProps) {
   const [mode, setMode] = useState(initialMode);
@@ -81,7 +81,7 @@ export function PartyManagerScreen({
             <p className="eyebrow">You will be the host</p>
             <h2 id="create-title">Open a room for movie night</h2>
             <p>
-              Hambin will create a party code and take you to the empty cinema.
+              Roomio will create a party code and take you to the empty cinema.
             </p>
             {joinStatus === 'loading' ? (
               <LoadingIndicator label="Opening your room" />
@@ -115,17 +115,20 @@ export function PartyManagerScreen({
               disabled={joinStatus === 'loading'}
             />
             {joinStatus === 'loading' ? (
-              <LoadingIndicator label="Joining Mira's late show" />
+              <LoadingIndicator label="Finding that party" />
             ) : (
               <Button
                 fullWidth
                 icon={<Ticket size={20} aria-hidden="true" />}
                 disabled={!code.trim()}
-                onClick={() => onJoin(code)}
+                onClick={() => onPreview(code)}
               >
-                Join party
+                Preview party
               </Button>
             )}
+            <p className="manager-code-hints">
+              Try <strong>MOON-42</strong>, <strong>ORBIT-08</strong>, <strong>FULL-10</strong>, or <strong>ENDED-3</strong>.
+            </p>
           </section>
         )}
       </main>

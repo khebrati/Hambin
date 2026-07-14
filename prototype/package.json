@@ -1,5 +1,5 @@
 {
-  "name": "hambin-immersive-cinema-prototype",
+  "name": "roomio-immersive-cinema-prototype",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -21,4 +21,3 @@
     "vite": "8.1.4"
   }
 }
-

@@ -1,5 +1,5 @@
-import { sampleVideoUrl } from './data/fakeRepository';
-import type { Identity, Party, PreviewState } from './types';
+import { getMockPartyPreview, sampleVideoUrl } from './data/fakeRepository';
+import type { Identity, Party, PartyPreview, PreviewState } from './types';
 
 export const defaultIdentity: Identity = {
   name: 'Nika',
@@ -17,6 +17,13 @@ export const previewStates: Record<string, PreviewState> = {
     joinStatus: 'loading',
   },
   'party-manager-error': { screen: 'party-manager', joinStatus: 'error' },
+  'room-preview': { screen: 'room-preview', roomPreview: 'available' },
+  'room-preview-owner-absent': {
+    screen: 'room-preview',
+    roomPreview: 'owner-absent',
+  },
+  'room-preview-full': { screen: 'room-preview', roomPreview: 'full' },
+  'room-preview-ended': { screen: 'room-preview', roomPreview: 'ended' },
   'owner-empty': { screen: 'party', role: 'owner', streamStatus: 'empty' },
   'player-loading': { screen: 'party', role: 'owner', streamStatus: 'loading' },
   'player-playing': { screen: 'party', role: 'owner', streamStatus: 'playing' },
@@ -32,11 +39,32 @@ export const previewStates: Record<string, PreviewState> = {
     role: 'participant',
     streamStatus: 'playing',
   },
+  'participant-owner-absent': {
+    screen: 'party',
+    role: 'participant',
+    streamStatus: 'playing',
+    roomPreview: 'owner-absent',
+  },
 };
+
+export function makePreviewRoom(
+  variant: PreviewState['roomPreview'] = 'available',
+): PartyPreview {
+  const code =
+    variant === 'owner-absent'
+      ? 'ORBIT-08'
+      : variant === 'full'
+        ? 'FULL-10'
+        : variant === 'ended'
+          ? 'ENDED-3'
+          : 'MOON-42';
+  return getMockPartyPreview(code)!;
+}
 
 export function makePreviewParty(
   role: 'owner' | 'participant',
   identity: Identity,
+  ownerPresent = true,
 ): Party {
   const self = {
     id: 'self',
@@ -48,12 +76,16 @@ export function makePreviewParty(
 
   if (role === 'participant') {
     return {
-      id: 'MOON-42',
-      title: "Mira's late show",
+      id: ownerPresent ? 'MOON-42' : 'ORBIT-08',
+      title: ownerPresent ? "Mira's late show" : 'Orbit double feature',
       role,
+      ownerName: 'Mira',
+      ownerPresent,
       streamUrl: sampleVideoUrl,
       participants: [
-        { id: 'mira', name: 'Mira', avatarId: 'mint', isOwner: true, isSpeaking: true },
+        ...(ownerPresent
+          ? [{ id: 'mira', name: 'Mira', avatarId: 'mint' as const, isOwner: true, isSpeaking: true }]
+          : []),
         { id: 'ellis', name: 'Ellis', avatarId: 'sunny', isMuted: true },
         { id: 'jo', name: 'Jo', avatarId: 'berry' },
         self,
@@ -65,6 +97,8 @@ export function makePreviewParty(
     id: 'NOVA-27',
     title: 'Friday night screening',
     role,
+    ownerName: identity.name || 'Nika',
+    ownerPresent: true,
     streamUrl: sampleVideoUrl,
     participants: [
       self,
@@ -73,4 +107,3 @@ export function makePreviewParty(
     ],
   };
 }
-

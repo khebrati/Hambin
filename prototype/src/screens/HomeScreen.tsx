@@ -1,5 +1,5 @@
-import { ArrowRight, Plus, Settings, Ticket } from 'lucide-react';
-import type { Identity } from '../types';
+import { ArrowRight, Crown, Plus, Settings, Ticket } from 'lucide-react';
+import type { Identity, Party } from '../types';
 import { AppBar } from '../components/AppBar';
 import { Avatar } from '../components/Avatar';
 import { Button, IconButton } from '../components/Material';
@@ -11,6 +11,8 @@ interface HomeScreenProps {
   onSettings: () => void;
   onCreate: () => void;
   onJoin: () => void;
+  returnableParty: Party | null;
+  onRejoinOwnedParty: () => void;
 }
 
 export function HomeScreen({
@@ -20,11 +22,13 @@ export function HomeScreen({
   onSettings,
   onCreate,
   onJoin,
+  returnableParty,
+  onRejoinOwnedParty,
 }: HomeScreenProps) {
   return (
     <div className="screen home-screen screen-enter">
       <AppBar
-        title="Hambin"
+        title="Roomio"
         subtitle="Movie night, in your room"
         theme={theme}
         onToggleTheme={onToggleTheme}
@@ -72,21 +76,34 @@ export function HomeScreen({
           </div>
         </section>
 
-        <section className="home-room-preview" aria-label="Recent room">
+        <section
+          className={`home-room-preview ${returnableParty ? 'home-room-preview--returnable' : ''}`}
+          aria-label={returnableParty ? 'Your ownerless room' : 'Recent room'}
+        >
           <div className="home-room-preview__scene" aria-hidden="true">
             <span className="mini-scene__moon" />
             <span className="mini-scene__ridge mini-scene__ridge--back" />
             <span className="mini-scene__ridge mini-scene__ridge--front" />
           </div>
           <div className="home-room-preview__copy">
-            <span className="eyebrow">Last room</span>
-            <strong>Mira's late show</strong>
-            <span>4 friends</span>
+            <span className="eyebrow">
+              {returnableParty ? 'Your room is waiting' : 'Last room'}
+            </span>
+            <strong>{returnableParty?.title || "Mira's late show"}</strong>
+            <span>
+              {returnableParty
+                ? `${returnableParty.participants.length} friends · No owner`
+                : '4 friends'}
+            </span>
           </div>
-          <IconButton icon={ArrowRight} label="Open party manager" onClick={onJoin} />
+          <IconButton
+            icon={returnableParty ? Crown : ArrowRight}
+            label={returnableParty ? 'Rejoin as owner' : 'Open party manager'}
+            variant={returnableParty ? 'tonal' : 'standard'}
+            onClick={returnableParty ? onRejoinOwnedParty : onJoin}
+          />
         </section>
       </main>
     </div>
   );
 }
-

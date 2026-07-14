@@ -4,6 +4,7 @@ import {
   FastForward,
   Fullscreen,
   Link2,
+  LockKeyhole,
   LogOut,
   Mic,
   MicOff,
@@ -13,6 +14,7 @@ import {
   RefreshCw,
   Rewind,
   Square,
+  UserPlus,
   Volume1,
   Volume2,
   VolumeX,
@@ -32,6 +34,16 @@ import type { Party, StreamStatus } from '../types';
 
 const TOTAL_SECONDS = 6138;
 const LEADING_POSITION = 1542;
+
+async function writeClipboardText(value: string) {
+  if (!navigator.clipboard?.writeText) throw new Error('CLIPBOARD_UNAVAILABLE');
+  await Promise.race([
+    navigator.clipboard.writeText(value),
+    new Promise<never>((_, reject) =>
+      window.setTimeout(() => reject(new Error('CLIPBOARD_TIMEOUT')), 600),
+    ),
+  ]);
+}
 
 function formatTime(value: number) {
   const safeValue = Math.max(0, Math.min(value, TOTAL_SECONDS));
@@ -81,10 +93,20 @@ export function PartyScreen({
   const [abortOpen, setAbortOpen] = useState(false);
   const [urlOpen, setUrlOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteCopyState, setInviteCopyState] = useState<
+    'idle' | 'code' | 'link' | 'error'
+  >('idle');
 
   const activeUrl = party.streamUrl || sampleVideoUrl;
   const hasPlayer = ['playing', 'paused', 'buffering'].includes(streamStatus);
-  const isOwner = party.role === 'owner';
+  const isOwner = party.role === 'owner' && party.ownerPresent;
+  const inviteLink = useMemo(() => {
+    const url = new URL(window.location.href);
+    url.search = '';
+    url.searchParams.set('invite', party.id);
+    return url.toString();
+  }, [party.id]);
 
   useEffect(() => {
     if (streamStatus !== 'playing') return;
@@ -107,9 +129,10 @@ export function PartyScreen({
 
   const copyUrl = async () => {
     try {
-      await navigator.clipboard.writeText(activeUrl);
+      await writeClipboardText(activeUrl);
     } catch {
-      // Clipboard access can be blocked in local previews; feedback remains deterministic.
+      onNotify('Copy is unavailable. Select the link manually.');
+      return;
     }
     setCopied(true);
     onNotify('Video link copied');
@@ -125,6 +148,17 @@ export function PartyScreen({
     }
     setUrlDraft(pasted || sampleVideoUrl);
     onNotify('Video link ready');
+  };
+
+  const copyInvite = async (value: string, target: 'code' | 'link') => {
+    try {
+      await writeClipboardText(value);
+      setInviteCopyState(target);
+      onNotify(target === 'code' ? 'Party code copied' : 'Invite link copied');
+    } catch {
+      setInviteCopyState('error');
+      onNotify('Copy is unavailable. You can select the text manually.');
+    }
   };
 
   const toggleMute = () => {
@@ -145,11 +179,20 @@ export function PartyScreen({
     <div className="screen party-screen screen-enter">
       <AppBar
         title={party.title}
-        subtitle={`${party.id} · ${isOwner ? 'Host' : 'Guest'}`}
+        subtitle={`${party.id} · ${isOwner ? 'Owner' : party.ownerPresent ? 'Guest' : 'Owner away'}`}
         theme={theme}
         onToggleTheme={onToggleTheme}
         actions={
           <>
+            <IconButton
+              icon={UserPlus}
+              label="Invite friends"
+              variant="tonal"
+              onClick={() => {
+                setInviteCopyState('idle');
+                setInviteOpen(true);
+              }}
+            />
             {hasPlayer ? (
               <IconButton icon={Link2} label="View video link" onClick={() => setUrlOpen(true)} />
             ) : null}
@@ -160,6 +203,19 @@ export function PartyScreen({
 
       <main className="party-layout">
         <section className="cinema-column" aria-label="Cinema">
+          {!party.ownerPresent ? (
+            <div className="owner-away-banner" role="status">
+              <LockKeyhole size={24} aria-hidden="true" />
+              <div>
+                <span className="eyebrow">Owner away</span>
+                <strong>{party.ownerName} left the room</strong>
+                <p>
+                  The current video stays available, but nobody can replace or end it until{' '}
+                  {party.ownerName} returns.
+                </p>
+              </div>
+            </div>
+          ) : null}
           {!hasPlayer ? (
             <StreamEntry
               status={streamStatus}
@@ -171,6 +227,8 @@ export function PartyScreen({
               onPaste={pasteUrl}
               onStart={() => onStartStream(urlDraft)}
               isOwner={isOwner}
+              ownerPresent={party.ownerPresent}
+              ownerName={party.ownerName}
             />
           ) : (
             <CinemaPlayer
@@ -230,6 +288,18 @@ export function PartyScreen({
             />
           </section>
 
+          <Button
+            variant="outlined"
+            icon={<UserPlus size={18} aria-hidden="true" />}
+            onClick={() => {
+              setInviteCopyState('idle');
+              setInviteOpen(true);
+            }}
+            fullWidth
+          >
+            Invite friends
+          </Button>
+
           {hasPlayer ? (
             <section className="source-row" aria-label="Current video source">
               <div>
@@ -258,6 +328,62 @@ export function PartyScreen({
       </main>
 
       <Dialog
+        open={inviteOpen}
+        title="Invite friends"
+        onClose={() => setInviteOpen(false)}
+        actions={
+          <Button variant="text" onClick={() => setInviteOpen(false)}>
+            Done
+          </Button>
+        }
+      >
+        <p>Share either option. Friends will preview the room before they join.</p>
+        <section className="share-option" aria-labelledby="party-code-label">
+          <label className="read-only-field">
+            <span id="party-code-label">Party code</span>
+            <input value={party.id} readOnly />
+          </label>
+          <Button
+            variant="tonal"
+            icon={
+              inviteCopyState === 'code' ? (
+                <ClipboardCheck size={18} aria-hidden="true" />
+              ) : (
+                <Clipboard size={18} aria-hidden="true" />
+              )
+            }
+            onClick={() => void copyInvite(party.id, 'code')}
+          >
+            {inviteCopyState === 'code' ? 'Code copied' : 'Copy code'}
+          </Button>
+        </section>
+        <section className="share-option" aria-labelledby="invite-link-label">
+          <label className="read-only-field">
+            <span id="invite-link-label">Prototype invite link</span>
+            <input value={inviteLink} readOnly />
+          </label>
+          <Button
+            variant="outlined"
+            icon={
+              inviteCopyState === 'link' ? (
+                <ClipboardCheck size={18} aria-hidden="true" />
+              ) : (
+                <Link2 size={18} aria-hidden="true" />
+              )
+            }
+            onClick={() => void copyInvite(inviteLink, 'link')}
+          >
+            {inviteCopyState === 'link' ? 'Link copied' : 'Copy link'}
+          </Button>
+        </section>
+        {inviteCopyState === 'error' ? (
+          <p className="copy-error" role="status">
+            Copy is unavailable here. Select the code or link above to share it manually.
+          </p>
+        ) : null}
+      </Dialog>
+
+      <Dialog
         open={urlOpen}
         title="Current video link"
         onClose={() => setUrlOpen(false)}
@@ -275,7 +401,13 @@ export function PartyScreen({
           <span>Direct video URL</span>
           <input value={activeUrl} readOnly />
         </label>
-        {!isOwner ? <p>Only the host can replace this link.</p> : null}
+        {!isOwner ? (
+          <p>
+            {party.ownerPresent
+              ? `Only ${party.ownerName}, the room owner, can replace this link.`
+              : `This link stays locked until ${party.ownerName} returns.`}
+          </p>
+        ) : null}
       </Dialog>
 
       <Dialog
@@ -293,7 +425,11 @@ export function PartyScreen({
           </>
         }
       >
-        <p>Your playback will stop and you will return home.</p>
+        <p>
+          {isOwner
+            ? 'Your playback will stop. The room stays open without an owner until you rejoin.'
+            : 'Your playback will stop and you will return home.'}
+        </p>
       </Dialog>
 
       <Dialog
@@ -338,6 +474,8 @@ function StreamEntry({
   onPaste,
   onStart,
   isOwner,
+  ownerPresent,
+  ownerName,
 }: {
   status: StreamStatus;
   url: string;
@@ -345,6 +483,8 @@ function StreamEntry({
   onPaste: () => void;
   onStart: () => void;
   isOwner: boolean;
+  ownerPresent: boolean;
+  ownerName: string;
 }) {
   if (status === 'loading') {
     return (
@@ -364,7 +504,11 @@ function StreamEntry({
         <CinemaScene quiet />
         <div className="empty-cinema__content">
           <span className="eyebrow">Waiting room</span>
-          <h2>The host is choosing the next video</h2>
+          <h2>
+            {ownerPresent
+              ? `${ownerName} is choosing the next video`
+              : `Waiting for ${ownerName} to return`}
+          </h2>
         </div>
       </div>
     );

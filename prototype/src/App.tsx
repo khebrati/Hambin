@@ -1,15 +1,22 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Snackbar } from './components/Material';
-import { fakePartyRepository } from './data/fakeRepository';
-import { defaultIdentity, makePreviewParty, previewStates } from './previewStates';
+import { fakePartyRepository, getMockPartyPreview } from './data/fakeRepository';
+import {
+  defaultIdentity,
+  makePreviewParty,
+  makePreviewRoom,
+  previewStates,
+} from './previewStates';
 import { HomeScreen } from './screens/HomeScreen';
 import { PartyManagerScreen, type ManagerMode } from './screens/PartyManagerScreen';
 import { PartyScreen } from './screens/PartyScreen';
+import { RoomPreviewScreen } from './screens/RoomPreviewScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import type {
   Identity,
   JoinStatus,
   Party,
+  PartyPreview,
   Screen,
   StreamStatus,
 } from './types';
@@ -19,7 +26,7 @@ type Theme = 'light' | 'dark';
 function getInitialTheme(): Theme {
   const queryTheme = new URLSearchParams(window.location.search).get('theme');
   if (queryTheme === 'dark' || queryTheme === 'light') return queryTheme;
-  const saved = window.localStorage.getItem('hambin-theme');
+  const saved = window.localStorage.getItem('roomio-theme');
   if (saved === 'dark' || saved === 'light') return saved;
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
@@ -27,26 +34,42 @@ function getInitialTheme(): Theme {
 export function App() {
   const params = useMemo(() => new URLSearchParams(window.location.search), []);
   const preview = previewStates[params.get('preview') || ''];
+  const inviteCode = params.get('invite');
+  const invitedRoom = inviteCode ? getMockPartyPreview(inviteCode) : null;
   const initialIdentity: Identity = {
     ...defaultIdentity,
     ...preview?.identity,
   };
 
   const [theme, setTheme] = useState<Theme>(getInitialTheme);
-  const [screen, setScreen] = useState<Screen>(preview?.screen || 'home');
+  const [screen, setScreen] = useState<Screen>(
+    preview?.screen || (inviteCode ? (invitedRoom ? 'room-preview' : 'party-manager') : 'home'),
+  );
   const [identity, setIdentity] = useState<Identity>(initialIdentity);
   const [managerMode, setManagerMode] = useState<ManagerMode>(
-    preview?.joinStatus ? 'join' : 'create',
+    preview?.joinStatus || inviteCode ? 'join' : 'create',
   );
-  const [joinStatus, setJoinStatus] = useState<JoinStatus>(preview?.joinStatus || 'idle');
+  const [joinStatus, setJoinStatus] = useState<JoinStatus>(
+    preview?.joinStatus || (inviteCode && !invitedRoom ? 'error' : 'idle'),
+  );
   const [streamStatus, setStreamStatus] = useState<StreamStatus>(
     preview?.streamStatus || 'empty',
   );
   const [party, setParty] = useState<Party | null>(() =>
     preview?.screen === 'party'
-      ? makePreviewParty(preview.role || 'owner', initialIdentity)
+      ? makePreviewParty(
+          preview.role || 'owner',
+          initialIdentity,
+          preview.roomPreview !== 'owner-absent',
+        )
       : null,
   );
+  const [partyPreview, setPartyPreview] = useState<PartyPreview | null>(() =>
+    preview?.screen === 'room-preview'
+      ? makePreviewRoom(preview.roomPreview)
+      : invitedRoom,
+  );
+  const [returnableParty, setReturnableParty] = useState<Party | null>(null);
   const [aborting, setAborting] = useState(false);
   const [snackbar, setSnackbar] = useState('');
 
@@ -54,7 +77,7 @@ export function App() {
     document.documentElement.dataset.theme = theme;
     document.documentElement.dataset.textScale =
       params.get('largeText') === '1' ? 'large' : 'standard';
-    window.localStorage.setItem('hambin-theme', theme);
+    window.localStorage.setItem('roomio-theme', theme);
   }, [params, theme]);
 
   useEffect(() => {
@@ -80,12 +103,25 @@ export function App() {
     setScreen('party');
   };
 
-  const joinParty = async (code: string) => {
+  const previewParty = async (code: string) => {
     setJoinStatus('loading');
     try {
-      const joined = await fakePartyRepository.join(code, identity);
+      const nextPreview = await fakePartyRepository.preview(code);
+      setPartyPreview(nextPreview);
+      setJoinStatus('idle');
+      setScreen('room-preview');
+    } catch {
+      setJoinStatus('error');
+    }
+  };
+
+  const joinParty = async () => {
+    if (!partyPreview) return;
+    setJoinStatus('loading');
+    try {
+      const joined = await fakePartyRepository.join(partyPreview.id, identity);
       setParty(joined);
-      setStreamStatus('playing');
+      setStreamStatus(joined.streamUrl ? 'playing' : 'empty');
       setJoinStatus('idle');
       setScreen('party');
     } catch {
@@ -116,11 +152,46 @@ export function App() {
   };
 
   const leaveParty = () => {
+    if (party?.role === 'owner') {
+      setReturnableParty({
+        ...party,
+        ownerPresent: false,
+        participants: party.participants.filter((participant) => !participant.isSelf),
+      });
+    }
     setParty(null);
     setStreamStatus('empty');
     setJoinStatus('idle');
     setScreen('home');
-    setSnackbar('You left the party');
+    setSnackbar(
+      party?.role === 'owner'
+        ? 'Your room stays open until you return'
+        : 'You left the party',
+    );
+  };
+
+  const rejoinOwnedParty = () => {
+    if (!returnableParty) return;
+    setParty({
+      ...returnableParty,
+      role: 'owner',
+      ownerName: identity.name || returnableParty.ownerName,
+      ownerPresent: true,
+      participants: [
+        {
+          id: 'self',
+          name: identity.name || returnableParty.ownerName,
+          avatarId: identity.avatarId,
+          isOwner: true,
+          isSelf: true,
+        },
+        ...returnableParty.participants,
+      ],
+    });
+    setStreamStatus(returnableParty.streamUrl ? 'playing' : 'empty');
+    setReturnableParty(null);
+    setScreen('party');
+    setSnackbar('You are back as the room owner');
   };
 
   return (
@@ -133,6 +204,8 @@ export function App() {
           onSettings={() => setScreen('settings')}
           onCreate={() => openManager('create')}
           onJoin={() => openManager('join')}
+          returnableParty={returnableParty}
+          onRejoinOwnedParty={rejoinOwnedParty}
         />
       ) : null}
 
@@ -158,8 +231,23 @@ export function App() {
           onToggleTheme={toggleTheme}
           onBack={() => setScreen('home')}
           onCreate={createParty}
-          onJoin={joinParty}
+          onPreview={previewParty}
           onResetError={() => setJoinStatus('idle')}
+        />
+      ) : null}
+
+      {screen === 'room-preview' && partyPreview ? (
+        <RoomPreviewScreen
+          preview={partyPreview}
+          joinStatus={joinStatus}
+          theme={theme}
+          onToggleTheme={toggleTheme}
+          onBack={() => {
+            setJoinStatus('idle');
+            setScreen('party-manager');
+            setManagerMode('join');
+          }}
+          onJoin={joinParty}
         />
       ) : null}
 
@@ -182,4 +270,3 @@ export function App() {
     </div>
   );
 }
-
