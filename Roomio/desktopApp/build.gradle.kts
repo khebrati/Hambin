@@ -27,7 +27,7 @@ compose.desktop {
             }
             macOS {
                 iconFile.set(project.file("appIcons/MacosIcon.icns"))
-                bundleID = "fun.roomio.app.desktopApp"
+                bundleID = "top.roomio.app.desktopApp"
             }
         }
     }

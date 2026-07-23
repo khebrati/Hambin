@@ -3,7 +3,7 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import java.awt.Dimension
-import fun.roomio.app.App
+import top.roomio.app.App
 
 fun main() = application {
     Window(
@@ -15,4 +15,3 @@ fun main() = application {
         App()
     }
 }
-

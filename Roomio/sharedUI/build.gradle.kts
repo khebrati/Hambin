@@ -13,7 +13,7 @@ plugins {
 
 kotlin {
     android {
-        namespace = "fun.roomio.app"
+        namespace = "top.roomio.app"
         compileSdk = 36
         minSdk = 23
         androidResources.enable = true

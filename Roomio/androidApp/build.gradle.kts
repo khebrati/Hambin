@@ -6,14 +6,14 @@ plugins {
 }
 
 android {
-    namespace = "fun.roomio.app.androidApp"
+    namespace = "top.roomio.app.androidApp"
     compileSdk = 36
 
     defaultConfig {
         minSdk = 23
         targetSdk = 36
 
-        applicationId = "fun.roomio.app.androidApp"
+        applicationId = "top.roomio.app.androidApp"
         versionCode = 1
         versionName = "1.0.0"
     }
