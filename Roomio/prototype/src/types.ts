@@ -23,9 +23,7 @@ export type AvatarId =
   | 'prism'
   | 'echo'
   | 'spark'
-  | 'bloom'
-  | 'pixel'
-  | 'luna';
+  | 'bloom';
 
 export interface Identity {
   name: string;
