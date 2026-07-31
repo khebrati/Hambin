@@ -1,1 +1,49 @@
+# IDEs and editors
 .idea/
+*.iml
+.vscode/
+*.swp
+*~
+
+# Local agent tooling and project skills
+.tools/
+.agents/
+**/.agents/
+.claude/
+**/.claude/
+.codex/
+**/.codex/
+
+# Gradle, Kotlin, and Android build output
+.gradle/
+.kotlin/
+**/build/
+out/
+.externalNativeBuild/
+.cxx/
+captures/
+*.apk
+*.aab
+
+# JavaScript dependencies and generated bundles
+**/node_modules/
+**/dist/
+
+# Local machine and environment configuration
+local.properties
+.env
+.env.*
+!.env.example
+
+# Apple and Xcode user data
+.DS_Store
+DerivedData/
+**/xcuserdata/
+*.xcuserstate
+
+# Local crash and telemetry artifacts
+.sentry-native/
+
+# Windows metadata
+Thumbs.db
+Desktop.ini

@@ -1,3 +1,0 @@
-[submodule "Roomio/.agents/skills"]
-	path = Roomio/.agents/skills
-	url = https://github.com/android/skills.git
