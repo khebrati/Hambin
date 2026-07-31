@@ -26,5 +26,5 @@
 | User icon | Visual representation of a participant in the party screen. | Relationship to "logo" is unclear. |
 | Chatroom | A communication area or mode inside the party. | "Speak" suggests voice, while "chatroom" may suggest text. |
 | Speaking indicator | A visual indicator on a user's icon when they speak in the chatroom. | Depends on whether chat is voice activity, text activity, or a generic active-state indicator. |
-| Material 3 Expressive | The design-system direction for adaptive layouts, expressive shape, motion, typography, and token-driven UI. | In this repository it should inform design docs and prototype UI; it does not imply Jetpack Compose code. |
+| Material 3 Expressive | The design-system direction for adaptive layouts, expressive shape, motion, typography, and token-driven UI. | Apply it with semantic CSS tokens in `webUI` and the Compose design system in `Roomio`, allowing platform-appropriate adaptations. |
 | Design-only phase | Current scope focused on analysis, flows, screen structure, visual direction, and documentation. | Production backend, streaming infrastructure, and application architecture are outside this phase. |

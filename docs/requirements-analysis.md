@@ -40,7 +40,7 @@ Existing requirement IDs are preserved. New confirmed requirements from stakehol
 | REQ-028 | Video playback includes volume setting capabilities. | Functional requirement | Explicit | REQ-013, REQ-039 | Volume control form remains unspecified. Per-user volume is implied by local playback behavior. | Relevant |
 | REQ-029 | The design should be focused on Material Design 3 Expressive. | Visual requirement | Explicit | REQ-001, REQ-039 | The Material 3 skill is Compose-first, while this repository's prototype guidance is React/TypeScript/Vite. | Relevant |
 | REQ-030 | The prototype should support light theme, dark theme, large text, and responsive layouts. | Accessibility requirement | Explicit | Repository `AGENTS.md`, REQ-006, REQ-029, REQ-041 | Repository guidance asks for RTL support, but stakeholder clarified to proceed only with English designs now. Whether RTL returns later is remaining uncertainty. | Relevant |
-| REQ-031 | The repository is a design prototype and design-system reference, not the production application. | Platform or technical constraint | Explicit | Repository `AGENTS.md` | Conflicts with any interpretation that requires backend, database, authentication, or production streaming architecture now. | Relevant as a scope constraint |
+| REQ-031 | The browser client is the interactive design prototype and design-system reference; backend and production streaming infrastructure remain out of scope until explicitly approved. | Platform or technical constraint | Explicit | Repository `AGENTS.md` | The repository now also contains a native client and a reserved backend boundary, so prototype-only constraints apply specifically to `webUI`. | Relevant as a client scope constraint |
 | REQ-032 | Non-owner users can see, copy, and inspect the current URL, but cannot paste/type/start a new stream URL. | Functional requirement | Explicit | REQ-012, REQ-015 | Exact "inspect" UI is unspecified. | Relevant |
 | REQ-033 | Party join failures such as invalid, expired, full, or unavailable party IDs can be represented with a simple error. | Functional requirement | Explicit | REQ-010 | Error copy and recovery action are unspecified. | Relevant |
 | REQ-034 | Users can leave a party through a visual leave indicator that asks for confirmation. | Navigation requirement | Explicit | REQ-011 | Exact placement and wording are unspecified. | Relevant |
@@ -104,7 +104,7 @@ Existing requirement IDs are preserved. New confirmed requirements from stakehol
 
 - The owner can abort the stream for everyone, while all users can control playback for themselves. This creates two control scopes: global owner actions and local viewer actions.
 - Local playback differences should not be visible, but sync targets the leading participant. The system may need hidden timing knowledge without exposing it in the UI.
-- Repository guidance says the prototype technology is React, TypeScript, and Vite, while the Material 3 skill is Compose-first. For this repo, MD3 should be applied through design tokens, CSS variables, and prototype components rather than Compose code unless later changed.
+- Repository guidance assigns React, TypeScript, and Vite to `webUI`, while `Roomio` uses Compose Multiplatform. Apply Material 3 through design tokens and CSS variables on the web and through the native Compose design system in Roomio.
 - Repository guidance asks for RTL support, while the latest stakeholder answer says to proceed only with English designs and no RTL examples now.
 
 ## Not Relevant to the Current Design-only Phase

@@ -11,7 +11,7 @@
 ## DD-002: Prototype Platform
 
 - **Status:** Approved for prototype only
-- **Decision:** Implement the experience as a React, TypeScript, and Vite browser prototype under `prototype/`.
+- **Decision:** Implement the experience as a React, TypeScript, and Vite browser client under `webUI/`; use it as the interactive product prototype while the clients evolve.
 - **Rationale:** This follows repository guidance while preserving a cross-platform mobile-focused design direction. Supported by REQ-001, REQ-031, and ASM-001.
 - **Constraint:** Use local state and fake repositories only. Do not add backend, authentication, production media, or real-time synchronization architecture. Supported by REQ-031.
 

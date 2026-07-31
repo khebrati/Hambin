@@ -1,14 +1,15 @@
-# Roomio Prototype
+# Hambin Web UI
 
-Interactive React/Vite prototype for the approved **Immersive Cinema** direction.
+React and Vite browser client for Hambin. It is also the fastest interactive
+reference for the approved **Immersive Cinema** product direction.
 
 ## Run locally
 
-From `prototype/`:
+From `webUI/`:
 
-```powershell
-npm.cmd install
-npm.cmd run dev --host 127.0.0.1
+```shell
+npm install
+npm run dev -- --host 127.0.0.1
 ```
 
 Open `http://127.0.0.1:5173/`.
@@ -55,6 +56,6 @@ Add `&theme=dark` for dark theme and `&largeText=1` for the large-text layout.
 
 ## Build
 
-```powershell
-npm.cmd run build
+```shell
+npm run build
 ```

@@ -30,12 +30,12 @@
 
 | Choice | Rationale | Risk if wrong |
 | --- | --- | --- |
-| Represent the first prototype as mobile-first browser-based while targeting cross-platform mobile. | Repository guidance points to React, TypeScript, Vite, and mobile-first layouts; product direction is cross-platform mobile. Temporary decision based on ASM-001 and supported by REQ-001. | If a native runtime is selected, navigation and media-control conventions may need adjustment. |
+| Represent the interactive prototype in the mobile-first `webUI` client while targeting a consistent cross-platform product. | Web client guidance points to React, TypeScript, Vite, and mobile-first layouts; Roomio provides the native implementation. Temporary decision based on ASM-001 and supported by REQ-001. | Web and native clients may require platform-appropriate navigation and media-control adaptations. |
 | Treat room creator as owner and ID or invite-link joiners as non-owners. | Ownership is required for URL start and abort, and creation is the only available initial ownership cue. Temporary decision based on ASM-004, ASM-005 and supported by REQ-015, REQ-016, REQ-043, REQ-044. | If initial ownership is assigned differently, role labels and party creation behavior must change; ownership does not transfer after leave. |
 | Use a simple mute/unmute voice model until voice behavior is clarified. | Voice chat is confirmed, but detailed interaction model is not. Temporary decision based on ASM-016 and supported by REQ-024, REQ-025. | Push-to-talk or open-mic requirements could change party screen controls. |
 | Show a post-abort party state that keeps the room available for another URL. | The owner can start another URL in the same room, but exact post-abort state is undefined. Temporary decision based on ASM-009 and supported by REQ-016, REQ-035. | If abort ends the room, navigation should return to party manager or home. |
 | Keep designs English-only for now while avoiding choices that block future RTL support. | Stakeholder clarified English-only for current designs, while repository guidance still mentions RTL. Temporary decision based on ASM-015 and supported by REQ-041. | If RTL returns, layout mirroring and language states must be added. |
-| Represent direct video URL validation visually rather than implementing real compatibility checks. | This is a design prototype, not production media infrastructure. Temporary decision based on ASM-014 and supported by REQ-002, REQ-031. | If real validation is required, prototype scope and technical dependencies increase. |
+| Represent direct video URL validation visually in `webUI` rather than implementing real compatibility checks there. | The browser client is the interactive prototype, not production media infrastructure. Temporary decision based on ASM-014 and supported by REQ-002, REQ-031. | If real validation is required in the web client, its scope and technical dependencies increase. |
 
 ## Anti-principles
 

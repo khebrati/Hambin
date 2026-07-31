@@ -1,10 +1,10 @@
 # Roomio project guidance
 
-## Parent repository context
+## Repository context
 
-The parent repository is a design prototype and design-system reference, not the production application. Its primary objective is to explore, validate, and document the complete product experience through an interactive React, TypeScript, and Vite browser prototype informed by Material 3 Expressive.
+The parent repository contains shared product requirements and documentation, this native client, the React/Vite browser client, and a reserved backend boundary.
 
-Roomio consumes that validated product direction but uses the Kotlin Multiplatform technology and structure documented below. Parent-repository rules about React, Vite, browser-local interactions, and prototype architecture apply to `../prototype/`, not to this folder.
+Roomio consumes the shared product direction but uses the Kotlin Multiplatform technology and structure documented below. Parent-repository rules scoped to React, Vite, and browser-local interactions apply to `../webUI/`, not to this folder.
 
 ## Purpose
 
@@ -20,7 +20,7 @@ Before substantial product or UI work, inspect the relevant sources in the paren
 
 - `../requirements.md` defines product requirements.
 - `../docs/` contains the product brief, requirements analysis, user flow, screen inventory, design principles, accepted decisions, assumptions, and open questions.
-- `../prototype/` is the interactive visual and behavior reference.
+- `../webUI/` is the browser client and interactive visual and behavior reference.
 - The current KMP implementation shows what has already been integrated, but it does not override documented product intent by accident.
 
 When these sources disagree, do not silently invent a resolution. Prefer explicit accepted decisions, identify the conflict, state the working assumption, and update the appropriate decision or open-question document when a decision is accepted.
