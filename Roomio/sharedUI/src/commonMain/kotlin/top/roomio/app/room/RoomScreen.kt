@@ -29,6 +29,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.DarkMode
@@ -89,13 +91,17 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
@@ -194,6 +200,9 @@ internal fun RoomScreen(
     val scope = rememberCoroutineScope()
     val syncComplete = stringResource(Res.string.sync_complete)
     val pastedUrl = stringResource(Res.string.sample_video_url)
+    val partyCodeCopied = stringResource(Res.string.party_code_copied)
+    val inviteLinkCopied = stringResource(Res.string.invite_link_copied)
+    val copyUnavailable = stringResource(Res.string.copy_unavailable)
 
     LaunchedEffect(playback) {
         if (playback == RoomPlaybackState.LOADING) {
@@ -327,11 +336,20 @@ internal fun RoomScreen(
     }
 
     if (inviteOpen) {
-        RoomDialog(
-            title = stringResource(Res.string.invite_friends),
-            body = "${stringResource(Res.string.party_code)}: ${model.partyCode}",
-            confirm = stringResource(Res.string.done),
+        InviteFriendsDialog(
+            partyCode = model.partyCode,
+            inviteLink = "https://roomio.app/?invite=${model.partyCode}",
             onDismiss = { inviteOpen = false },
+            onCopied = { target ->
+                scope.launch {
+                    snackbarHost.showSnackbar(
+                        if (target == InviteCopyTarget.CODE) partyCodeCopied else inviteLinkCopied,
+                    )
+                }
+            },
+            onCopyFailed = {
+                scope.launch { snackbarHost.showSnackbar(copyUnavailable) }
+            },
         )
     }
     if (linkOpen) {
@@ -380,39 +398,54 @@ private fun RoomTopBar(
     onToggleTheme: () -> Unit,
 ) {
     Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 0.dp) {
-        BoxWithConstraints {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 72.dp)
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .border(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                RoomioMark()
-                Column(Modifier.weight(1f)) {
-                    Text(title, style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    if (subtitle != null) {
-                        Text(subtitle, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Column {
+            BoxWithConstraints {
+                val compactBar = maxWidth < 600.dp
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = if (compactBar) 64.dp else 72.dp)
+                        .padding(
+                            horizontal = if (compactBar) 4.dp else 16.dp,
+                            vertical = if (compactBar) 4.dp else 8.dp,
+                        ),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(if (compactBar) 6.dp else 10.dp),
+                ) {
+                    RoomioMark(size = if (compactBar) 40.dp else 48.dp)
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            title,
+                            style = if (compactBar) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge,
+                            maxLines = if (compactBar) 1 else 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        if (subtitle != null && !compactBar) {
+                            Text(
+                                subtitle,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    MaterialIconButton(Icons.Filled.PersonAdd, stringResource(Res.string.invite_friends), tonal = true, onClick = onInvite)
+                    if (showLink) MaterialIconButton(Icons.Filled.Link, stringResource(Res.string.current_video_link), onClick = onShowLink)
+                    MaterialIconButton(Icons.AutoMirrored.Filled.Logout, stringResource(Res.string.leave), onClick = onLeave)
+                    if (showTheme && !compactBar) {
+                        MaterialIconButton(Icons.Filled.DarkMode, stringResource(Res.string.theme), onClick = onToggleTheme)
                     }
                 }
-                MaterialIconButton(Icons.Filled.PersonAdd, stringResource(Res.string.invite_friends), tonal = true, onClick = onInvite)
-                if (showLink) MaterialIconButton(Icons.Filled.Link, stringResource(Res.string.current_video_link), onClick = onShowLink)
-                MaterialIconButton(Icons.AutoMirrored.Filled.Logout, stringResource(Res.string.leave), onClick = onLeave)
-                if (showTheme && this@BoxWithConstraints.maxWidth > 460.dp) {
-                    MaterialIconButton(Icons.Filled.DarkMode, stringResource(Res.string.theme), onClick = onToggleTheme)
-                }
             }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         }
     }
 }
 
 @Composable
-private fun RoomioMark() {
+private fun RoomioMark(size: Dp = 48.dp) {
     Box(
         modifier = Modifier
-            .size(48.dp)
+            .size(size)
             .clip(MaterialTheme.shapes.large)
             .background(MaterialTheme.colorScheme.primaryContainer),
     ) {
@@ -984,17 +1017,22 @@ private fun ParticipantAvatar(participant: RoomParticipant, speaking: Boolean) {
         RoomAvatar.SUNNY -> painterResource(Res.drawable.avatar_sunny)
         RoomAvatar.BERRY -> painterResource(Res.drawable.avatar_berry)
     }
+    val avatarShape = if (speaking) RoomioDesignSystem.shapes.largeIncreased else CircleShape
     Box(
         modifier = Modifier
-            .size(56.dp)
-            .clip(CircleShape)
+            .size(72.dp)
+            .clip(avatarShape)
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .border(if (speaking) 4.dp else 1.dp, if (speaking) RoomioDesignSystem.colors.speaker else MaterialTheme.colorScheme.outlineVariant, CircleShape),
+            .border(
+                width = if (speaking) 4.dp else 2.dp,
+                color = if (speaking) RoomioDesignSystem.colors.speaker else MaterialTheme.colorScheme.outlineVariant,
+                shape = avatarShape,
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Image(painter = painter, contentDescription = participant.name, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
         Surface(
-            modifier = Modifier.align(Alignment.BottomEnd).size(20.dp),
+            modifier = Modifier.align(Alignment.BottomEnd).size(24.dp),
             shape = CircleShape,
             color = MaterialTheme.colorScheme.surfaceContainerHighest,
         ) {
@@ -1038,6 +1076,233 @@ private fun SourceRow(onShowLink: () -> Unit) {
     }
 }
 
+private enum class InviteCopyTarget { CODE, LINK }
+
+private enum class InviteCopyState { IDLE, CODE, LINK, ERROR }
+
+@Composable
+private fun InviteFriendsDialog(
+    partyCode: String,
+    inviteLink: String,
+    onDismiss: () -> Unit,
+    onCopied: (InviteCopyTarget) -> Unit,
+    onCopyFailed: () -> Unit,
+) {
+    val clipboard = LocalClipboardManager.current
+    var copyState by remember { mutableStateOf(InviteCopyState.IDLE) }
+
+    fun copy(value: String, target: InviteCopyTarget) {
+        runCatching { clipboard.setText(AnnotatedString(value)) }
+            .onSuccess {
+                copyState = if (target == InviteCopyTarget.CODE) InviteCopyState.CODE else InviteCopyState.LINK
+                onCopied(target)
+            }
+            .onFailure {
+                copyState = InviteCopyState.ERROR
+                onCopyFailed()
+            }
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(RoomioDesignSystem.spacing.small),
+            contentAlignment = Alignment.Center,
+        ) {
+            InviteFriendsDialogCard(
+                partyCode = partyCode,
+                inviteLink = inviteLink,
+                copyState = copyState,
+                onCopyCode = { copy(partyCode, InviteCopyTarget.CODE) },
+                onCopyLink = { copy(inviteLink, InviteCopyTarget.LINK) },
+                onDismiss = onDismiss,
+            )
+        }
+    }
+}
+
+@Composable
+private fun InviteFriendsDialogCard(
+    partyCode: String,
+    inviteLink: String,
+    copyState: InviteCopyState,
+    onCopyCode: () -> Unit,
+    onCopyLink: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier
+            .widthIn(max = 520.dp)
+            .fillMaxWidth()
+            .heightIn(max = 720.dp),
+        shape = MaterialTheme.shapes.extraLarge,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        tonalElevation = 6.dp,
+    ) {
+        Column {
+            Row(
+                modifier = Modifier.padding(start = 24.dp, top = 16.dp, end = 8.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = stringResource(Res.string.invite_friends),
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                val closeLabel = stringResource(Res.string.close)
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.semantics { contentDescription = closeLabel },
+                ) {
+                    Icon(Icons.Filled.Close, contentDescription = null)
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 24.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(RoomioDesignSystem.spacing.small),
+            ) {
+                Text(
+                    text = stringResource(Res.string.invite_friends_description),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                InviteShareOption(
+                    label = stringResource(Res.string.party_code),
+                    value = partyCode,
+                    buttonLabel = stringResource(
+                        if (copyState == InviteCopyState.CODE) Res.string.code_copied else Res.string.copy_code,
+                    ),
+                    copied = copyState == InviteCopyState.CODE,
+                    tonal = true,
+                    onCopy = onCopyCode,
+                )
+                InviteShareOption(
+                    label = stringResource(Res.string.prototype_invite_link),
+                    value = inviteLink,
+                    buttonLabel = stringResource(
+                        if (copyState == InviteCopyState.LINK) Res.string.link_copied else Res.string.copy_link,
+                    ),
+                    copied = copyState == InviteCopyState.LINK,
+                    tonal = false,
+                    onCopy = onCopyLink,
+                )
+                if (copyState == InviteCopyState.ERROR) {
+                    Surface(
+                        shape = MaterialTheme.shapes.medium,
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                    ) {
+                        Text(
+                            text = stringResource(Res.string.copy_unavailable_details),
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 24.dp, top = 8.dp, end = 24.dp, bottom = 16.dp),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                TextButton(onClick = onDismiss) {
+                    Text(stringResource(Res.string.done))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun InviteShareOption(
+    label: String,
+    value: String,
+    buttonLabel: String,
+    copied: Boolean,
+    tonal: Boolean,
+    onCopy: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoomioDesignSystem.shapes.largeIncreased,
+        color = MaterialTheme.colorScheme.surfaceContainerLowest,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+    ) {
+        BoxWithConstraints(Modifier.padding(RoomioDesignSystem.spacing.small)) {
+            val horizontal = maxWidth >= 400.dp
+            val field: @Composable (Modifier) -> Unit = { fieldModifier ->
+                OutlinedTextField(
+                    value = value,
+                    onValueChange = {},
+                    modifier = fieldModifier,
+                    readOnly = true,
+                    singleLine = true,
+                    label = { Text(label) },
+                )
+            }
+            val action: @Composable () -> Unit = {
+                val icon = if (copied) {
+                    Icons.Filled.Check
+                } else if (tonal) {
+                    Icons.Filled.ContentCopy
+                } else {
+                    Icons.Filled.Link
+                }
+                if (tonal) {
+                    FilledTonalButton(
+                        onClick = onCopy,
+                        modifier = Modifier.heightIn(min = 48.dp),
+                    ) {
+                        Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(buttonLabel)
+                    }
+                } else {
+                    OutlinedButton(
+                        onClick = onCopy,
+                        modifier = Modifier.heightIn(min = 48.dp),
+                    ) {
+                        Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(buttonLabel)
+                    }
+                }
+            }
+
+            if (horizontal) {
+                Row(
+                    verticalAlignment = Alignment.Bottom,
+                    horizontalArrangement = Arrangement.spacedBy(RoomioDesignSystem.spacing.extraSmall),
+                ) {
+                    field(Modifier.weight(1f))
+                    action()
+                }
+            } else {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(RoomioDesignSystem.spacing.extraSmall),
+                ) {
+                    field(Modifier.fillMaxWidth())
+                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                        action()
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun RoomDialog(title: String, body: String, confirm: String, onDismiss: () -> Unit) {
     AlertDialog(
@@ -1073,6 +1338,48 @@ private fun OwnerEmptyRoomPreview() = AppTheme(onThemeChanged = {}) { RoomScreen
 @Composable
 private fun OwnerPlayingRoomPreview() = AppTheme(onThemeChanged = {}) {
     RoomScreen(ownerEmptyRoom.copy(playback = RoomPlaybackState.PLAYING))
+}
+
+@Preview(name = "Owner playing · small", widthDp = 360, heightDp = 800)
+@Composable
+private fun OwnerPlayingSmallPreview() = AppTheme(onThemeChanged = {}) {
+    RoomScreen(ownerEmptyRoom.copy(playback = RoomPlaybackState.PLAYING))
+}
+
+@Preview(name = "Invite friends · compact", widthDp = 360, heightDp = 720)
+@Composable
+private fun InviteFriendsDialogCompactPreview() = AppTheme(onThemeChanged = {}) {
+    Box(
+        modifier = Modifier.fillMaxSize().padding(16.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        InviteFriendsDialogCard(
+            partyCode = "NOVA-27",
+            inviteLink = "https://roomio.app/?invite=NOVA-27",
+            copyState = InviteCopyState.IDLE,
+            onCopyCode = {},
+            onCopyLink = {},
+            onDismiss = {},
+        )
+    }
+}
+
+@Preview(name = "Invite friends · copied", widthDp = 540, heightDp = 620)
+@Composable
+private fun InviteFriendsDialogCopiedPreview() = AppTheme(onThemeChanged = {}) {
+    Box(
+        modifier = Modifier.fillMaxSize().padding(16.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        InviteFriendsDialogCard(
+            partyCode = "NOVA-27",
+            inviteLink = "https://roomio.app/?invite=NOVA-27",
+            copyState = InviteCopyState.CODE,
+            onCopyCode = {},
+            onCopyLink = {},
+            onDismiss = {},
+        )
+    }
 }
 
 @Preview(name = "Guest playing · desktop", widthDp = 1200, heightDp = 800)

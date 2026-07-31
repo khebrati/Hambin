@@ -10,11 +10,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runComposeUiTest
 import kotlin.test.Test
+import top.roomio.app.room.RoomScreen
+import top.roomio.app.theme.AppTheme
 
 @OptIn(ExperimentalTestApi::class)
 class ComposeTest {
@@ -41,5 +45,22 @@ class ComposeTest {
             repeat(3) { performClick() }
         }
         onNodeWithTag("t_text").assertTextEquals("Go...")
+    }
+
+    @Test
+    fun inviteDialogShowsBothShareOptions() = runComposeUiTest {
+        setContent {
+            AppTheme(onThemeChanged = {}) {
+                RoomScreen()
+            }
+        }
+
+        onNodeWithContentDescription("Invite friends").performClick()
+
+        onNodeWithText("Share either option. Friends will preview the room before they join.").assertExists()
+        onNodeWithText("Party code").assertExists()
+        onNodeWithText("Prototype invite link").assertExists()
+        onNodeWithText("Copy code").assertExists()
+        onNodeWithText("Copy link").assertExists()
     }
 }
