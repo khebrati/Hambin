@@ -4,6 +4,7 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -370,6 +371,8 @@ private fun AvatarPicker(
                     avatar = avatar,
                     selected = avatar == selectedAvatar,
                     onClick = { onSelected(avatar) },
+                    baseArtworkSize = minOf(itemWidth - 16.dp, 124.dp),
+                    selectedArtworkSize = minOf(itemWidth - 4.dp, 144.dp),
                     modifier = Modifier.width(itemWidth),
                 )
             }
@@ -382,66 +385,62 @@ private fun AvatarChoice(
     avatar: ProfileAvatar,
     selected: Boolean,
     onClick: () -> Unit,
+    baseArtworkSize: androidx.compose.ui.unit.Dp,
+    selectedArtworkSize: androidx.compose.ui.unit.Dp,
     modifier: Modifier = Modifier,
 ) {
-    val shape = MaterialTheme.shapes.medium
-    Surface(
-        onClick = onClick,
+    Box(
         modifier = modifier
-            .heightIn(min = 148.dp)
-            .border(
-                width = if (selected) 2.dp else 1.dp,
-                color = if (selected) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.outlineVariant
-                },
-                shape = shape,
+            .heightIn(min = selectedArtworkSize + 44.dp)
+            .clickable(
+                role = Role.RadioButton,
+                onClick = onClick,
             )
             .semantics {
-                role = Role.RadioButton
                 this.selected = selected
             },
-        shape = shape,
-        color = if (selected) {
-            MaterialTheme.colorScheme.primaryContainer
-        } else {
-            MaterialTheme.colorScheme.surfaceContainerLow
-        },
-        contentColor = if (selected) {
-            MaterialTheme.colorScheme.onPrimaryContainer
-        } else {
-            MaterialTheme.colorScheme.onSurface
-        },
     ) {
-        Box(modifier = Modifier.padding(8.dp)) {
-            if (selected) {
-                Icon(
-                    imageVector = Icons.Filled.Check,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .size(16.dp),
-                )
-            }
-            Column(
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .padding(top = 2.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
+        Column(
+            modifier = Modifier.align(Alignment.Center),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Box {
                 ProfileAvatarImage(
                     avatar = avatar,
                     description = avatar.label,
                     selected = selected,
+                    baseArtworkSize = baseArtworkSize,
+                    selectedArtworkSize = selectedArtworkSize,
                 )
-                Text(
-                    text = avatar.label,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold,
-                )
+                if (selected) {
+                    Icon(
+                        imageVector = Icons.Filled.Check,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .size(24.dp)
+                            .clip(CircleShape)
+                            .border(
+                                width = 2.dp,
+                                color = MaterialTheme.colorScheme.surface,
+                                shape = CircleShape,
+                            )
+                            .padding(3.dp),
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
             }
+            Text(
+                text = avatar.label,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = if (selected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+            )
         }
     }
 }
@@ -451,12 +450,18 @@ private fun ProfileAvatarImage(
     avatar: ProfileAvatar,
     description: String,
     selected: Boolean,
+    baseArtworkSize: androidx.compose.ui.unit.Dp = 84.dp,
+    selectedArtworkSize: androidx.compose.ui.unit.Dp = 96.dp,
 ) {
     val artworkSize by animateDpAsState(
-        targetValue = if (selected) 96.dp else 84.dp,
+        targetValue = if (selected) selectedArtworkSize else baseArtworkSize,
     )
     val frameSize by animateDpAsState(
-        targetValue = if (selected) 76.dp else 88.dp,
+        targetValue = if (selected) {
+            selectedArtworkSize * .72f
+        } else {
+            baseArtworkSize + 4.dp
+        },
     )
     val rotation by animateFloatAsState(
         targetValue = if (selected) -3f else 0f,
@@ -483,7 +488,7 @@ private fun ProfileAvatarImage(
     }
 
     Box(
-        modifier = Modifier.size(100.dp),
+        modifier = Modifier.size(selectedArtworkSize + 8.dp),
         contentAlignment = Alignment.Center,
     ) {
         Surface(
