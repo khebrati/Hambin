@@ -48,3 +48,19 @@
 - **Decision:** The room invite action opens a responsive Material dialog with a selectable party code and mock invite link. Each option has its own copy action, visible copied feedback, snackbar confirmation, and a manual-selection recovery message when clipboard access fails.
 - **Rationale:** Showing both options preserves the prototype flow and lets users share the most convenient identifier without bypassing the required pre-join room preview.
 - **Responsive consequence:** Share fields and actions sit side by side when the dialog has at least 400dp of content width and stack at narrower widths or under equivalent layout pressure. All actions retain at least 48dp touch targets.
+
+## DD-008: Home Entry and Room Continuity
+
+- **Status:** Approved for the Compose implementation
+- **Decision:** The Home screen opens with the local Nika identity and an ownerless “Friday night screening” room that can be resumed. The primary Create and Join actions remain equally prominent, while the returnable room is a supporting card rather than a competing primary action.
+- **Responsive consequence:** At 840dp and wider, the identity and primary actions occupy the leading pane and the returnable room occupies a narrower supporting pane. Below 840dp the card stacks after the primary actions; the two primary actions share a row from 600dp upward and stack on compact widths.
+- **Material consequence:** The implementation uses semantic color roles, expressive large-increased containers, 48dp minimum action targets, mirrored directional icons for RTL, and layouts that reflow under large text instead of scaling fixed coordinates.
+- **Prototype behavior:** Create, Join, and room-resume actions navigate locally to the existing room experience. Settings edits the mock display name in memory, and the theme action switches the local Material theme.
+
+## DD-009: Party Manager Create and Join Modes
+
+- **Status:** Approved for the Compose implementation
+- **Decision:** Use one Party Manager destination with a two-option segmented control. Create is the default mode when entered from “Create a party”; Join is the default when entered from “Join with code.”
+- **Create consequence:** The create mode explains ownership before showing one full-width Create action and an abstract cinema illustration. Creating enters the existing empty owner room using local fixture state.
+- **Join consequence:** The join action remains disabled until a party code is present. Loading and invalid-code states are represented by the screen API and previews so local repository behavior can be connected without redesigning the surface.
+- **Accessibility consequence:** Both mode targets expose tab semantics, directional navigation mirrors in RTL, every icon action retains a 48dp target, and scrolling preserves the complete flow at large font scales.

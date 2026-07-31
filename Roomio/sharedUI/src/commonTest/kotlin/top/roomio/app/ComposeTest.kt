@@ -10,6 +10,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.onNodeWithTag
@@ -62,5 +63,61 @@ class ComposeTest {
         onNodeWithText("Prototype invite link").assertExists()
         onNodeWithText("Copy code").assertExists()
         onNodeWithText("Copy link").assertExists()
+    }
+
+    @Test
+    fun homeShowsIdentityActionsAndReturnableRoom() = runComposeUiTest {
+        setContent {
+            App()
+        }
+
+        onNodeWithText("Bring the film. Keep your own pace.").assertExists()
+        onNodeWithText("Nika").assertExists()
+        onNodeWithText("Create a party").assertExists()
+        onNodeWithText("Join with code").assertExists()
+        onNodeWithText("Friday night screening").assertExists()
+        onNodeWithText("2 friends · No owner").assertExists()
+    }
+
+    @Test
+    fun homeSettingsCanUpdateTheDisplayName() = runComposeUiTest {
+        setContent {
+            App()
+        }
+
+        onNodeWithContentDescription("Settings").performClick()
+
+        onNodeWithText("Display name").assertExists()
+        onNodeWithText("Save").assertExists()
+    }
+
+    @Test
+    fun createFromHomeOpensPartyManagerAndCreatesRoom() = runComposeUiTest {
+        setContent {
+            App()
+        }
+
+        onNodeWithText("Create a party").performClick()
+
+        onNodeWithText("Party manager").assertExists()
+        onNodeWithText("Open a room for movie night").assertExists()
+        onNodeWithText("You will be the host", ignoreCase = true).assertExists()
+
+        onNodeWithText("Create party").performClick()
+
+        onNodeWithText("Your cinema is empty").assertExists()
+    }
+
+    @Test
+    fun joinFromHomeOpensDisabledEmptyCodeState() = runComposeUiTest {
+        setContent {
+            App()
+        }
+
+        onNodeWithText("Join with code").performClick()
+
+        onNodeWithText("Step into their room").assertExists()
+        onNodeWithText("Party code").assertExists()
+        onNodeWithText("Preview party").assertIsNotEnabled()
     }
 }
