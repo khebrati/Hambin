@@ -64,3 +64,12 @@
 - **Create consequence:** The create mode explains ownership before showing one full-width Create action and an abstract cinema illustration. Creating enters the existing empty owner room using local fixture state.
 - **Join consequence:** The join action remains disabled until a party code is present. Loading and invalid-code states are represented by the screen API and previews so local repository behavior can be connected without redesigning the surface.
 - **Accessibility consequence:** Both mode targets expose tab semantics, directional navigation mirrors in RTL, every icon action retains a 48dp target, and scrolling preserves the complete flow at large font scales.
+
+## DD-010: Full-Screen Profile Editing
+
+- **Status:** Approved for the Compose implementation
+- **Decision:** Replace the temporary settings dialog with a dedicated profile destination containing a live identity preview, display-name field, twelve local avatar choices, a disabled language field, and a persistent Save action.
+- **Responsive consequence:** Profile content is capped at 712dp inside the 760dp prototype page width. The avatar grid uses three columns from 460dp and two columns below it; the page scrolls behind a safe-area-aware bottom action at compact heights and large font scales.
+- **State consequence:** Name and avatar changes remain draft values until Save. Saving trims the display name and updates the Home identity in memory; Back discards the draft. Save remains disabled while the trimmed name is empty.
+- **Expressive consequence:** All avatars use larger, low-inset portraits. Selection morphs the portrait into a larger asymmetric shape that overlaps a contrasting tonal frame, adds slight rotation and elevation, and animates between states while retaining the card border and check mark.
+- **Accessibility consequence:** Avatar choices expose radio-button selection semantics and visible selected borders/check marks. The live preview and picker have explicit labels, directional navigation mirrors in RTL, and interactive controls retain 48dp minimum targets.

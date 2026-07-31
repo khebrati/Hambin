@@ -65,7 +65,6 @@ import androidx.compose.ui.unit.dp
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import roomio.sharedui.generated.resources.Res
-import roomio.sharedui.generated.resources.avatar_comet
 import roomio.sharedui.generated.resources.choose_name
 import roomio.sharedui.generated.resources.create_party
 import roomio.sharedui.generated.resources.edit_profile
@@ -88,6 +87,7 @@ import top.roomio.app.theme.AppTheme
 import top.roomio.app.theme.LocalThemeIsDark
 import top.roomio.app.theme.RoomioDesignSystem
 import top.roomio.app.theme.RoomioTheme
+import top.roomio.app.profile.ProfileAvatar
 
 @Immutable
 internal data class HomeRoomPreview(
@@ -111,6 +111,7 @@ private val recentRoom = HomeRoomPreview(
 @Composable
 internal fun HomeScreen(
     identityName: String = "Nika",
+    identityAvatar: ProfileAvatar = ProfileAvatar.COMET,
     roomPreview: HomeRoomPreview? = returnableRoom,
     onSettings: () -> Unit,
     onCreate: () -> Unit,
@@ -160,6 +161,7 @@ internal fun HomeScreen(
                 ) {
                     HomeStage(
                         identityName = identityName,
+                        identityAvatar = identityAvatar,
                         actionsHorizontal = true,
                         onSettings = onSettings,
                         onCreate = onCreate,
@@ -186,6 +188,7 @@ internal fun HomeScreen(
                 ) {
                     HomeStage(
                         identityName = identityName,
+                        identityAvatar = identityAvatar,
                         actionsHorizontal = mediumOrWider,
                         onSettings = onSettings,
                         onCreate = onCreate,
@@ -301,6 +304,7 @@ private fun HomeIconButton(
 @Composable
 private fun HomeStage(
     identityName: String,
+    identityAvatar: ProfileAvatar,
     actionsHorizontal: Boolean,
     onSettings: () -> Unit,
     onCreate: () -> Unit,
@@ -329,7 +333,11 @@ private fun HomeStage(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        IdentityPill(identityName = identityName, onSettings = onSettings)
+        IdentityPill(
+            identityName = identityName,
+            identityAvatar = identityAvatar,
+            onSettings = onSettings,
+        )
         if (actionsHorizontal) {
             Row(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -347,7 +355,11 @@ private fun HomeStage(
 }
 
 @Composable
-private fun IdentityPill(identityName: String, onSettings: () -> Unit) {
+private fun IdentityPill(
+    identityName: String,
+    identityAvatar: ProfileAvatar,
+    onSettings: () -> Unit,
+) {
     Surface(
         modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp),
         shape = RoomioDesignSystem.shapes.extraLargeIncreased,
@@ -360,7 +372,7 @@ private fun IdentityPill(identityName: String, onSettings: () -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(RoomioDesignSystem.spacing.small),
         ) {
             Image(
-                painter = painterResource(Res.drawable.avatar_comet),
+                painter = painterResource(identityAvatar.resource),
                 contentDescription = identityName,
                 modifier = Modifier
                     .size(76.dp)

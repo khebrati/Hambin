@@ -129,4 +129,21 @@
     <string name="preview_party">Preview party</string>
     <string name="step_into_their_room">Step into their room</string>
     <string name="you_will_be_the_host">You will be the host</string>
+    <string name="add_your_name">Add your name</string>
+    <string name="app_language">App language</string>
+    <string name="avatar">Avatar</string>
+    <string name="avatar_description">Pick the face friends will see in the room.</string>
+    <string name="choose_an_avatar">Choose an avatar</string>
+    <string name="english">English</string>
+    <string name="language">Language</string>
+    <string name="language_description">English is selected for this design pass.</string>
+    <string name="name">Name</string>
+    <string name="name_description">Keep it recognizable to friends.</string>
+    <string name="name_required">A name is needed before saving.</string>
+    <string name="profile_preview">Profile preview</string>
+    <string name="ready_to_watch">Ready to watch</string>
+    <string name="save_profile">Save profile</string>
+    <string name="shown_inside_every_party">Shown inside every party</string>
+    <string name="your_avatar">Your avatar</string>
+    <string name="your_profile">Your profile</string>
 </resources>

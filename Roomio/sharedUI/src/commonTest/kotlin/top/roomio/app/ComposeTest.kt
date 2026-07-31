@@ -87,8 +87,12 @@ class ComposeTest {
 
         onNodeWithContentDescription("Settings").performClick()
 
+        onNodeWithText("Your profile").assertExists()
         onNodeWithText("Display name").assertExists()
-        onNodeWithText("Save").assertExists()
+        onNodeWithText("Avatar").assertExists()
+        onNodeWithText("Comet").assertExists()
+        onNodeWithText("Sunny").assertExists()
+        onNodeWithText("Save profile").assertExists()
     }
 
     @Test
