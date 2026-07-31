@@ -16,6 +16,7 @@ import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.runComposeUiTest
 import kotlin.test.Test
 import top.roomio.app.room.RoomScreen
@@ -123,5 +124,75 @@ class ComposeTest {
         onNodeWithText("Step into their room").assertExists()
         onNodeWithText("Party code").assertExists()
         onNodeWithText("Preview party").assertIsNotEnabled()
+    }
+
+    @Test
+    fun destinationUpActionsReturnToHome() = runComposeUiTest {
+        setContent {
+            App()
+        }
+
+        onNodeWithContentDescription("Settings").performClick()
+        onNodeWithText("Your profile").assertExists()
+        onNodeWithContentDescription("Back").performClick()
+        onNodeWithText("Bring the film. Keep your own pace.").assertExists()
+
+        onNodeWithText("Create a party").performClick()
+        onNodeWithText("Party manager").assertExists()
+        onNodeWithContentDescription("Back").performClick()
+        onNodeWithText("Bring the film. Keep your own pace.").assertExists()
+    }
+
+    @Test
+    fun confirmedLeavePartyReturnsToHome() = runComposeUiTest {
+        setContent {
+            App()
+        }
+
+        onNodeWithText("Create a party").performClick()
+        onNodeWithText("Create party").performClick()
+        onNodeWithContentDescription("Leave").performClick()
+        onNodeWithText("Leave party?").assertExists()
+        onNodeWithText("Leave").performClick()
+
+        onNodeWithText("Bring the film. Keep your own pace.").assertExists()
+        onNodeWithText("Party manager").assertDoesNotExist()
+    }
+
+    @Test
+    fun joinCodeShowsPreviewBeforeEnteringRoom() = runComposeUiTest {
+        setContent {
+            App()
+        }
+
+        onNodeWithText("Join with code").performClick()
+        onNodeWithText("Party code").performTextInput("MOON-42")
+        onNodeWithText("Preview party").performClick()
+
+        onNodeWithText("Room preview").assertExists()
+        onNodeWithText("Mira's late show").assertExists()
+        onNodeWithText("Open").assertExists()
+        onNodeWithText("3 people").assertExists()
+        onNodeWithText("Playing now").assertExists()
+
+        onNodeWithText("Join party").performClick()
+
+        onNodeWithText("Voice party").assertExists()
+        onNodeWithText("MOON-42 · Guest").assertExists()
+    }
+
+    @Test
+    fun notNowReturnsFromPreviewToEnteredCode() = runComposeUiTest {
+        setContent {
+            App()
+        }
+
+        onNodeWithText("Join with code").performClick()
+        onNodeWithText("Party code").performTextInput("MOON-42")
+        onNodeWithText("Preview party").performClick()
+        onNodeWithText("Not now").performClick()
+
+        onNodeWithText("Step into their room").assertExists()
+        onNodeWithText("MOON-42").assertExists()
     }
 }

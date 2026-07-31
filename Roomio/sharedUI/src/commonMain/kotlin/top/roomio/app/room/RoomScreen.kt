@@ -179,10 +179,23 @@ private val guestPlayingRoom = RoomScreenModel(
     ),
 )
 
+internal fun ownerRoomModel(): RoomScreenModel = ownerEmptyRoom
+
+internal fun joinedRoomModel(partyCode: String): RoomScreenModel = when (partyCode) {
+    "ORBIT-08" -> guestPlayingRoom.copy(
+        title = "Orbit double feature",
+        partyCode = partyCode,
+        ownerPresent = false,
+        participants = guestPlayingRoom.participants.filterNot { it.isHost },
+    )
+    else -> guestPlayingRoom.copy(partyCode = partyCode)
+}
+
 @Composable
 internal fun RoomScreen(
     model: RoomScreenModel = ownerEmptyRoom,
     modifier: Modifier = Modifier,
+    onLeaveParty: () -> Unit = {},
 ) {
     var isDark by LocalThemeIsDark.current
     var playback by remember(model) { mutableStateOf(model.playback) }
@@ -195,7 +208,6 @@ internal fun RoomScreen(
     var linkOpen by remember { mutableStateOf(false) }
     var leaveOpen by remember { mutableStateOf(false) }
     var abortOpen by remember { mutableStateOf(false) }
-    var hasLeft by remember { mutableStateOf(false) }
     val snackbarHost = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val syncComplete = stringResource(Res.string.sync_complete)
@@ -209,11 +221,6 @@ internal fun RoomScreen(
             delay(650)
             playback = RoomPlaybackState.PLAYING
         }
-    }
-
-    if (hasLeft) {
-        LeftRoomState(modifier, onRejoin = { hasLeft = false })
-        return
     }
 
     val isOwner = model.role == RoomRole.OWNER && model.ownerPresent
@@ -366,7 +373,14 @@ internal fun RoomScreen(
             title = { Text(stringResource(Res.string.leave_party)) },
             text = { Text(stringResource(if (isOwner) Res.string.leave_owner_copy else Res.string.leave_guest_copy)) },
             confirmButton = {
-                TextButton(onClick = { hasLeft = true; leaveOpen = false }) { Text(stringResource(Res.string.leave)) }
+                TextButton(
+                    onClick = {
+                        leaveOpen = false
+                        onLeaveParty()
+                    },
+                ) {
+                    Text(stringResource(Res.string.leave))
+                }
             },
             dismissButton = { TextButton(onClick = { leaveOpen = false }) { Text(stringResource(Res.string.stay)) } },
         )
@@ -1311,23 +1325,6 @@ private fun RoomDialog(title: String, body: String, confirm: String, onDismiss: 
         text = { Text(body) },
         confirmButton = { TextButton(onClick = onDismiss) { Text(confirm) } },
     )
-}
-
-@Composable
-private fun LeftRoomState(modifier: Modifier, onRejoin: () -> Unit) {
-    Box(modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing), contentAlignment = Alignment.Center) {
-        Surface(shape = RoomioDesignSystem.shapes.extraLargeIncreased, color = MaterialTheme.colorScheme.surfaceContainerLow) {
-            Column(
-                modifier = Modifier.padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Text(stringResource(Res.string.you_left_party), style = MaterialTheme.typography.headlineSmall)
-                Text(stringResource(Res.string.rejoin_room_copy), style = MaterialTheme.typography.bodyMedium)
-                FilledTonalButton(onClick = onRejoin) { Text(stringResource(Res.string.rejoin)) }
-            }
-        }
-    }
 }
 
 @Preview(name = "Owner empty · compact", widthDp = 412, heightDp = 920)

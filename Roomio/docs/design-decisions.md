@@ -73,3 +73,21 @@
 - **State consequence:** Name and avatar changes remain draft values until Save. Saving trims the display name and updates the Home identity in memory; Back discards the draft. Save remains disabled while the trimmed name is empty.
 - **Expressive consequence:** Avatar choices are containerless so their grid width belongs to the portraits rather than card chrome. Selection morphs the portrait into a larger asymmetric shape that overlaps a contrasting tonal frame, adds slight rotation and elevation, and animates between states while retaining a check mark and emphasized label.
 - **Accessibility consequence:** Avatar choices expose radio-button selection semantics and visible selected borders/check marks. The live preview and picker have explicit labels, directional navigation mirrors in RTL, and interactive controls retain 48dp minimum targets.
+
+## DD-011: Type-Safe Navigation 3 Back Stack
+
+- **Status:** Approved for the Compose implementation
+- **Decision:** Replace the sample-level destination enum with a Navigation 3 `NavDisplay`, a saveable back stack, serializable route keys, and the type-safe entry-provider DSL.
+- **Route model:** Home is the root route. Profile and Room are object routes. Party Manager carries its initial Create or Join mode as a serializable route argument rather than mutable navigation state.
+- **Back behavior:** App-bar Up actions and system/predictive Back remove the same top entry and never remove the root Home entry. Repeated requests for the current route are ignored to prevent accidental duplicate destinations.
+- **Leave behavior:** Confirming Leave in a room clears every entry above Home, so rooms entered through Party Manager cannot reveal that setup flow after departure. Dismissing the confirmation keeps the current Room entry.
+- **State consequence:** The local profile identity remains app state outside destination entries and is saveable independently of the navigation stack. Draft profile edits still belong to the Profile entry and are committed only on Save.
+- **Motion consequence:** Forward navigation uses a short emphasized horizontal/fade transition; pop and predictive-pop use the matching reverse transition.
+
+## DD-012: Pre-Join Room Preview
+
+- **Status:** Approved for the Compose implementation
+- **Decision:** A valid party code opens a dedicated Room Preview route before the user can enter the room. The serializable route carries only the normalized party code; preview details come from local fixtures.
+- **Navigation consequence:** “Not now” and app-bar Up pop back to Party Manager with its entered code intact. “Join party” pushes a guest Room route only when availability is Open. Confirmed room departure still clears the entire flow back to Home.
+- **State coverage:** Local fixtures represent open/playing, open/owner-away, full, and ended/waiting states. Invalid codes remain in Party Manager with inline error feedback; unavailable previews explain the reason and disable Join.
+- **Responsive consequence:** The preview card is capped at 672dp. Its three facts share a row at 560dp and wider and stack below that width; the full screen remains scrollable for compact heights and large text.

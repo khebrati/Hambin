@@ -43,7 +43,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -90,13 +90,19 @@ internal fun PartyManagerScreen(
     initialMode: ManagerMode,
     onBack: () -> Unit,
     onCreate: () -> Unit,
-    onPreview: (String) -> Unit,
+    onPreview: (String) -> Boolean,
     modifier: Modifier = Modifier,
     loading: Boolean = false,
     codeError: Boolean = false,
 ) {
-    var mode by remember(initialMode) { mutableStateOf(initialMode) }
-    var code by remember(codeError) { mutableStateOf(if (codeError) "NOVA-99" else "") }
+    var modeName by rememberSaveable(initialMode.name) {
+        mutableStateOf(initialMode.name)
+    }
+    val mode = ManagerMode.valueOf(modeName)
+    var code by rememberSaveable(codeError) {
+        mutableStateOf(if (codeError) "NOVA-99" else "")
+    }
+    var hasCodeError by rememberSaveable(codeError) { mutableStateOf(codeError) }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -127,7 +133,7 @@ internal fun PartyManagerScreen(
                 ManagerTabs(
                     selectedMode = mode,
                     enabled = !loading,
-                    onSelected = { mode = it },
+                    onSelected = { modeName = it.name },
                 )
                 when (mode) {
                     ManagerMode.CREATE -> CreatePartyPanel(
@@ -137,9 +143,14 @@ internal fun PartyManagerScreen(
                     ManagerMode.JOIN -> JoinPartyPanel(
                         code = code,
                         loading = loading,
-                        codeError = codeError,
-                        onCodeChange = { code = it.uppercase() },
-                        onPreview = { onPreview(code.trim()) },
+                        codeError = hasCodeError,
+                        onCodeChange = {
+                            code = it.uppercase()
+                            hasCodeError = false
+                        },
+                        onPreview = {
+                            hasCodeError = !onPreview(code.trim())
+                        },
                     )
                 }
             }
@@ -516,7 +527,7 @@ private fun PartyManagerCompactPreview() {
             initialMode = ManagerMode.CREATE,
             onBack = {},
             onCreate = {},
-            onPreview = {},
+            onPreview = { true },
         )
     }
 }
@@ -529,7 +540,7 @@ private fun PartyManagerExpandedPreview() {
             initialMode = ManagerMode.CREATE,
             onBack = {},
             onCreate = {},
-            onPreview = {},
+            onPreview = { true },
         )
     }
 }
@@ -542,7 +553,7 @@ private fun PartyManagerJoinErrorPreview() {
             initialMode = ManagerMode.JOIN,
             onBack = {},
             onCreate = {},
-            onPreview = {},
+            onPreview = { true },
             codeError = true,
         )
     }
@@ -556,7 +567,7 @@ private fun PartyManagerLoadingLargeTextPreview() {
             initialMode = ManagerMode.CREATE,
             onBack = {},
             onCreate = {},
-            onPreview = {},
+            onPreview = { true },
             loading = true,
         )
     }

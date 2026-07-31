@@ -146,4 +146,23 @@
     <string name="shown_inside_every_party">Shown inside every party</string>
     <string name="your_avatar">Your avatar</string>
     <string name="your_profile">Your profile</string>
+    <string name="check_party_before_joining">Check the party before joining</string>
+    <string name="ended">Ended</string>
+    <string name="full">Full</string>
+    <string name="in_the_room">In the room</string>
+    <string name="join_party">Join party</string>
+    <string name="joining_unavailable">Joining is unavailable</string>
+    <string name="no_owner_in_room">No owner in the room</string>
+    <string name="not_now">Not now</string>
+    <string name="open">Open</string>
+    <string name="owner_away_preview_copy">You can watch and use local controls, but the video stays locked until %1$s returns.</string>
+    <string name="owner_is_away">%1$s is away</string>
+    <string name="party_ended_preview_copy">This party has ended and is no longer accepting guests.</string>
+    <string name="party_full_preview_copy">This room has reached its participant limit.</string>
+    <string name="party_label">PARTY %1$s</string>
+    <string name="people_count">%1$d people</string>
+    <string name="person_count">%1$d person</string>
+    <string name="room_preview">Room preview</string>
+    <string name="stream">Stream</string>
+    <string name="waiting_to_start">Waiting to start</string>
 </resources>
