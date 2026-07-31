@@ -137,16 +137,15 @@ internal fun roomPreviewForCode(code: String): RoomPreviewModel? = when (code.tr
 
 @Composable
 internal fun RoomPreviewScreen(
-    model: RoomPreviewModel,
-    onBack: () -> Unit,
-    onJoin: () -> Unit,
+    state: RoomPreviewUiState,
+    onAction: (RoomPreviewAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.surface,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        topBar = { PreviewTopBar(onBack = onBack) },
+        topBar = { PreviewTopBar(onBack = { onAction(RoomPreviewAction.BackClicked) }) },
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -163,9 +162,9 @@ internal fun RoomPreviewScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             PreviewCard(
-                model = model,
-                onBack = onBack,
-                onJoin = onJoin,
+                model = state.model,
+                onBack = { onAction(RoomPreviewAction.BackClicked) },
+                onJoin = { onAction(RoomPreviewAction.JoinClicked) },
                 modifier = Modifier
                     .widthIn(max = 672.dp)
                     .fillMaxWidth(),
@@ -565,9 +564,8 @@ private fun PreviewCinemaScene(modifier: Modifier = Modifier) {
 private fun AvailablePreview() {
     AppTheme(onThemeChanged = {}) {
         RoomPreviewScreen(
-            model = requireNotNull(roomPreviewForCode("MOON-42")),
-            onBack = {},
-            onJoin = {},
+            state = RoomPreviewUiState(requireNotNull(roomPreviewForCode("MOON-42"))),
+            onAction = {},
         )
     }
 }
@@ -577,9 +575,8 @@ private fun AvailablePreview() {
 private fun OwnerAwayCompactPreview() {
     RoomioTheme(darkTheme = true) {
         RoomPreviewScreen(
-            model = requireNotNull(roomPreviewForCode("ORBIT-08")),
-            onBack = {},
-            onJoin = {},
+            state = RoomPreviewUiState(requireNotNull(roomPreviewForCode("ORBIT-08"))),
+            onAction = {},
         )
     }
 }
@@ -589,9 +586,8 @@ private fun OwnerAwayCompactPreview() {
 private fun UnavailableLargeTextPreview() {
     AppTheme(onThemeChanged = {}) {
         RoomPreviewScreen(
-            model = requireNotNull(roomPreviewForCode("FULL-10")),
-            onBack = {},
-            onJoin = {},
+            state = RoomPreviewUiState(requireNotNull(roomPreviewForCode("FULL-10"))),
+            onAction = {},
         )
     }
 }

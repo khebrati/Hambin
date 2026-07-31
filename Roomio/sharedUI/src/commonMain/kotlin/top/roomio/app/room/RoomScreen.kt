@@ -77,10 +77,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -102,8 +99,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import roomio.sharedui.generated.resources.*
@@ -193,58 +190,47 @@ internal fun joinedRoomModel(partyCode: String): RoomScreenModel = when (partyCo
 
 @Composable
 internal fun RoomScreen(
-    model: RoomScreenModel = ownerEmptyRoom,
+    state: RoomUiState = RoomUiState(ownerEmptyRoom),
+    effects: Flow<RoomEffect> = emptyFlow(),
+    onAction: (RoomAction) -> Unit = {},
     modifier: Modifier = Modifier,
-    onLeaveParty: () -> Unit = {},
 ) {
     var isDark by LocalThemeIsDark.current
-    var playback by remember(model) { mutableStateOf(model.playback) }
-    var videoUrl by remember(model) { mutableStateOf("") }
-    var playbackPosition by remember(model) { mutableFloatStateOf(0.13f) }
-    var volume by remember { mutableFloatStateOf(0.72f) }
-    var micMuted by remember { mutableStateOf(false) }
-    var theaterMode by remember { mutableStateOf(false) }
-    var inviteOpen by remember { mutableStateOf(false) }
-    var linkOpen by remember { mutableStateOf(false) }
-    var leaveOpen by remember { mutableStateOf(false) }
-    var abortOpen by remember { mutableStateOf(false) }
     val snackbarHost = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
     val syncComplete = stringResource(Res.string.sync_complete)
     val pastedUrl = stringResource(Res.string.sample_video_url)
     val partyCodeCopied = stringResource(Res.string.party_code_copied)
     val inviteLinkCopied = stringResource(Res.string.invite_link_copied)
     val copyUnavailable = stringResource(Res.string.copy_unavailable)
 
-    LaunchedEffect(playback) {
-        if (playback == RoomPlaybackState.LOADING) {
-            delay(650)
-            playback = RoomPlaybackState.PLAYING
+    LaunchedEffect(effects) {
+        effects.collect { effect ->
+            snackbarHost.showSnackbar(
+                when (effect) {
+                    RoomEffect.SYNC_COMPLETED -> syncComplete
+                    RoomEffect.PARTY_CODE_COPIED -> partyCodeCopied
+                    RoomEffect.INVITE_LINK_COPIED -> inviteLinkCopied
+                    RoomEffect.COPY_UNAVAILABLE -> copyUnavailable
+                },
+            )
         }
     }
-
-    val isOwner = model.role == RoomRole.OWNER && model.ownerPresent
-    val hasPlayer = playback in setOf(
-        RoomPlaybackState.PLAYING,
-        RoomPlaybackState.PAUSED,
-        RoomPlaybackState.BUFFERING,
-    )
 
     Scaffold(
         modifier = modifier.windowInsetsPadding(WindowInsets.safeDrawing),
         topBar = {
             RoomTopBar(
-                title = model.title,
-                subtitle = if (model.role == RoomRole.GUEST) {
-                    "${model.partyCode} · ${stringResource(Res.string.guest)}"
+                title = state.model.title,
+                subtitle = if (state.model.role == RoomRole.GUEST) {
+                    "${state.model.partyCode} · ${stringResource(Res.string.guest)}"
                 } else {
                     null
                 },
-                showLink = hasPlayer,
+                showLink = state.hasPlayer,
                 showTheme = true,
-                onInvite = { inviteOpen = true },
-                onShowLink = { linkOpen = true },
-                onLeave = { leaveOpen = true },
+                onInvite = { onAction(RoomAction.InviteClicked) },
+                onShowLink = { onAction(RoomAction.LinkClicked) },
+                onLeave = { onAction(RoomAction.LeaveClicked) },
                 onToggleTheme = { isDark = !isDark },
             )
         },
@@ -256,60 +242,50 @@ internal fun RoomScreen(
                 .padding(contentPadding)
                 .verticalScroll(rememberScrollState()),
         ) {
-            val compact = maxWidth < 840.dp || theaterMode
+            val compact = maxWidth < 840.dp || state.theaterMode
             val cinema: @Composable ColumnScope.() -> Unit = {
-                if (!model.ownerPresent) {
-                    OwnerAwayBanner(model.ownerName)
+                if (!state.model.ownerPresent) {
+                    OwnerAwayBanner(state.model.ownerName)
                     Spacer(Modifier.height(RoomioDesignSystem.spacing.small))
                 }
                 CinemaCard(
-                    playback = playback,
-                    isOwner = isOwner,
-                    ownerName = model.ownerName,
-                    videoUrl = videoUrl,
-                    playbackPosition = playbackPosition,
-                    volume = volume,
-                    onVideoUrlChange = {
-                        videoUrl = it
-                        if (playback == RoomPlaybackState.ERROR) playback = RoomPlaybackState.OWNER_EMPTY
-                    },
-                    onPaste = { videoUrl = pastedUrl },
-                    onStart = {
-                        playback = if (videoUrl.startsWith("http")) RoomPlaybackState.LOADING else RoomPlaybackState.ERROR
-                    },
-                    onRetry = { playback = if (isOwner) RoomPlaybackState.OWNER_EMPTY else RoomPlaybackState.WAITING_FOR_OWNER },
-                    onTogglePlayback = {
-                        playback = if (playback == RoomPlaybackState.PLAYING) RoomPlaybackState.PAUSED else RoomPlaybackState.PLAYING
-                    },
-                    onPositionChange = { playbackPosition = it },
-                    onSkip = { direction -> playbackPosition = (playbackPosition + direction * 0.035f).coerceIn(0f, 1f) },
-                    onVolumeChange = { volume = it },
-                    onToggleVolume = { volume = if (volume == 0f) .72f else 0f },
-                    onToggleTheater = { theaterMode = !theaterMode },
+                    playback = state.playback,
+                    isOwner = state.isOwner,
+                    ownerName = state.model.ownerName,
+                    videoUrl = state.videoUrl,
+                    playbackPosition = state.playbackPosition,
+                    volume = state.volume,
+                    onVideoUrlChange = { onAction(RoomAction.VideoUrlChanged(it)) },
+                    onPaste = { onAction(RoomAction.VideoUrlPasted(pastedUrl)) },
+                    onStart = { onAction(RoomAction.StartPlaybackClicked) },
+                    onRetry = { onAction(RoomAction.RetryPlaybackClicked) },
+                    onTogglePlayback = { onAction(RoomAction.TogglePlaybackClicked) },
+                    onPositionChange = { onAction(RoomAction.PlaybackPositionChanged(it)) },
+                    onSkip = { onAction(RoomAction.PlaybackSkipped(it)) },
+                    onVolumeChange = { onAction(RoomAction.VolumeChanged(it)) },
+                    onToggleVolume = { onAction(RoomAction.ToggleVolumeClicked) },
+                    onToggleTheater = { onAction(RoomAction.ToggleTheaterClicked) },
                 )
-                if (hasPlayer) {
+                if (state.hasPlayer) {
                     Spacer(Modifier.height(RoomioDesignSystem.spacing.small))
                     SyncBand(
-                        paused = playback == RoomPlaybackState.PAUSED,
-                        onSync = {
-                            playbackPosition = .21f
-                            scope.launch { snackbarHost.showSnackbar(syncComplete) }
-                        },
+                        paused = state.playback == RoomPlaybackState.PAUSED,
+                        onSync = { onAction(RoomAction.SyncClicked) },
                     )
                 }
             }
 
             val support: @Composable () -> Unit = {
                 RoomSupportPanel(
-                    participants = model.participants,
-                    micMuted = micMuted,
-                    streamActive = hasPlayer,
-                    isOwner = isOwner,
-                    ownerPresent = model.ownerPresent,
-                    onToggleMic = { micMuted = !micMuted },
-                    onInvite = { inviteOpen = true },
-                    onShowLink = { linkOpen = true },
-                    onEndStream = { abortOpen = true },
+                    participants = state.model.participants,
+                    micMuted = state.micMuted,
+                    streamActive = state.hasPlayer,
+                    isOwner = state.isOwner,
+                    ownerPresent = state.model.ownerPresent,
+                    onToggleMic = { onAction(RoomAction.ToggleMicClicked) },
+                    onInvite = { onAction(RoomAction.InviteClicked) },
+                    onShowLink = { onAction(RoomAction.LinkClicked) },
+                    onEndStream = { onAction(RoomAction.EndStreamClicked) },
                 )
             }
 
@@ -322,7 +298,7 @@ internal fun RoomScreen(
                     verticalArrangement = Arrangement.spacedBy(RoomioDesignSystem.spacing.small),
                 ) {
                     cinema()
-                    if (!theaterMode) support()
+                    if (!state.theaterMode) support()
                 }
             } else {
                 Row(
@@ -342,60 +318,58 @@ internal fun RoomScreen(
         }
     }
 
-    if (inviteOpen) {
+    if (state.inviteOpen) {
         InviteFriendsDialog(
-            partyCode = model.partyCode,
-            inviteLink = "https://roomio.app/?invite=${model.partyCode}",
-            onDismiss = { inviteOpen = false },
-            onCopied = { target ->
-                scope.launch {
-                    snackbarHost.showSnackbar(
-                        if (target == InviteCopyTarget.CODE) partyCodeCopied else inviteLinkCopied,
-                    )
-                }
-            },
-            onCopyFailed = {
-                scope.launch { snackbarHost.showSnackbar(copyUnavailable) }
-            },
+            partyCode = state.model.partyCode,
+            inviteLink = "https://roomio.app/?invite=${state.model.partyCode}",
+            copyState = state.inviteCopyState,
+            onDismiss = { onAction(RoomAction.InviteDismissed) },
+            onCopied = { onAction(RoomAction.InviteCopySucceeded(it)) },
+            onCopyFailed = { onAction(RoomAction.InviteCopyFailed) },
         )
     }
-    if (linkOpen) {
+    if (state.linkOpen) {
         RoomDialog(
             title = stringResource(Res.string.current_video_link),
-            body = "https://roomio.app/watch/${model.partyCode.lowercase()}",
+            body = "https://roomio.app/watch/${state.model.partyCode.lowercase()}",
             confirm = stringResource(Res.string.done),
-            onDismiss = { linkOpen = false },
+            onDismiss = { onAction(RoomAction.LinkDismissed) },
         )
     }
-    if (leaveOpen) {
+    if (state.leaveOpen) {
         AlertDialog(
-            onDismissRequest = { leaveOpen = false },
+            onDismissRequest = { onAction(RoomAction.LeaveDismissed) },
             title = { Text(stringResource(Res.string.leave_party)) },
-            text = { Text(stringResource(if (isOwner) Res.string.leave_owner_copy else Res.string.leave_guest_copy)) },
+            text = { Text(stringResource(if (state.isOwner) Res.string.leave_owner_copy else Res.string.leave_guest_copy)) },
             confirmButton = {
                 TextButton(
-                    onClick = {
-                        leaveOpen = false
-                        onLeaveParty()
-                    },
+                    onClick = { onAction(RoomAction.LeaveConfirmed) },
                 ) {
                     Text(stringResource(Res.string.leave))
                 }
             },
-            dismissButton = { TextButton(onClick = { leaveOpen = false }) { Text(stringResource(Res.string.stay)) } },
+            dismissButton = {
+                TextButton(onClick = { onAction(RoomAction.LeaveDismissed) }) {
+                    Text(stringResource(Res.string.stay))
+                }
+            },
         )
     }
-    if (abortOpen) {
+    if (state.abortOpen) {
         AlertDialog(
-            onDismissRequest = { abortOpen = false },
+            onDismissRequest = { onAction(RoomAction.EndStreamDismissed) },
             title = { Text(stringResource(Res.string.end_stream_question)) },
             text = { Text(stringResource(Res.string.end_stream_copy)) },
             confirmButton = {
-                TextButton(onClick = { playback = RoomPlaybackState.ABORTED; abortOpen = false }) {
+                TextButton(onClick = { onAction(RoomAction.EndStreamConfirmed) }) {
                     Text(stringResource(Res.string.end_for_everyone))
                 }
             },
-            dismissButton = { TextButton(onClick = { abortOpen = false }) { Text(stringResource(Res.string.cancel)) } },
+            dismissButton = {
+                TextButton(onClick = { onAction(RoomAction.EndStreamDismissed) }) {
+                    Text(stringResource(Res.string.cancel))
+                }
+            },
         )
     }
 }
@@ -1090,29 +1064,23 @@ private fun SourceRow(onShowLink: () -> Unit) {
     }
 }
 
-private enum class InviteCopyTarget { CODE, LINK }
-
-private enum class InviteCopyState { IDLE, CODE, LINK, ERROR }
-
 @Composable
 private fun InviteFriendsDialog(
     partyCode: String,
     inviteLink: String,
+    copyState: InviteCopyState,
     onDismiss: () -> Unit,
     onCopied: (InviteCopyTarget) -> Unit,
     onCopyFailed: () -> Unit,
 ) {
     val clipboard = LocalClipboardManager.current
-    var copyState by remember { mutableStateOf(InviteCopyState.IDLE) }
 
     fun copy(value: String, target: InviteCopyTarget) {
         runCatching { clipboard.setText(AnnotatedString(value)) }
             .onSuccess {
-                copyState = if (target == InviteCopyTarget.CODE) InviteCopyState.CODE else InviteCopyState.LINK
                 onCopied(target)
             }
             .onFailure {
-                copyState = InviteCopyState.ERROR
                 onCopyFailed()
             }
     }
@@ -1329,18 +1297,20 @@ private fun RoomDialog(title: String, body: String, confirm: String, onDismiss: 
 
 @Preview(name = "Owner empty · compact", widthDp = 412, heightDp = 920)
 @Composable
-private fun OwnerEmptyRoomPreview() = AppTheme(onThemeChanged = {}) { RoomScreen(ownerEmptyRoom) }
+private fun OwnerEmptyRoomPreview() = AppTheme(onThemeChanged = {}) {
+    RoomScreen(RoomUiState(ownerEmptyRoom))
+}
 
 @Preview(name = "Owner playing · compact", widthDp = 412, heightDp = 920)
 @Composable
 private fun OwnerPlayingRoomPreview() = AppTheme(onThemeChanged = {}) {
-    RoomScreen(ownerEmptyRoom.copy(playback = RoomPlaybackState.PLAYING))
+    RoomScreen(RoomUiState(ownerEmptyRoom.copy(playback = RoomPlaybackState.PLAYING)))
 }
 
 @Preview(name = "Owner playing · small", widthDp = 360, heightDp = 800)
 @Composable
 private fun OwnerPlayingSmallPreview() = AppTheme(onThemeChanged = {}) {
-    RoomScreen(ownerEmptyRoom.copy(playback = RoomPlaybackState.PLAYING))
+    RoomScreen(RoomUiState(ownerEmptyRoom.copy(playback = RoomPlaybackState.PLAYING)))
 }
 
 @Preview(name = "Invite friends · compact", widthDp = 360, heightDp = 720)
@@ -1381,16 +1351,25 @@ private fun InviteFriendsDialogCopiedPreview() = AppTheme(onThemeChanged = {}) {
 
 @Preview(name = "Guest playing · desktop", widthDp = 1200, heightDp = 800)
 @Composable
-private fun GuestPlayingDesktopPreview() = AppTheme(onThemeChanged = {}) { RoomScreen(guestPlayingRoom) }
+private fun GuestPlayingDesktopPreview() = AppTheme(onThemeChanged = {}) {
+    RoomScreen(RoomUiState(guestPlayingRoom))
+}
 
 @Preview(name = "Guest waiting · compact", widthDp = 412, heightDp = 920)
 @Composable
 private fun GuestWaitingPreview() = AppTheme(onThemeChanged = {}) {
-    RoomScreen(guestPlayingRoom.copy(playback = RoomPlaybackState.WAITING_FOR_OWNER))
+    RoomScreen(RoomUiState(guestPlayingRoom.copy(playback = RoomPlaybackState.WAITING_FOR_OWNER)))
 }
 
 @Preview(name = "Owner away · desktop", widthDp = 1200, heightDp = 800)
 @Composable
 private fun OwnerAwayDesktopPreview() = AppTheme(onThemeChanged = {}) {
-    RoomScreen(guestPlayingRoom.copy(ownerPresent = false, playback = RoomPlaybackState.PLAYING))
+    RoomScreen(
+        RoomUiState(
+            guestPlayingRoom.copy(
+                ownerPresent = false,
+                playback = RoomPlaybackState.PLAYING,
+            ),
+        ),
+    )
 }

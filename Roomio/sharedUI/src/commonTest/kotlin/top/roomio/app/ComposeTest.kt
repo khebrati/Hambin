@@ -19,7 +19,6 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.runComposeUiTest
 import kotlin.test.Test
-import top.roomio.app.room.RoomScreen
 import top.roomio.app.theme.AppTheme
 
 @OptIn(ExperimentalTestApi::class)
@@ -53,9 +52,12 @@ class ComposeTest {
     fun inviteDialogShowsBothShareOptions() = runComposeUiTest {
         setContent {
             AppTheme(onThemeChanged = {}) {
-                RoomScreen()
+                App()
             }
         }
+
+        onNodeWithText("Create a party").performClick()
+        onNodeWithText("Create party").performClick()
 
         onNodeWithContentDescription("Invite friends").performClick()
 

@@ -96,7 +96,7 @@ internal data class HomeRoomPreview(
     val returnable: Boolean,
 )
 
-private val returnableRoom = HomeRoomPreview(
+internal val returnableHomeRoom = HomeRoomPreview(
     title = "Friday night screening",
     friendCount = 2,
     returnable = true,
@@ -110,13 +110,8 @@ private val recentRoom = HomeRoomPreview(
 
 @Composable
 internal fun HomeScreen(
-    identityName: String = "Nika",
-    identityAvatar: ProfileAvatar = ProfileAvatar.COMET,
-    roomPreview: HomeRoomPreview? = returnableRoom,
-    onSettings: () -> Unit,
-    onCreate: () -> Unit,
-    onJoin: () -> Unit,
-    onOpenRoom: () -> Unit,
+    state: HomeUiState = HomeUiState(),
+    onAction: (HomeAction) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var isDark by LocalThemeIsDark.current
@@ -126,7 +121,7 @@ internal fun HomeScreen(
         topBar = {
             HomeTopBar(
                 isDark = isDark,
-                onSettings = onSettings,
+                onSettings = { onAction(HomeAction.SettingsClicked) },
                 onToggleTheme = { isDark = !isDark },
             )
         },
@@ -160,19 +155,19 @@ internal fun HomeScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     HomeStage(
-                        identityName = identityName,
-                        identityAvatar = identityAvatar,
+                        identityName = state.identityName,
+                        identityAvatar = state.identityAvatar,
                         actionsHorizontal = true,
-                        onSettings = onSettings,
-                        onCreate = onCreate,
-                        onJoin = onJoin,
+                        onSettings = { onAction(HomeAction.SettingsClicked) },
+                        onCreate = { onAction(HomeAction.CreatePartyClicked) },
+                        onJoin = { onAction(HomeAction.JoinPartyClicked) },
                         modifier = Modifier.weight(1.45f),
                     )
-                    if (roomPreview != null) {
+                    if (state.roomPreview != null) {
                         HomeRoomCard(
-                            room = roomPreview,
+                            room = state.roomPreview,
                             expanded = true,
-                            onClick = onOpenRoom,
+                            onClick = { onAction(HomeAction.OpenRoomClicked) },
                             modifier = Modifier.weight(.75f),
                         )
                     }
@@ -187,18 +182,18 @@ internal fun HomeScreen(
                     verticalArrangement = Arrangement.spacedBy(RoomioDesignSystem.spacing.large),
                 ) {
                     HomeStage(
-                        identityName = identityName,
-                        identityAvatar = identityAvatar,
+                        identityName = state.identityName,
+                        identityAvatar = state.identityAvatar,
                         actionsHorizontal = mediumOrWider,
-                        onSettings = onSettings,
-                        onCreate = onCreate,
-                        onJoin = onJoin,
+                        onSettings = { onAction(HomeAction.SettingsClicked) },
+                        onCreate = { onAction(HomeAction.CreatePartyClicked) },
+                        onJoin = { onAction(HomeAction.JoinPartyClicked) },
                     )
-                    if (roomPreview != null) {
+                    if (state.roomPreview != null) {
                         HomeRoomCard(
-                            room = roomPreview,
+                            room = state.roomPreview,
                             expanded = false,
-                            onClick = onOpenRoom,
+                            onClick = { onAction(HomeAction.OpenRoomClicked) },
                         )
                     }
                 }
@@ -622,45 +617,28 @@ private fun MiniCinemaScene(modifier: Modifier = Modifier) {
 @Preview(name = "Home · compact", widthDp = 412, heightDp = 920)
 @Composable
 private fun HomeCompactPreview() = AppTheme(onThemeChanged = {}) {
-    HomeScreen(
-        onSettings = {},
-        onCreate = {},
-        onJoin = {},
-        onOpenRoom = {},
-    )
+    HomeScreen()
 }
 
 @Preview(name = "Home · expanded", widthDp = 1280, heightDp = 800)
 @Composable
 private fun HomeExpandedPreview() = AppTheme(onThemeChanged = {}) {
-    HomeScreen(
-        onSettings = {},
-        onCreate = {},
-        onJoin = {},
-        onOpenRoom = {},
-    )
+    HomeScreen()
 }
 
 @Preview(name = "Home · dark", widthDp = 412, heightDp = 920)
 @Composable
 private fun HomeDarkPreview() = RoomioTheme(darkTheme = true) {
-    HomeScreen(
-        onSettings = {},
-        onCreate = {},
-        onJoin = {},
-        onOpenRoom = {},
-    )
+    HomeScreen()
 }
 
 @Preview(name = "Home · large text", widthDp = 412, heightDp = 920, fontScale = 1.5f)
 @Composable
 private fun HomeLargeTextPreview() = AppTheme(onThemeChanged = {}) {
     HomeScreen(
-        identityName = "",
-        roomPreview = recentRoom,
-        onSettings = {},
-        onCreate = {},
-        onJoin = {},
-        onOpenRoom = {},
+        state = HomeUiState(
+            identityName = "",
+            roomPreview = recentRoom,
+        ),
     )
 }

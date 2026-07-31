@@ -8,29 +8,38 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
+import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import androidx.savedstate.serialization.SavedStateConfiguration
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.polymorphic
 import kotlinx.serialization.modules.subclass
+import top.roomio.app.home.HomeAction
 import top.roomio.app.home.HomeScreen
+import top.roomio.app.home.HomeViewModel
 import top.roomio.app.manager.ManagerMode
+import top.roomio.app.manager.PartyManagerAction
 import top.roomio.app.manager.PartyManagerScreen
-import top.roomio.app.profile.ProfileAvatar
+import top.roomio.app.manager.PartyManagerViewModel
+import top.roomio.app.profile.SettingsAction
 import top.roomio.app.profile.SettingsScreen
-import top.roomio.app.preview.RoomAvailability
+import top.roomio.app.profile.SettingsViewModel
+import top.roomio.app.preview.RoomPreviewAction
 import top.roomio.app.preview.RoomPreviewScreen
+import top.roomio.app.preview.RoomPreviewViewModel
 import top.roomio.app.preview.roomPreviewForCode
+import top.roomio.app.room.RoomAction
 import top.roomio.app.room.RoomScreen
+import top.roomio.app.room.RoomViewModel
 import top.roomio.app.room.joinedRoomModel
 
 @Serializable
@@ -78,11 +87,8 @@ internal fun RoomioNavigation(
         savedStateConfiguration,
         HomeRoute,
     )
-    var identityName by rememberSaveable { mutableStateOf("Nika") }
-    var identityAvatarName by rememberSaveable {
-        mutableStateOf(ProfileAvatar.COMET.name)
-    }
-    val identityAvatar = ProfileAvatar.valueOf(identityAvatarName)
+    val appViewModel = viewModel { RoomioAppViewModel() }
+    val appState by appViewModel.state.collectAsStateWithLifecycle()
 
     fun navigate(route: NavKey) {
         if (backStack.lastOrNull() != route) {
@@ -106,56 +112,86 @@ internal fun RoomioNavigation(
         backStack = backStack,
         modifier = modifier,
         onBack = ::navigateBack,
+        entryDecorators = listOf(
+            rememberSaveableStateHolderNavEntryDecorator(),
+            rememberViewModelStoreNavEntryDecorator(),
+        ),
         entryProvider = entryProvider {
             entry<HomeRoute> {
+                val viewModel = viewModel { HomeViewModel(appViewModel.state) }
+                val state by viewModel.state.collectAsStateWithLifecycle()
                 HomeScreen(
-                    identityName = identityName,
-                    identityAvatar = identityAvatar,
-                    onSettings = { navigate(ProfileRoute) },
-                    onCreate = {
-                        navigate(
-                            PartyManagerRoute(
-                                initialMode = PartyManagerMode.CREATE,
-                            ),
-                        )
+                    state = state,
+                    onAction = { action ->
+                        when (action) {
+                            HomeAction.SettingsClicked -> navigate(ProfileRoute)
+                            HomeAction.CreatePartyClicked -> navigate(
+                                PartyManagerRoute(PartyManagerMode.CREATE),
+                            )
+                            HomeAction.JoinPartyClicked -> navigate(
+                                PartyManagerRoute(PartyManagerMode.JOIN),
+                            )
+                            HomeAction.OpenRoomClicked -> navigate(RoomRoute())
+                        }
                     },
-                    onJoin = {
-                        navigate(
-                            PartyManagerRoute(
-                                initialMode = PartyManagerMode.JOIN,
-                            ),
-                        )
-                    },
-                    onOpenRoom = { navigate(RoomRoute()) },
                 )
             }
             entry<ProfileRoute> {
+                val viewModel = viewModel {
+                    SettingsViewModel(
+                        identityName = appState.identityName,
+                        identityAvatar = appState.identityAvatar,
+                    )
+                }
+                val state by viewModel.state.collectAsStateWithLifecycle()
                 SettingsScreen(
-                    identityName = identityName,
-                    identityAvatar = identityAvatar,
-                    onBack = ::navigateBack,
-                    onSave = { name, avatar ->
-                        identityName = name
-                        identityAvatarName = avatar.name
-                        navigateBack()
+                    state = state,
+                    onAction = { action ->
+                        viewModel.onAction(action)
+                        when (action) {
+                            SettingsAction.BackClicked -> navigateBack()
+                            SettingsAction.SaveClicked -> {
+                                appViewModel.onAction(
+                                    RoomioAppAction.ProfileSaved(
+                                        name = state.trimmedName,
+                                        avatar = state.draftAvatar,
+                                    ),
+                                )
+                                navigateBack()
+                            }
+                            is SettingsAction.NameChanged,
+                            is SettingsAction.AvatarSelected,
+                            -> Unit
+                        }
                     },
                 )
             }
             entry<PartyManagerRoute> { route ->
+                val initialMode = when (route.initialMode) {
+                    PartyManagerMode.CREATE -> ManagerMode.CREATE
+                    PartyManagerMode.JOIN -> ManagerMode.JOIN
+                }
+                val viewModel = viewModel { PartyManagerViewModel(initialMode) }
+                val state by viewModel.state.collectAsStateWithLifecycle()
                 PartyManagerScreen(
-                    initialMode = when (route.initialMode) {
-                        PartyManagerMode.CREATE -> ManagerMode.CREATE
-                        PartyManagerMode.JOIN -> ManagerMode.JOIN
-                    },
-                    onBack = ::navigateBack,
-                    onCreate = { navigate(RoomRoute()) },
-                    onPreview = { code ->
-                        val normalizedCode = code.trim().uppercase()
-                        val previewExists = roomPreviewForCode(normalizedCode) != null
-                        if (previewExists) {
-                            navigate(RoomPreviewRoute(normalizedCode))
+                    state = state,
+                    onAction = { action ->
+                        viewModel.onAction(action)
+                        when (action) {
+                            PartyManagerAction.BackClicked -> navigateBack()
+                            PartyManagerAction.CreateClicked -> navigate(RoomRoute())
+                            PartyManagerAction.PreviewClicked -> {
+                                if (roomPreviewForCode(state.normalizedCode) != null) {
+                                    navigate(RoomPreviewRoute(state.normalizedCode))
+                                } else {
+                                    viewModel.onAction(PartyManagerAction.PreviewRejected)
+                                }
+                            }
+                            is PartyManagerAction.ModeSelected,
+                            is PartyManagerAction.CodeChanged,
+                            PartyManagerAction.PreviewRejected,
+                            -> Unit
                         }
-                        previewExists
                     },
                 )
             }
@@ -164,21 +200,36 @@ internal fun RoomioNavigation(
                 checkNotNull(preview) {
                     "Unknown local party code: ${route.partyCode}"
                 }
+                val viewModel = viewModel { RoomPreviewViewModel(preview) }
+                val state by viewModel.state.collectAsStateWithLifecycle()
                 RoomPreviewScreen(
-                    model = preview,
-                    onBack = ::navigateBack,
-                    onJoin = {
-                        if (preview.availability == RoomAvailability.AVAILABLE) {
-                            navigate(RoomRoute(joinedPartyCode = preview.code))
+                    state = state,
+                    onAction = { action ->
+                        when (action) {
+                            RoomPreviewAction.BackClicked -> navigateBack()
+                            RoomPreviewAction.JoinClicked -> {
+                                if (state.canJoin) {
+                                    navigate(RoomRoute(joinedPartyCode = state.model.code))
+                                }
+                            }
                         }
                     },
                 )
             }
             entry<RoomRoute> { route ->
+                val model = route.joinedPartyCode?.let(::joinedRoomModel)
+                    ?: top.roomio.app.room.ownerRoomModel()
+                val viewModel = viewModel { RoomViewModel(model) }
+                val state by viewModel.state.collectAsStateWithLifecycle()
                 RoomScreen(
-                    model = route.joinedPartyCode?.let(::joinedRoomModel)
-                        ?: top.roomio.app.room.ownerRoomModel(),
-                    onLeaveParty = ::navigateHome,
+                    state = state,
+                    effects = viewModel.effects,
+                    onAction = { action ->
+                        viewModel.onAction(action)
+                        if (action == RoomAction.LeaveConfirmed) {
+                            navigateHome()
+                        }
+                    },
                 )
             }
         },

@@ -42,9 +42,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -87,28 +84,15 @@ internal enum class ManagerMode { CREATE, JOIN }
 
 @Composable
 internal fun PartyManagerScreen(
-    initialMode: ManagerMode,
-    onBack: () -> Unit,
-    onCreate: () -> Unit,
-    onPreview: (String) -> Boolean,
+    state: PartyManagerUiState,
+    onAction: (PartyManagerAction) -> Unit,
     modifier: Modifier = Modifier,
-    loading: Boolean = false,
-    codeError: Boolean = false,
 ) {
-    var modeName by rememberSaveable(initialMode.name) {
-        mutableStateOf(initialMode.name)
-    }
-    val mode = ManagerMode.valueOf(modeName)
-    var code by rememberSaveable(codeError) {
-        mutableStateOf(if (codeError) "NOVA-99" else "")
-    }
-    var hasCodeError by rememberSaveable(codeError) { mutableStateOf(codeError) }
-
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.surface,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        topBar = { ManagerTopBar(onBack = onBack) },
+        topBar = { ManagerTopBar(onBack = { onAction(PartyManagerAction.BackClicked) }) },
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -131,26 +115,22 @@ internal fun PartyManagerScreen(
                 verticalArrangement = Arrangement.spacedBy(32.dp),
             ) {
                 ManagerTabs(
-                    selectedMode = mode,
-                    enabled = !loading,
-                    onSelected = { modeName = it.name },
+                    selectedMode = state.mode,
+                    enabled = !state.isLoading,
+                    onSelected = { onAction(PartyManagerAction.ModeSelected(it)) },
                 )
-                when (mode) {
+                when (state.mode) {
                     ManagerMode.CREATE -> CreatePartyPanel(
-                        loading = loading,
-                        onCreate = onCreate,
+                        loading = state.isLoading,
+                        onCreate = { onAction(PartyManagerAction.CreateClicked) },
                     )
                     ManagerMode.JOIN -> JoinPartyPanel(
-                        code = code,
-                        loading = loading,
-                        codeError = hasCodeError,
-                        onCodeChange = {
-                            code = it.uppercase()
-                            hasCodeError = false
-                        },
-                        onPreview = {
-                            hasCodeError = !onPreview(code.trim())
-                        },
+                        code = state.code,
+                        loading = state.isLoading,
+                        canPreview = state.canPreview,
+                        codeError = state.hasCodeError,
+                        onCodeChange = { onAction(PartyManagerAction.CodeChanged(it)) },
+                        onPreview = { onAction(PartyManagerAction.PreviewClicked) },
                     )
                 }
             }
@@ -380,6 +360,7 @@ private fun CreatePartyPanel(
 private fun JoinPartyPanel(
     code: String,
     loading: Boolean,
+    canPreview: Boolean,
     codeError: Boolean,
     onCodeChange: (String) -> Unit,
     onPreview: () -> Unit,
@@ -430,7 +411,7 @@ private fun JoinPartyPanel(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = 48.dp),
-                    enabled = code.isNotBlank(),
+                    enabled = canPreview,
                 ) {
                     Icon(
                         imageVector = Icons.Filled.ConfirmationNumber,
@@ -524,10 +505,8 @@ private fun CinemaManagerVisual(modifier: Modifier = Modifier) {
 private fun PartyManagerCompactPreview() {
     AppTheme(onThemeChanged = {}) {
         PartyManagerScreen(
-            initialMode = ManagerMode.CREATE,
-            onBack = {},
-            onCreate = {},
-            onPreview = { true },
+            state = PartyManagerUiState(mode = ManagerMode.CREATE),
+            onAction = {},
         )
     }
 }
@@ -537,10 +516,8 @@ private fun PartyManagerCompactPreview() {
 private fun PartyManagerExpandedPreview() {
     AppTheme(onThemeChanged = {}) {
         PartyManagerScreen(
-            initialMode = ManagerMode.CREATE,
-            onBack = {},
-            onCreate = {},
-            onPreview = { true },
+            state = PartyManagerUiState(mode = ManagerMode.CREATE),
+            onAction = {},
         )
     }
 }
@@ -550,11 +527,12 @@ private fun PartyManagerExpandedPreview() {
 private fun PartyManagerJoinErrorPreview() {
     RoomioTheme(darkTheme = true) {
         PartyManagerScreen(
-            initialMode = ManagerMode.JOIN,
-            onBack = {},
-            onCreate = {},
-            onPreview = { true },
-            codeError = true,
+            state = PartyManagerUiState(
+                mode = ManagerMode.JOIN,
+                code = "NOVA-99",
+                hasCodeError = true,
+            ),
+            onAction = {},
         )
     }
 }
@@ -564,11 +542,11 @@ private fun PartyManagerJoinErrorPreview() {
 private fun PartyManagerLoadingLargeTextPreview() {
     AppTheme(onThemeChanged = {}) {
         PartyManagerScreen(
-            initialMode = ManagerMode.CREATE,
-            onBack = {},
-            onCreate = {},
-            onPreview = { true },
-            loading = true,
+            state = PartyManagerUiState(
+                mode = ManagerMode.CREATE,
+                isLoading = true,
+            ),
+            onAction = {},
         )
     }
 }
