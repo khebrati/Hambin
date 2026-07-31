@@ -78,6 +78,7 @@ import roomio.sharedui.generated.resources.name_required
 import roomio.sharedui.generated.resources.profile_preview
 import roomio.sharedui.generated.resources.ready_to_watch
 import roomio.sharedui.generated.resources.save_profile
+import roomio.sharedui.generated.resources.save_profile_error
 import roomio.sharedui.generated.resources.shown_inside_every_party
 import roomio.sharedui.generated.resources.theme
 import roomio.sharedui.generated.resources.your_avatar
@@ -101,6 +102,7 @@ internal fun SettingsScreen(
         bottomBar = {
             SaveProfileBar(
                 enabled = state.canSave,
+                saveFailed = state.saveFailed,
                 onSave = { onAction(SettingsAction.SaveClicked) },
             )
         },
@@ -522,6 +524,7 @@ private fun ProfileAvatarImage(
 @Composable
 private fun SaveProfileBar(
     enabled: Boolean,
+    saveFailed: Boolean,
     onSave: () -> Unit,
 ) {
     Surface(
@@ -543,15 +546,28 @@ private fun SaveProfileBar(
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Button(
-                    onClick = onSave,
+                Column(
                     modifier = Modifier
                         .widthIn(max = 728.dp)
-                        .fillMaxWidth()
-                        .heightIn(min = 48.dp),
-                    enabled = enabled,
+                        .fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Text(stringResource(Res.string.save_profile))
+                    if (saveFailed) {
+                        Text(
+                            text = stringResource(Res.string.save_profile_error),
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                    Button(
+                        onClick = onSave,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp),
+                        enabled = enabled,
+                    ) {
+                        Text(stringResource(Res.string.save_profile))
+                    }
                 }
             }
         }
@@ -586,6 +602,21 @@ private fun SettingsLargeTextPreview() {
     RoomioTheme(darkTheme = true) {
         SettingsScreen(
             state = SettingsUiState("", ProfileAvatar.BERRY),
+            onAction = {},
+        )
+    }
+}
+
+@Preview(widthDp = 360, heightDp = 760)
+@Composable
+private fun SettingsSaveErrorPreview() {
+    AppTheme(onThemeChanged = {}) {
+        SettingsScreen(
+            state = SettingsUiState(
+                draftName = "Nika",
+                draftAvatar = ProfileAvatar.COMET,
+                saveFailed = true,
+            ),
             onAction = {},
         )
     }

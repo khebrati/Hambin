@@ -1,6 +1,9 @@
 package top.roomio.app.room
 
 import androidx.lifecycle.ViewModel
+import dev.zacsweers.metro.Assisted
+import dev.zacsweers.metro.AssistedFactory
+import dev.zacsweers.metro.AssistedInject
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -73,14 +76,20 @@ internal enum class RoomEffect {
     COPY_UNAVAILABLE,
 }
 
+@AssistedInject
 internal class RoomViewModel(
-    model: RoomScreenModel,
+    @Assisted model: RoomScreenModel,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(RoomUiState(model))
     val state = mutableState.asStateFlow()
 
     private val mutableEffects = MutableSharedFlow<RoomEffect>(extraBufferCapacity = 1)
     val effects = mutableEffects.asSharedFlow()
+
+    @AssistedFactory
+    fun interface Factory {
+        fun create(model: RoomScreenModel): RoomViewModel
+    }
 
     fun onAction(action: RoomAction) {
         when (action) {

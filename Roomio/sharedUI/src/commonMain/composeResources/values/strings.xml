@@ -143,6 +143,7 @@
     <string name="profile_preview">Profile preview</string>
     <string name="ready_to_watch">Ready to watch</string>
     <string name="save_profile">Save profile</string>
+    <string name="save_profile_error">We couldn't save your profile. Try again.</string>
     <string name="shown_inside_every_party">Shown inside every party</string>
     <string name="your_avatar">Your avatar</string>
     <string name="your_profile">Your profile</string>

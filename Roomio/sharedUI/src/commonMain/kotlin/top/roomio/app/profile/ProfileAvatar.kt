@@ -14,6 +14,7 @@ import roomio.sharedui.generated.resources.avatar_orbit
 import roomio.sharedui.generated.resources.avatar_prism
 import roomio.sharedui.generated.resources.avatar_spark
 import roomio.sharedui.generated.resources.avatar_sunny
+import top.roomio.domain.profile.ProfileAvatarId
 
 internal enum class ProfileAvatar(
     val label: String,
@@ -32,3 +33,9 @@ internal enum class ProfileAvatar(
     SPARK("Spark", Res.drawable.avatar_spark),
     BLOOM("Bloom", Res.drawable.avatar_bloom),
 }
+
+internal fun ProfileAvatarId.toPresentationAvatar(): ProfileAvatar =
+    ProfileAvatar.valueOf(name)
+
+internal fun ProfileAvatar.toDomainAvatar(): ProfileAvatarId =
+    ProfileAvatarId.valueOf(name)

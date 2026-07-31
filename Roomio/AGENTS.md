@@ -1,5 +1,11 @@
 # Roomio project guidance
 
+## Parent repository context
+
+The parent repository is a design prototype and design-system reference, not the production application. Its primary objective is to explore, validate, and document the complete product experience through an interactive React, TypeScript, and Vite browser prototype informed by Material 3 Expressive.
+
+Roomio consumes that validated product direction but uses the Kotlin Multiplatform technology and structure documented below. Parent-repository rules about React, Vite, browser-local interactions, and prototype architecture apply to `../prototype/`, not to this folder.
+
 ## Purpose
 
 Roomio is the Kotlin Multiplatform implementation of the product defined by the parent repository. It turns the validated browser prototype and written requirements into a shared Compose Multiplatform application for Android, iOS, and desktop.
@@ -21,18 +27,57 @@ When these sources disagree, do not silently invent a resolution. Prefer explici
 
 ## Project structure
 
-- `sharedUI/` is the shared KMP application and the default home for product code.
-  - `src/commonMain/kotlin/` contains shared Compose UI, navigation, presentation state, domain logic, data abstractions, and platform-neutral implementations.
+- `app/` is the shared KMP composition root. It owns the application-level Metro graph, connects data implementations to presentation, and exports the shared application entry point used by every platform launcher.
+- `sharedUI/` is the presentation module only.
+  - `src/commonMain/kotlin/` contains shared Compose screens, navigation, UI models, MVI state/actions/effects, lifecycle ViewModels, theme code, and presentation-only mapping.
   - `src/commonMain/composeResources/` contains shared strings, images, icons, fonts, and other Compose resources. User-visible text belongs in resources rather than inline Kotlin strings.
   - `src/commonTest/` contains shared unit and Compose UI tests.
   - `src/androidMain/`, `src/iosMain/`, and `src/jvmMain/` contain only integrations that genuinely require platform APIs or platform-specific library engines.
-- `androidApp/` is the thin Android launcher and Android application configuration. Keep product features in `sharedUI` unless they are Android-only by requirement.
-- `iosApp/` is the thin Swift/Xcode host for the shared Compose UI. Keep Swift code limited to lifecycle and required iOS integration.
+- `domain/` is the platform-neutral business boundary. It contains domain models and repository interfaces, and must not depend on `data`, `sharedUI`, Compose, Multiplatform Settings, or platform APIs.
+- `data/` contains repository implementations, persistence/network data sources, DTOs/entities, and data-to-domain mapping. It depends on `domain` and must not depend on `sharedUI` or `app`.
+- `androidApp/` is the thin Android launcher and Android application configuration. It depends on `app` and must not construct product dependencies itself.
+- `iosApp/` is the thin Swift/Xcode host for the framework exported by `app`. Keep Swift code limited to lifecycle and required iOS integration.
 - `desktopApp/` is the thin JVM desktop launcher, window configuration, icons, and packaging setup.
 - `gradle/libs.versions.toml` is the single dependency and plugin catalog. Declare or update versions there rather than hard-coding coordinates in module build files.
 - Root Gradle files configure shared repositories and plugins. Add modules only when a clear boundary justifies the maintenance cost.
 
-As the codebase grows, organize `commonMain` by product feature, with small shared `core`, `designsystem`, or `data` areas only when multiple features genuinely reuse them. Keep each feature's screen, UI state, actions, and presentation logic close together. Avoid both a single monolithic `App.kt` and premature layers made only for architectural symmetry.
+Within each module, organize `commonMain` by product feature. Keep each feature's screen, UI state, actions, effects, and ViewModel close together in `sharedUI`. Avoid both monolithic files and additional layers made only for architectural symmetry.
+
+## Mandatory clean architecture
+
+All product code must preserve this dependency direction:
+
+```text
+androidApp / desktopApp / iosApp -> app
+app -> sharedUI, data, domain
+sharedUI -> domain
+data -> domain
+domain -> Kotlin and platform-neutral coroutine primitives only
+```
+
+- Dependencies always point inward. `domain` never imports data or presentation types, and `data` never imports presentation types.
+- Define domain models and repository contracts in `domain`; implement those contracts in `data`.
+- Keep Compose state, presentation models, navigation, and ViewModels in `sharedUI`. Convert between domain and presentation models at the presentation boundary.
+- Keep application assembly and implementation selection in `app`. Platform launchers only configure their host and invoke the shared application.
+- Do not place repository implementations, Settings access, DTOs, entities, or data-source code in `sharedUI`.
+- Do not expose data-layer models to ViewModels or screens.
+- Add a UseCase only when it represents reusable business behavior, orchestration, or policy. A repository may be consumed directly for simple storage until such behavior exists.
+- New feature work must follow these boundaries even when a shortcut would require fewer files.
+
+## Mandatory dependency injection
+
+Metro is required for application and presentation dependency injection on every supported target.
+
+- Use the application Metro graph in `app` to provide app-wide infrastructure and bind `data` implementations to `domain` interfaces.
+- Use the presentation Metro graph in `sharedUI` to create ViewModels and their factories.
+- Prefer constructor injection with `@Inject`. Use `@AssistedInject` and an explicit `@AssistedFactory` for runtime navigation arguments or other caller-owned values.
+- Apply the Metro Gradle plugin to every module that declares injectable classes, assisted factories, binding containers, or dependency graphs so Metro can generate reusable factories and validate the graph at compile time.
+- Obtain navigation-scoped ViewModels from the presentation graph inside Navigation 3 `viewModel { ... }` factories. Do not retain a shared catch-all application ViewModel solely to distribute dependencies or unrelated screen state.
+- Put Metro `@Binds` and `@Provides` declarations beside the implementation boundary they configure, normally in a data binding container. Keep the complete application graph in `app`.
+- Do not manually construct repositories, data sources, Settings instances, or dependency-owning ViewModels in production UI or platform launcher code.
+- Do not introduce Hilt, Koin, another DI container, a service locator, mutable global dependency registry, or singleton `object` graph access.
+- Tests may directly construct the unit under test with fakes or use dedicated Metro test bindings. Production code must not gain service-location hooks for tests.
+- Any new dependency must be reachable through a compile-time-validated Metro graph before the feature is considered complete.
 
 ## KMP implementation rules
 
@@ -53,7 +98,7 @@ Use the dependencies already declared in `gradle/libs.versions.toml` before addi
 - Material 3 and MaterialKolor for the theme, semantic color roles, and generated tonal palettes. Do not add a visually conflicting component library.
 - AndroidX Lifecycle ViewModel and runtime Compose for lifecycle-aware shared presentation state.
 - Navigation 3 and `navigation3-browser` for typed navigation, back stacks, deep-link/browser integration, and navigation-scoped ViewModels.
-- Metro for dependency injection. Do not add a second DI container or a service-locator singleton pattern.
+- Metro for mandatory compile-time dependency injection across KMP targets. Follow the dependency-injection rules above.
 - Kotlin coroutines and `StateFlow` for concurrency and reactive state.
 - Ktor Client, Content Negotiation, logging, and the installed platform engines for HTTP when a documented API contract exists.
 - Kotlinx Serialization JSON for navigation keys, persisted models, and network payloads where serialization is required.
@@ -67,9 +112,11 @@ Adding a dependency requires a demonstrated gap, a multiplatform compatibility c
 
 ## Design and interaction
 
+- Invoke the `material-3-expressive` skill for major design tasks when it is available.
 - Follow the prototype's Material 3 Expressive direction while using platform-appropriate Compose Multiplatform components and behavior.
 - Prefer semantic theme values (`MaterialTheme.colorScheme`, typography, shapes, and project tokens) over raw colors, sizes, or duplicated styling.
 - Build reusable components when a pattern is repeated or is part of the design system; avoid abstracting one-off composition prematurely.
+- Optimize design work for focused, fast visual iteration.
 - Use realistic Roomio content rather than lorem ipsum or generic placeholder labels.
 - Preserve clear hierarchy, expressive shape and motion, and strong state feedback without copying another product's visual identity.
 - Motion must communicate state or spatial relationships, respect reduced-motion expectations where the platform exposes them, and never block task completion.
@@ -110,7 +157,9 @@ For substantial work:
 Run commands from the `Roomio/` directory. On Windows use `gradlew.bat`; on macOS or Linux use `./gradlew`.
 
 - Android debug build: `./gradlew :androidApp:assembleDebug`
+- Data JVM tests: `./gradlew :data:jvmTest`
 - Shared JVM tests: `./gradlew :sharedUI:jvmTest`
+- App graph compilation: `./gradlew :app:compileKotlinJvm`
 - Desktop run: `./gradlew :desktopApp:run`
 - Desktop hot reload: `./gradlew :desktopApp:hotRun --auto`
 

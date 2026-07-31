@@ -16,10 +16,12 @@ import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.runComposeUiTest
 import kotlin.test.Test
 import top.roomio.app.theme.AppTheme
+import top.roomio.app.ui.RoomioUi
 
 @OptIn(ExperimentalTestApi::class)
 class ComposeTest {
@@ -52,7 +54,7 @@ class ComposeTest {
     fun inviteDialogShowsBothShareOptions() = runComposeUiTest {
         setContent {
             AppTheme(onThemeChanged = {}) {
-                App()
+                RoomioUi(TestProfileRepository())
             }
         }
 
@@ -71,7 +73,7 @@ class ComposeTest {
     @Test
     fun homeShowsIdentityActionsAndReturnableRoom() = runComposeUiTest {
         setContent {
-            App()
+            RoomioUi(TestProfileRepository())
         }
 
         onNodeWithText("Bring the film. Keep your own pace.").assertExists()
@@ -85,7 +87,7 @@ class ComposeTest {
     @Test
     fun homeSettingsCanUpdateTheDisplayName() = runComposeUiTest {
         setContent {
-            App()
+            RoomioUi(TestProfileRepository())
         }
 
         onNodeWithContentDescription("Settings").performClick()
@@ -96,12 +98,19 @@ class ComposeTest {
         onNodeWithText("Comet").assertExists()
         onNodeWithText("Sunny").assertExists()
         onNodeWithText("Save profile").assertExists()
+
+        onNodeWithText("Display name").performTextClearance()
+        onNodeWithText("Display name").performTextInput("Mira")
+        onNodeWithText("Save profile").performClick()
+
+        onNodeWithText("Mira").assertExists()
+        onNodeWithText("Bring the film. Keep your own pace.").assertExists()
     }
 
     @Test
     fun createFromHomeOpensPartyManagerAndCreatesRoom() = runComposeUiTest {
         setContent {
-            App()
+            RoomioUi(TestProfileRepository())
         }
 
         onNodeWithText("Create a party").performClick()
@@ -118,7 +127,7 @@ class ComposeTest {
     @Test
     fun joinFromHomeOpensDisabledEmptyCodeState() = runComposeUiTest {
         setContent {
-            App()
+            RoomioUi(TestProfileRepository())
         }
 
         onNodeWithText("Join with code").performClick()
@@ -131,7 +140,7 @@ class ComposeTest {
     @Test
     fun destinationUpActionsReturnToHome() = runComposeUiTest {
         setContent {
-            App()
+            RoomioUi(TestProfileRepository())
         }
 
         onNodeWithContentDescription("Settings").performClick()
@@ -148,7 +157,7 @@ class ComposeTest {
     @Test
     fun confirmedLeavePartyReturnsToHome() = runComposeUiTest {
         setContent {
-            App()
+            RoomioUi(TestProfileRepository())
         }
 
         onNodeWithText("Create a party").performClick()
@@ -164,7 +173,7 @@ class ComposeTest {
     @Test
     fun joinCodeShowsPreviewBeforeEnteringRoom() = runComposeUiTest {
         setContent {
-            App()
+            RoomioUi(TestProfileRepository())
         }
 
         onNodeWithText("Join with code").performClick()
@@ -186,7 +195,7 @@ class ComposeTest {
     @Test
     fun notNowReturnsFromPreviewToEnteredCode() = runComposeUiTest {
         setContent {
-            App()
+            RoomioUi(TestProfileRepository())
         }
 
         onNodeWithText("Join with code").performClick()

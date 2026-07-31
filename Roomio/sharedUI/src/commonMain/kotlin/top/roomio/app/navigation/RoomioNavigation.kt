@@ -7,6 +7,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -25,22 +26,19 @@ import kotlinx.serialization.modules.polymorphic
 import kotlinx.serialization.modules.subclass
 import top.roomio.app.home.HomeAction
 import top.roomio.app.home.HomeScreen
-import top.roomio.app.home.HomeViewModel
 import top.roomio.app.manager.ManagerMode
 import top.roomio.app.manager.PartyManagerAction
 import top.roomio.app.manager.PartyManagerScreen
-import top.roomio.app.manager.PartyManagerViewModel
 import top.roomio.app.profile.SettingsAction
+import top.roomio.app.profile.SettingsEffect
 import top.roomio.app.profile.SettingsScreen
-import top.roomio.app.profile.SettingsViewModel
 import top.roomio.app.preview.RoomPreviewAction
 import top.roomio.app.preview.RoomPreviewScreen
-import top.roomio.app.preview.RoomPreviewViewModel
 import top.roomio.app.preview.roomPreviewForCode
 import top.roomio.app.room.RoomAction
 import top.roomio.app.room.RoomScreen
-import top.roomio.app.room.RoomViewModel
 import top.roomio.app.room.joinedRoomModel
+import top.roomio.app.ui.PresentationGraph
 
 @Serializable
 internal data object HomeRoute : NavKey
@@ -68,6 +66,7 @@ internal data class RoomRoute(
 
 @Composable
 internal fun RoomioNavigation(
+    presentationGraph: PresentationGraph,
     modifier: Modifier = Modifier,
 ) {
     val savedStateConfiguration = remember {
@@ -87,9 +86,6 @@ internal fun RoomioNavigation(
         savedStateConfiguration,
         HomeRoute,
     )
-    val appViewModel = viewModel { RoomioAppViewModel() }
-    val appState by appViewModel.state.collectAsStateWithLifecycle()
-
     fun navigate(route: NavKey) {
         if (backStack.lastOrNull() != route) {
             backStack.add(route)
@@ -118,7 +114,7 @@ internal fun RoomioNavigation(
         ),
         entryProvider = entryProvider {
             entry<HomeRoute> {
-                val viewModel = viewModel { HomeViewModel(appViewModel.state) }
+                val viewModel = viewModel { presentationGraph.homeViewModel }
                 val state by viewModel.state.collectAsStateWithLifecycle()
                 HomeScreen(
                     state = state,
@@ -137,11 +133,13 @@ internal fun RoomioNavigation(
                 )
             }
             entry<ProfileRoute> {
-                val viewModel = viewModel {
-                    SettingsViewModel(
-                        identityName = appState.identityName,
-                        identityAvatar = appState.identityAvatar,
-                    )
+                val viewModel = viewModel { presentationGraph.settingsViewModel }
+                LaunchedEffect(viewModel) {
+                    viewModel.effects.collect { effect ->
+                        when (effect) {
+                            SettingsEffect.PROFILE_SAVED -> navigateBack()
+                        }
+                    }
                 }
                 val state by viewModel.state.collectAsStateWithLifecycle()
                 SettingsScreen(
@@ -150,15 +148,7 @@ internal fun RoomioNavigation(
                         viewModel.onAction(action)
                         when (action) {
                             SettingsAction.BackClicked -> navigateBack()
-                            SettingsAction.SaveClicked -> {
-                                appViewModel.onAction(
-                                    RoomioAppAction.ProfileSaved(
-                                        name = state.trimmedName,
-                                        avatar = state.draftAvatar,
-                                    ),
-                                )
-                                navigateBack()
-                            }
+                            SettingsAction.SaveClicked,
                             is SettingsAction.NameChanged,
                             is SettingsAction.AvatarSelected,
                             -> Unit
@@ -171,7 +161,13 @@ internal fun RoomioNavigation(
                     PartyManagerMode.CREATE -> ManagerMode.CREATE
                     PartyManagerMode.JOIN -> ManagerMode.JOIN
                 }
-                val viewModel = viewModel { PartyManagerViewModel(initialMode) }
+                val viewModel = viewModel {
+                    presentationGraph.partyManagerViewModelFactory.create(
+                        initialMode = initialMode,
+                        loading = false,
+                        codeError = false,
+                    )
+                }
                 val state by viewModel.state.collectAsStateWithLifecycle()
                 PartyManagerScreen(
                     state = state,
@@ -200,7 +196,9 @@ internal fun RoomioNavigation(
                 checkNotNull(preview) {
                     "Unknown local party code: ${route.partyCode}"
                 }
-                val viewModel = viewModel { RoomPreviewViewModel(preview) }
+                val viewModel = viewModel {
+                    presentationGraph.roomPreviewViewModelFactory.create(preview)
+                }
                 val state by viewModel.state.collectAsStateWithLifecycle()
                 RoomPreviewScreen(
                     state = state,
@@ -219,7 +217,9 @@ internal fun RoomioNavigation(
             entry<RoomRoute> { route ->
                 val model = route.joinedPartyCode?.let(::joinedRoomModel)
                     ?: top.roomio.app.room.ownerRoomModel()
-                val viewModel = viewModel { RoomViewModel(model) }
+                val viewModel = viewModel {
+                    presentationGraph.roomViewModelFactory.create(model)
+                }
                 val state by viewModel.state.collectAsStateWithLifecycle()
                 RoomScreen(
                     state = state,

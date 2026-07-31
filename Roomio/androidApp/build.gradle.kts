@@ -29,6 +29,6 @@ kotlin {
 }
 
 dependencies {
-    implementation(project(":sharedUI"))
+    implementation(project(":app"))
     implementation(libs.androidx.activityCompose)
 }

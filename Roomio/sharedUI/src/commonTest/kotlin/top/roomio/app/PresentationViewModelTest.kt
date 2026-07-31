@@ -4,11 +4,11 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import top.roomio.app.manager.ManagerMode
 import top.roomio.app.manager.PartyManagerAction
 import top.roomio.app.manager.PartyManagerViewModel
-import top.roomio.app.navigation.RoomioAppAction
-import top.roomio.app.navigation.RoomioAppViewModel
 import top.roomio.app.profile.ProfileAvatar
 import top.roomio.app.profile.SettingsAction
 import top.roomio.app.profile.SettingsViewModel
@@ -18,11 +18,16 @@ import top.roomio.app.room.RoomAction
 import top.roomio.app.room.RoomPlaybackState
 import top.roomio.app.room.RoomViewModel
 import top.roomio.app.room.ownerRoomModel
+import top.roomio.domain.profile.ProfileAvatarId
+import top.roomio.domain.profile.ProfileRepository
+import top.roomio.domain.profile.UserProfile
 
 class PresentationViewModelTest {
     @Test
     fun settingsStateDerivesValidationFromActions() {
-        val viewModel = SettingsViewModel("Nika", ProfileAvatar.COMET)
+        val viewModel = SettingsViewModel(
+            TestProfileRepository(),
+        )
 
         viewModel.onAction(SettingsAction.NameChanged("   "))
 
@@ -75,17 +80,20 @@ class PresentationViewModelTest {
     }
 
     @Test
-    fun appStateAcceptsSavedProfileFromSettingsDestination() {
-        val viewModel = RoomioAppViewModel()
+    fun settingsStateRepresentsPreferenceWriteFailure() {
+        val profile = UserProfile("Nika", ProfileAvatarId.COMET)
+        val failingRepository = object : ProfileRepository {
+            override fun observeProfile(): Flow<UserProfile> = flowOf(profile)
 
-        viewModel.onAction(
-            RoomioAppAction.ProfileSaved(
-                name = "Mira",
-                avatar = ProfileAvatar.MINT,
-            ),
-        )
+            override fun currentProfile(): UserProfile = profile
 
-        assertEquals("Mira", viewModel.state.value.identityName)
-        assertEquals(ProfileAvatar.MINT, viewModel.state.value.identityAvatar)
+            override fun saveProfile(profile: UserProfile): Result<Unit> =
+                Result.failure(IllegalStateException("Test write failure"))
+        }
+        val viewModel = SettingsViewModel(failingRepository)
+
+        viewModel.onAction(SettingsAction.SaveClicked)
+
+        assertTrue(viewModel.state.value.saveFailed)
     }
 }

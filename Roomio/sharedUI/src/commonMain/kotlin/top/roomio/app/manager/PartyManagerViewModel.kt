@@ -1,6 +1,9 @@
 package top.roomio.app.manager
 
 import androidx.lifecycle.ViewModel
+import dev.zacsweers.metro.Assisted
+import dev.zacsweers.metro.AssistedFactory
+import dev.zacsweers.metro.AssistedInject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -27,10 +30,11 @@ internal sealed interface PartyManagerAction {
     data object PreviewRejected : PartyManagerAction
 }
 
+@AssistedInject
 internal class PartyManagerViewModel(
-    initialMode: ManagerMode,
-    loading: Boolean = false,
-    codeError: Boolean = false,
+    @Assisted initialMode: ManagerMode,
+    @Assisted loading: Boolean = false,
+    @Assisted codeError: Boolean = false,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(
         PartyManagerUiState(
@@ -41,6 +45,15 @@ internal class PartyManagerViewModel(
         ),
     )
     val state = mutableState.asStateFlow()
+
+    @AssistedFactory
+    fun interface Factory {
+        fun create(
+            initialMode: ManagerMode,
+            loading: Boolean,
+            codeError: Boolean,
+        ): PartyManagerViewModel
+    }
 
     fun onAction(action: PartyManagerAction) {
         when (action) {
