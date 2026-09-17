@@ -91,3 +91,13 @@
 - **Navigation consequence:** “Not now” and app-bar Up pop back to Party Manager with its entered code intact. “Join party” pushes a guest Room route only when availability is Open. Confirmed room departure still clears the entire flow back to Home.
 - **State coverage:** Local fixtures represent open/playing, open/owner-away, full, and ended/waiting states. Invalid codes remain in Party Manager with inline error feedback; unavailable previews explain the reason and disable Join.
 - **Responsive consequence:** The preview card is capped at 672dp. Its three facts share a row at 560dp and wider and stack below that width; the full screen remains scrollable for compact heights and large text.
+
+## DD-013: Direct Video URL Playback in the Native Client
+
+- **Status:** Approved for the Roomio Compose client (Android first)
+- **Decision:** The Android client plays user-supplied direct video URLs through Media3 ExoPlayer within the room screen. The playback engine is owned by an Android-only composable and surfaced to the shared UI through a thin common player API; the ViewModel stays platform-neutral.
+- **Scope:** Progressive HTTP(S) files and HLS live streams are supported. Desktop and iOS render the existing canvas placeholder until a platform engine is approved; the shared player seam remains the integration point for them.
+- **Validation consequence:** Any well-formed HTTP(S) URL is accepted; playback failures surface through the player error path instead of URL pre-validation. Cleartext HTTP is permitted for this feature through a debug network security configuration.
+- **Live consequence:** Live HLS streams (short or unset duration) show a Live indicator and hide scrubber and skip controls. The Sync control remains a local placeholder (targets the room position constant) until a synchronization contract exists.
+- **State consequence:** Player state reports IDLE, BUFFERING, READY, PLAYING, PAUSED, ENDED, and ERROR plus position, duration, buffered position, and live flag. The room screen's Loading/Buffering/Playing/Paused/Error states derive from those reports, preserving the required experience states.
+- **Platform consequence:** The engine is created lazily only when a player surface is needed (not in previews or the guest waiting states), released with the composable, and paused automatically when the app stops.

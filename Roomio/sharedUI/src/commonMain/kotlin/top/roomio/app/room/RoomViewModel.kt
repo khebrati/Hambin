@@ -12,6 +12,8 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import top.roomio.app.room.player.VideoPlayerState
+import top.roomio.app.room.player.VideoPlayerStatus
 
 internal enum class InviteCopyTarget { CODE, LINK }
 
@@ -21,7 +23,10 @@ internal data class RoomUiState(
     val model: RoomScreenModel,
     val playback: RoomPlaybackState = model.playback,
     val videoUrl: String = "",
-    val playbackPosition: Float = 0.13f,
+    val positionMs: Long = 0L,
+    val durationMs: Long = 0L,
+    val bufferedMs: Long = 0L,
+    val isLive: Boolean = false,
     val volume: Float = 0.72f,
     val micMuted: Boolean = false,
     val theaterMode: Boolean = false,
@@ -45,10 +50,11 @@ internal data class RoomUiState(
 internal sealed interface RoomAction {
     data class VideoUrlChanged(val url: String) : RoomAction
     data class VideoUrlPasted(val url: String) : RoomAction
-    data class PlaybackPositionChanged(val position: Float) : RoomAction
+    data class PlaybackPositionChanged(val positionMs: Long) : RoomAction
     data class PlaybackSkipped(val direction: Float) : RoomAction
     data class VolumeChanged(val volume: Float) : RoomAction
     data class InviteCopySucceeded(val target: InviteCopyTarget) : RoomAction
+    data class PlayerStateChanged(val state: VideoPlayerState) : RoomAction
     data object InviteCopyFailed : RoomAction
     data object StartPlaybackClicked : RoomAction
     data object RetryPlaybackClicked : RoomAction
@@ -105,12 +111,13 @@ internal class RoomViewModel(
             }
             is RoomAction.VideoUrlPasted -> mutableState.update { it.copy(videoUrl = action.url) }
             is RoomAction.PlaybackPositionChanged -> mutableState.update {
-                it.copy(playbackPosition = action.position.coerceIn(0f, 1f))
+                it.copy(positionMs = it.clampPosition(action.positionMs))
             }
             is RoomAction.PlaybackSkipped -> mutableState.update {
                 it.copy(
-                    playbackPosition = (it.playbackPosition + action.direction * 0.035f)
-                        .coerceIn(0f, 1f),
+                    positionMs = it.clampPosition(
+                        it.positionMs + (action.direction * SKIP_STEP_MS).toLong(),
+                    ),
                 )
             }
             is RoomAction.VolumeChanged -> mutableState.update {
@@ -130,6 +137,16 @@ internal class RoomViewModel(
                         InviteCopyTarget.CODE -> RoomEffect.PARTY_CODE_COPIED
                         InviteCopyTarget.LINK -> RoomEffect.INVITE_LINK_COPIED
                     },
+                )
+            }
+            is RoomAction.PlayerStateChanged -> mutableState.update { current ->
+                val playerState = action.state
+                current.copy(
+                    playback = playerState.status.toRoomPlaybackState(current.playback),
+                    positionMs = playerState.positionMs.coerceAtLeast(0L),
+                    durationMs = playerState.durationMs.coerceAtLeast(0L),
+                    bufferedMs = playerState.bufferedMs.coerceAtLeast(0L),
+                    isLive = playerState.isLive,
                 )
             }
             RoomAction.InviteCopyFailed -> {
@@ -163,7 +180,7 @@ internal class RoomViewModel(
             }
             RoomAction.ToggleMicClicked -> mutableState.update { it.copy(micMuted = !it.micMuted) }
             RoomAction.SyncClicked -> {
-                mutableState.update { it.copy(playbackPosition = 0.21f) }
+                mutableState.update { it.copy(positionMs = SYNC_TARGET_MS) }
                 emitEffect(RoomEffect.SYNC_COMPLETED)
             }
             RoomAction.InviteClicked -> mutableState.update {
@@ -194,7 +211,7 @@ internal class RoomViewModel(
 
         mutableState.update { it.copy(playback = RoomPlaybackState.LOADING) }
         viewModelScope.launch {
-            delay(650)
+            delay(LOADING_FALLBACK_MS)
             mutableState.update {
                 if (it.playback == RoomPlaybackState.LOADING) {
                     it.copy(playback = RoomPlaybackState.PLAYING)
@@ -208,4 +225,28 @@ internal class RoomViewModel(
     private fun emitEffect(effect: RoomEffect) {
         mutableEffects.tryEmit(effect)
     }
+
+    private companion object {
+        const val SKIP_STEP_MS = 15_000f
+        const val SYNC_TARGET_MS = 210L
+        const val LOADING_FALLBACK_MS = 650L
+    }
 }
+
+private fun RoomUiState.clampPosition(positionMs: Long): Long {
+    val max = if (durationMs > 0L) durationMs else Long.MAX_VALUE
+    return positionMs.coerceIn(0L, max)
+}
+
+private fun VideoPlayerStatus.toRoomPlaybackState(fallback: RoomPlaybackState): RoomPlaybackState =
+    when (this) {
+        VideoPlayerStatus.IDLE,
+        VideoPlayerStatus.READY,
+        -> fallback
+        VideoPlayerStatus.BUFFERING -> RoomPlaybackState.BUFFERING
+        VideoPlayerStatus.PLAYING -> RoomPlaybackState.PLAYING
+        VideoPlayerStatus.PAUSED,
+        VideoPlayerStatus.ENDED,
+        -> RoomPlaybackState.PAUSED
+        VideoPlayerStatus.ERROR -> RoomPlaybackState.ERROR
+    }

@@ -8,6 +8,7 @@ plugins {
 android {
     namespace = "top.roomio.app.androidApp"
     compileSdk = 36
+    buildToolsVersion = "37.0.0"
 
     defaultConfig {
         minSdk = 23

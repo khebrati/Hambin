@@ -104,6 +104,9 @@ import kotlinx.coroutines.flow.emptyFlow
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import roomio.sharedui.generated.resources.*
+import top.roomio.app.room.player.VideoPlayerHandle
+import top.roomio.app.room.player.VideoPlayerSurface
+import top.roomio.app.room.player.rememberPlatformVideoPlayer
 import top.roomio.app.theme.AppTheme
 import top.roomio.app.theme.LocalThemeIsDark
 import top.roomio.app.theme.RoomioDesignSystem
@@ -194,14 +197,36 @@ internal fun RoomScreen(
     effects: Flow<RoomEffect> = emptyFlow(),
     onAction: (RoomAction) -> Unit = {},
     modifier: Modifier = Modifier,
+    playerContent: (@Composable (Modifier) -> Unit)? = null,
 ) {
     var isDark by LocalThemeIsDark.current
     val snackbarHost = remember { SnackbarHostState() }
+    val clipboard = LocalClipboardManager.current
     val syncComplete = stringResource(Res.string.sync_complete)
-    val pastedUrl = stringResource(Res.string.sample_video_url)
+    val sampleUrl = stringResource(Res.string.sample_video_url)
     val partyCodeCopied = stringResource(Res.string.party_code_copied)
     val inviteLinkCopied = stringResource(Res.string.invite_link_copied)
     val copyUnavailable = stringResource(Res.string.copy_unavailable)
+
+    val playerHandle: VideoPlayerHandle? = if (playerContent == null) {
+        rememberPlatformVideoPlayer { playerState ->
+            onAction(RoomAction.PlayerStateChanged(playerState))
+        }
+    } else {
+        null
+    }
+    val player: @Composable (Modifier) -> Unit = playerContent ?: { playerModifier ->
+        val handle = playerHandle
+        if (handle != null) {
+            VideoPlayerSurface(handle, playerModifier)
+        } else {
+            CinemaScene(modifier = playerModifier, showTitle = true, muted = false)
+        }
+    }
+    val pasteVideoLink = {
+        val clip = clipboard.getText()?.text?.trim().orEmpty()
+        onAction(RoomAction.VideoUrlPasted(clip.ifEmpty { sampleUrl }))
+    }
 
     LaunchedEffect(effects) {
         effects.collect { effect ->
@@ -253,17 +278,43 @@ internal fun RoomScreen(
                     isOwner = state.isOwner,
                     ownerName = state.model.ownerName,
                     videoUrl = state.videoUrl,
-                    playbackPosition = state.playbackPosition,
+                    positionMs = state.positionMs,
+                    durationMs = state.durationMs,
+                    isLive = state.isLive,
                     volume = state.volume,
+                    player = player,
                     onVideoUrlChange = { onAction(RoomAction.VideoUrlChanged(it)) },
-                    onPaste = { onAction(RoomAction.VideoUrlPasted(pastedUrl)) },
-                    onStart = { onAction(RoomAction.StartPlaybackClicked) },
-                    onRetry = { onAction(RoomAction.RetryPlaybackClicked) },
-                    onTogglePlayback = { onAction(RoomAction.TogglePlaybackClicked) },
-                    onPositionChange = { onAction(RoomAction.PlaybackPositionChanged(it)) },
-                    onSkip = { onAction(RoomAction.PlaybackSkipped(it)) },
-                    onVolumeChange = { onAction(RoomAction.VolumeChanged(it)) },
-                    onToggleVolume = { onAction(RoomAction.ToggleVolumeClicked) },
+                    onPaste = pasteVideoLink,
+                    onStart = {
+                        onAction(RoomAction.StartPlaybackClicked)
+                        playerHandle?.load(state.videoUrl)
+                        playerHandle?.play()
+                    },
+                    onRetry = {
+                        onAction(RoomAction.RetryPlaybackClicked)
+                        playerHandle?.load(state.videoUrl)
+                        playerHandle?.play()
+                    },
+                    onTogglePlayback = {
+                        onAction(RoomAction.TogglePlaybackClicked)
+                        playerHandle?.togglePlayPause()
+                    },
+                    onPositionChange = {
+                        onAction(RoomAction.PlaybackPositionChanged(it))
+                        playerHandle?.seekTo(it)
+                    },
+                    onSkip = {
+                        onAction(RoomAction.PlaybackSkipped(it))
+                        playerHandle?.seekBy((it * 15_000f).toLong())
+                    },
+                    onVolumeChange = {
+                        onAction(RoomAction.VolumeChanged(it))
+                        playerHandle?.setVolume(it)
+                    },
+                    onToggleVolume = {
+                        onAction(RoomAction.ToggleVolumeClicked)
+                        playerHandle?.setVolume(if (state.volume == 0f) 0.72f else 0f)
+                    },
                     onToggleTheater = { onAction(RoomAction.ToggleTheaterClicked) },
                 )
                 if (state.hasPlayer) {
@@ -343,7 +394,10 @@ internal fun RoomScreen(
             text = { Text(stringResource(if (state.isOwner) Res.string.leave_owner_copy else Res.string.leave_guest_copy)) },
             confirmButton = {
                 TextButton(
-                    onClick = { onAction(RoomAction.LeaveConfirmed) },
+                    onClick = {
+                        playerHandle?.stop()
+                        onAction(RoomAction.LeaveConfirmed)
+                    },
                 ) {
                     Text(stringResource(Res.string.leave))
                 }
@@ -361,7 +415,10 @@ internal fun RoomScreen(
             title = { Text(stringResource(Res.string.end_stream_question)) },
             text = { Text(stringResource(Res.string.end_stream_copy)) },
             confirmButton = {
-                TextButton(onClick = { onAction(RoomAction.EndStreamConfirmed) }) {
+                TextButton(onClick = {
+                    playerHandle?.stop()
+                    onAction(RoomAction.EndStreamConfirmed)
+                }) {
                     Text(stringResource(Res.string.end_for_everyone))
                 }
             },
@@ -487,14 +544,17 @@ private fun CinemaCard(
     isOwner: Boolean,
     ownerName: String,
     videoUrl: String,
-    playbackPosition: Float,
+    positionMs: Long,
+    durationMs: Long,
+    isLive: Boolean,
     volume: Float,
+    player: @Composable (Modifier) -> Unit,
     onVideoUrlChange: (String) -> Unit,
     onPaste: () -> Unit,
     onStart: () -> Unit,
     onRetry: () -> Unit,
     onTogglePlayback: () -> Unit,
-    onPositionChange: (Float) -> Unit,
+    onPositionChange: (Long) -> Unit,
     onSkip: (Float) -> Unit,
     onVolumeChange: (Float) -> Unit,
     onToggleVolume: () -> Unit,
@@ -510,7 +570,12 @@ private fun CinemaCard(
     ) {
         Column {
             Box(Modifier.fillMaxWidth()) {
-                CinemaScene(showTitle = hasPlayer, muted = !hasPlayer)
+                val playerModifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f)
+                if (hasPlayer) {
+                    player(playerModifier)
+                } else {
+                    CinemaScene(modifier = playerModifier, showTitle = false, muted = true)
+                }
                 if (playback == RoomPlaybackState.PAUSED) {
                     FilledIconButton(
                         onClick = onTogglePlayback,
@@ -525,7 +590,9 @@ private fun CinemaCard(
                 hasPlayer -> PlayerControls(
                     paused = playback == RoomPlaybackState.PAUSED,
                     buffering = playback == RoomPlaybackState.BUFFERING,
-                    position = playbackPosition,
+                    positionMs = positionMs,
+                    durationMs = durationMs,
+                    isLive = isLive,
                     volume = volume,
                     onTogglePlayback = onTogglePlayback,
                     onPositionChange = onPositionChange,
@@ -550,13 +617,10 @@ private fun CinemaCard(
 }
 
 @Composable
-private fun CinemaScene(showTitle: Boolean, muted: Boolean) {
+private fun CinemaScene(modifier: Modifier, showTitle: Boolean, muted: Boolean) {
     val colors = RoomioDesignSystem.colors
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .aspectRatio(16f / 9f)
-            .background(colors.sceneSky),
+        modifier = modifier.background(colors.sceneSky),
     ) {
         Canvas(Modifier.fillMaxSize()) {
             val planetCenter = Offset(size.width * .79f, size.height * .30f)
@@ -738,10 +802,12 @@ private fun LoadingCinema() {
 private fun PlayerControls(
     paused: Boolean,
     buffering: Boolean,
-    position: Float,
+    positionMs: Long,
+    durationMs: Long,
+    isLive: Boolean,
     volume: Float,
     onTogglePlayback: () -> Unit,
-    onPositionChange: (Float) -> Unit,
+    onPositionChange: (Long) -> Unit,
     onSkip: (Float) -> Unit,
     onVolumeChange: (Float) -> Unit,
     onToggleVolume: () -> Unit,
@@ -755,16 +821,25 @@ private fun PlayerControls(
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Slider(
-            value = position,
-            onValueChange = onPositionChange,
-            modifier = Modifier.fillMaxWidth().height(28.dp),
-            colors = SliderDefaults.colors(
-                thumbColor = MaterialTheme.colorScheme.primary,
-                activeTrackColor = MaterialTheme.colorScheme.primary,
-                inactiveTrackColor = colors.mediaOutline,
-            ),
-        )
+        if (isLive) {
+            LiveIndicator()
+        } else {
+            val fraction = if (durationMs > 0L) {
+                (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
+            } else {
+                0f
+            }
+            Slider(
+                value = fraction,
+                onValueChange = { onPositionChange((it * durationMs).toLong()) },
+                modifier = Modifier.fillMaxWidth().height(28.dp),
+                colors = SliderDefaults.colors(
+                    thumbColor = MaterialTheme.colorScheme.primary,
+                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                    inactiveTrackColor = colors.mediaOutline,
+                ),
+            )
+        }
         if (buffering) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 CircularProgressIndicator(modifier = Modifier.size(16.dp), color = colors.onMedia, strokeWidth = 2.dp)
@@ -774,15 +849,15 @@ private fun PlayerControls(
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             if (maxWidth >= 520.dp) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    PlaybackTime(position, Modifier.weight(1f))
-                    TransportControls(paused, onTogglePlayback, onSkip)
+                    PlaybackTime(positionMs, durationMs, isLive, Modifier.weight(1f))
+                    TransportControls(paused, isLive, onTogglePlayback, onSkip)
                     VolumeControls(volume, onVolumeChange, onToggleVolume, onToggleTheater, Modifier.weight(1f))
                 }
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        PlaybackTime(position, Modifier.weight(1f))
-                        TransportControls(paused, onTogglePlayback, onSkip)
+                        PlaybackTime(positionMs, durationMs, isLive, Modifier.weight(1f))
+                        TransportControls(paused, isLive, onTogglePlayback, onSkip)
                     }
                     VolumeControls(volume, onVolumeChange, onToggleVolume, onToggleTheater, Modifier.fillMaxWidth())
                 }
@@ -792,20 +867,67 @@ private fun PlayerControls(
 }
 
 @Composable
-private fun PlaybackTime(position: Float, modifier: Modifier = Modifier) {
-    val minute = 18 + (position * 10).toInt()
+private fun LiveIndicator() {
+    Row(
+        modifier = Modifier.fillMaxWidth().height(28.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(10.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.error),
+        )
+        Text(
+            text = stringResource(Res.string.live),
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = RoomioDesignSystem.colors.onMedia,
+        )
+    }
+}
+
+@Composable
+private fun PlaybackTime(
+    positionMs: Long,
+    durationMs: Long,
+    isLive: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val text = if (!isLive && durationMs > 0L) {
+        "${formatPlaybackTime(positionMs)} / ${formatPlaybackTime(durationMs)}"
+    } else {
+        formatPlaybackTime(positionMs)
+    }
     Text(
-        text = "$minute:45 / 1:42:18",
+        text = text,
         modifier = modifier,
         style = MaterialTheme.typography.labelMedium,
         color = RoomioDesignSystem.colors.onMedia,
     )
 }
 
+private fun formatPlaybackTime(millis: Long): String {
+    val totalSeconds = (millis / 1000L).coerceAtLeast(0L)
+    val hours = totalSeconds / 3600L
+    val minutes = (totalSeconds % 3600L) / 60L
+    val seconds = totalSeconds % 60L
+    fun pad(value: Long): String = if (value < 10L) "0$value" else value.toString()
+    return if (hours > 0L) "$hours:${pad(minutes)}:${pad(seconds)}" else "${pad(minutes)}:${pad(seconds)}"
+}
+
 @Composable
-private fun TransportControls(paused: Boolean, onTogglePlayback: () -> Unit, onSkip: (Float) -> Unit) {
+private fun TransportControls(
+    paused: Boolean,
+    live: Boolean,
+    onTogglePlayback: () -> Unit,
+    onSkip: (Float) -> Unit,
+) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-        MaterialIconButton(Icons.Filled.FastRewind, stringResource(Res.string.rewind_15), size = 48.dp, onClick = { onSkip(-1f) })
+        if (!live) {
+            MaterialIconButton(Icons.Filled.FastRewind, stringResource(Res.string.rewind_15), size = 48.dp, onClick = { onSkip(-1f) })
+        }
         FilledIconButton(
             onClick = onTogglePlayback,
             modifier = Modifier.size(56.dp),
@@ -817,7 +939,9 @@ private fun TransportControls(paused: Boolean, onTogglePlayback: () -> Unit, onS
                 modifier = Modifier.size(28.dp),
             )
         }
-        MaterialIconButton(Icons.Filled.FastForward, stringResource(Res.string.forward_15), size = 48.dp, onClick = { onSkip(1f) })
+        if (!live) {
+            MaterialIconButton(Icons.Filled.FastForward, stringResource(Res.string.forward_15), size = 48.dp, onClick = { onSkip(1f) })
+        }
     }
 }
 
@@ -1295,22 +1419,26 @@ private fun RoomDialog(title: String, body: String, confirm: String, onDismiss: 
     )
 }
 
+private val PreviewPlayer: @Composable (Modifier) -> Unit = { modifier ->
+    CinemaScene(modifier = modifier, showTitle = true, muted = false)
+}
+
 @Preview(name = "Owner empty · compact", widthDp = 412, heightDp = 920)
 @Composable
 private fun OwnerEmptyRoomPreview() = AppTheme(onThemeChanged = {}) {
-    RoomScreen(RoomUiState(ownerEmptyRoom))
+    RoomScreen(RoomUiState(ownerEmptyRoom), playerContent = PreviewPlayer)
 }
 
 @Preview(name = "Owner playing · compact", widthDp = 412, heightDp = 920)
 @Composable
 private fun OwnerPlayingRoomPreview() = AppTheme(onThemeChanged = {}) {
-    RoomScreen(RoomUiState(ownerEmptyRoom.copy(playback = RoomPlaybackState.PLAYING)))
+    RoomScreen(RoomUiState(ownerEmptyRoom.copy(playback = RoomPlaybackState.PLAYING)), playerContent = PreviewPlayer)
 }
 
 @Preview(name = "Owner playing · small", widthDp = 360, heightDp = 800)
 @Composable
 private fun OwnerPlayingSmallPreview() = AppTheme(onThemeChanged = {}) {
-    RoomScreen(RoomUiState(ownerEmptyRoom.copy(playback = RoomPlaybackState.PLAYING)))
+    RoomScreen(RoomUiState(ownerEmptyRoom.copy(playback = RoomPlaybackState.PLAYING)), playerContent = PreviewPlayer)
 }
 
 @Preview(name = "Invite friends · compact", widthDp = 360, heightDp = 720)
@@ -1352,13 +1480,13 @@ private fun InviteFriendsDialogCopiedPreview() = AppTheme(onThemeChanged = {}) {
 @Preview(name = "Guest playing · desktop", widthDp = 1200, heightDp = 800)
 @Composable
 private fun GuestPlayingDesktopPreview() = AppTheme(onThemeChanged = {}) {
-    RoomScreen(RoomUiState(guestPlayingRoom))
+    RoomScreen(RoomUiState(guestPlayingRoom), playerContent = PreviewPlayer)
 }
 
 @Preview(name = "Guest waiting · compact", widthDp = 412, heightDp = 920)
 @Composable
 private fun GuestWaitingPreview() = AppTheme(onThemeChanged = {}) {
-    RoomScreen(RoomUiState(guestPlayingRoom.copy(playback = RoomPlaybackState.WAITING_FOR_OWNER)))
+    RoomScreen(RoomUiState(guestPlayingRoom.copy(playback = RoomPlaybackState.WAITING_FOR_OWNER)), playerContent = PreviewPlayer)
 }
 
 @Preview(name = "Owner away · desktop", widthDp = 1200, heightDp = 800)
@@ -1371,5 +1499,6 @@ private fun OwnerAwayDesktopPreview() = AppTheme(onThemeChanged = {}) {
                 playback = RoomPlaybackState.PLAYING,
             ),
         ),
+        playerContent = PreviewPlayer,
     )
 }

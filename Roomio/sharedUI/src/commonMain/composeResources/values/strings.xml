@@ -67,6 +67,7 @@
     <string name="left_the_room">left the room</string>
     <string name="link_copied">Link copied</string>
     <string name="listening">Listening</string>
+    <string name="live">Live</string>
     <string name="mute_video">Mute video</string>
     <string name="owner_away_copy">The current video stays available, but nobody can replace or end it until the owner returns.</string>
     <string name="paste_video_link">Paste video link</string>

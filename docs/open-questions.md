@@ -69,8 +69,12 @@ Resolved questions are preserved with their answers for traceability.
    - Design decision affected: Joining becomes a two-step flow with loading, available, owner-absent, full, ended/unavailable, and join-confirmation states.
 
 11. [Resolved] What happens when the room owner leaves?
-   - Answer: The room remains active without an owner until that same owner rejoins. Other users retain local playback but cannot start, replace, or abort the shared video. Ownership does not transfer.
-   - Design decision affected: Add a persistent owner-absent room state, keep owner-only controls unavailable, and restore them only when the original owner returns.
+    - Answer: The room remains active without an owner until that same owner rejoins. Other users retain local playback but cannot start, replace, or abort the shared video. Ownership does not transfer.
+    - Design decision affected: Add a persistent owner-absent room state, keep owner-only controls unavailable, and restore them only when the original owner returns.
+
+12. [Resolved] What direct video URL formats and validation rules apply to the native client?
+    - Answer: The Android client accepts any well-formed HTTP(S) direct video URL and plays it through Media3 ExoPlayer; progressive files and HLS live streams are supported. Validation is deferred to playback: failures surface through the player error state and a retry path. Cleartext HTTP is permitted for this feature via a debug network security configuration.
+    - Design decision affected: Native URL entry needs an error-with-recovery player state rather than format pre-validation; live streams hide scrubber and skip controls. Recorded as DD-013 for the Roomio Compose client.
 
 ## Can be deferred
 
@@ -101,4 +105,5 @@ Resolved questions are preserved with their answers for traceability.
 - RTL is currently excluded from designs, but repository guidance still asks for RTL support.
 - Voice-chat details are not yet defined beyond "voice only."
 - Initial owner assignment is still inferred from party creation, but the owner-absent and returning-owner lifecycle is defined.
-- Direct video URL validation rules remain undefined.
+- Desktop and iOS playback engines are not yet implemented; the Android player (DD-013) is the approved reference seam for extending them.
+- Synchronization is a local placeholder until a cross-device sync contract exists.
