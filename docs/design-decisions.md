@@ -101,3 +101,22 @@
 - **Live consequence:** Live HLS streams (short or unset duration) show a Live indicator and hide scrubber and skip controls. The Sync control remains a local placeholder (targets the room position constant) until a synchronization contract exists.
 - **State consequence:** Player state reports IDLE, BUFFERING, READY, PLAYING, PAUSED, ENDED, and ERROR plus position, duration, buffered position, and live flag. The room screen's Loading/Buffering/Playing/Paused/Error states derive from those reports, preserving the required experience states.
 - **Platform consequence:** The engine is created lazily only when a player surface is needed (not in previews or the guest waiting states), released with the composable, and paused automatically when the app stops.
+
+## DD-014: Cost-Conscious Go Backend Implementation
+
+- **Status:** Approved for the backend implementation
+- **Decision:** Implement the backend defined in `backend/backend-architecture.md` as a portable Go modular monolith. PostgreSQL is authoritative; room events flow through a transactional outbox to authenticated room WebSockets; playback telemetry and single-use realtime tickets stay in memory; LiveKit voice is optional and failure-isolated.
+- **Scope:** Guest identity with rotating refresh tokens, room lifecycle with owner-seat reservation and 24-hour tombstones, shared stream start/abort with revisions, explicit sync-to-leader, signed LiveKit webhooks, an OpenAPI 3.1 HTTP contract, an AsyncAPI 3.0 WebSocket contract, and Docker Compose services for TLS ingress, the API, PostgreSQL, LiveKit, and Coturn. Registered accounts, moderation, recording, text chat, server-hosted video, multi-region deployment, Redis, and Kubernetes remain out of scope for v1.
+- **Constraint superseded:** The earlier "backend out of scope" constraints in DD-002 and the design-phase restraint guidance continue to apply to `webUI/`; the backend boundary is now implemented under `backend/`.
+- **Consequence:** KMP clients can replace fixtures with repositories backed by this contract; the shared player seam in `Roomio/` remains the integration point. Contract tests against the generated Kotlin client and a 1/10/100/1,000-room load profile remain follow-up work.
+
+## DD-015: Single-VM Deployment with LiveKit Built-in TURN
+
+- **Status:** Approved for the backend deployment
+- **Decision:** Deploy the Docker Compose stack on one Linux VM (AWS EC2) with Caddy (TLS ingress), the API, PostgreSQL, and LiveKit. Voice media relays through LiveKit's built-in TURN server. This supersedes the Coturn service described in DD-014 for the v1 deployment.
+- **Rationale:** LiveKit's built-in TURN advertises itself to clients and issues short-lived relay credentials automatically, removing a container, a shared static-auth-secret, and TLS certificate coordination between two products. A single VM matches the 1-10 concurrent room stage in `backend-architecture.md`.
+- **Security consequence:** Only Caddy (80/443) and the TURN endpoint (3478/udp+tcp, 50000-50100/udp) are publicly reachable; the API (8080), LiveKit signaling (7880), and PostgreSQL (5432) stay on the internal network. Secrets live in a `0600` `.env`; the API image runs non-root; Caddy terminates TLS with HSTS and content-type hardening.
+- **Tradeoff accepted:** TURN-over-TLS on 5349 and offsite backups/monitoring are deferred. Relay traffic remains DTLS-SRTP encrypted; only TURN-as-TLS-fallback for restrictive networks is unavailable. A dedicated Coturn (or multi-node TURN) returns at the ~100-room scaling stage.
+- **Setup guidance:** `backend/deploy-aws.md` documents the AWS console steps (EC2, Elastic IP, security group, Route 53) and how to bring the stack up.
+
+
