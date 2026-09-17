@@ -83,7 +83,8 @@
     <string name="speaking">Speaking</string>
     <string name="stay">Stay</string>
     <string name="sync_to_room">Sync to room</string>
-    <string name="toggle_theater">Toggle theater mode</string>
+    <string name="enter_fullscreen">Enter fullscreen</string>
+    <string name="exit_fullscreen">Exit fullscreen</string>
     <string name="try_again">Try again</string>
     <string name="unmute_video">Unmute video</string>
     <string name="video_source">Video source</string>

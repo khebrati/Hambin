@@ -27,9 +27,10 @@ internal data class RoomUiState(
     val durationMs: Long = 0L,
     val bufferedMs: Long = 0L,
     val isLive: Boolean = false,
+    val videoAspectRatio: Float = 0f,
     val volume: Float = 0.72f,
     val micMuted: Boolean = false,
-    val theaterMode: Boolean = false,
+    val fullscreenMode: Boolean = false,
     val inviteOpen: Boolean = false,
     val inviteCopyState: InviteCopyState = InviteCopyState.IDLE,
     val linkOpen: Boolean = false,
@@ -60,7 +61,7 @@ internal sealed interface RoomAction {
     data object RetryPlaybackClicked : RoomAction
     data object TogglePlaybackClicked : RoomAction
     data object ToggleVolumeClicked : RoomAction
-    data object ToggleTheaterClicked : RoomAction
+    data object ToggleFullscreenClicked : RoomAction
     data object ToggleMicClicked : RoomAction
     data object SyncClicked : RoomAction
     data object InviteClicked : RoomAction
@@ -141,12 +142,19 @@ internal class RoomViewModel(
             }
             is RoomAction.PlayerStateChanged -> mutableState.update { current ->
                 val playerState = action.state
+                val playback = playerState.status.toRoomPlaybackState(current.playback)
                 current.copy(
-                    playback = playerState.status.toRoomPlaybackState(current.playback),
+                    playback = playback,
                     positionMs = playerState.positionMs.coerceAtLeast(0L),
                     durationMs = playerState.durationMs.coerceAtLeast(0L),
                     bufferedMs = playerState.bufferedMs.coerceAtLeast(0L),
                     isLive = playerState.isLive,
+                    videoAspectRatio = playerState.videoAspectRatio,
+                    fullscreenMode = if (playback in ACTIVE_PLAYBACK_STATES) {
+                        current.fullscreenMode
+                    } else {
+                        false
+                    },
                 )
             }
             RoomAction.InviteCopyFailed -> {
@@ -175,8 +183,8 @@ internal class RoomViewModel(
             RoomAction.ToggleVolumeClicked -> mutableState.update {
                 it.copy(volume = if (it.volume == 0f) 0.72f else 0f)
             }
-            RoomAction.ToggleTheaterClicked -> mutableState.update {
-                it.copy(theaterMode = !it.theaterMode)
+            RoomAction.ToggleFullscreenClicked -> mutableState.update {
+                it.copy(fullscreenMode = !it.fullscreenMode)
             }
             RoomAction.ToggleMicClicked -> mutableState.update { it.copy(micMuted = !it.micMuted) }
             RoomAction.SyncClicked -> {
@@ -191,13 +199,16 @@ internal class RoomViewModel(
             RoomAction.LinkDismissed -> mutableState.update { it.copy(linkOpen = false) }
             RoomAction.LeaveClicked -> mutableState.update { it.copy(leaveOpen = true) }
             RoomAction.LeaveDismissed -> mutableState.update { it.copy(leaveOpen = false) }
-            RoomAction.LeaveConfirmed -> mutableState.update { it.copy(leaveOpen = false) }
+            RoomAction.LeaveConfirmed -> mutableState.update {
+                it.copy(leaveOpen = false, fullscreenMode = false)
+            }
             RoomAction.EndStreamClicked -> mutableState.update { it.copy(abortOpen = true) }
             RoomAction.EndStreamDismissed -> mutableState.update { it.copy(abortOpen = false) }
             RoomAction.EndStreamConfirmed -> mutableState.update {
                 it.copy(
                     playback = RoomPlaybackState.ABORTED,
                     abortOpen = false,
+                    fullscreenMode = false,
                 )
             }
         }
@@ -230,6 +241,12 @@ internal class RoomViewModel(
         const val SKIP_STEP_MS = 15_000f
         const val SYNC_TARGET_MS = 210L
         const val LOADING_FALLBACK_MS = 650L
+
+        val ACTIVE_PLAYBACK_STATES = setOf(
+            RoomPlaybackState.PLAYING,
+            RoomPlaybackState.PAUSED,
+            RoomPlaybackState.BUFFERING,
+        )
     }
 }
 

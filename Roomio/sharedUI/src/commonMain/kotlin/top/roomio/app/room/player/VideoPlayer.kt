@@ -19,6 +19,7 @@ internal data class VideoPlayerState(
     val durationMs: Long = 0L,
     val bufferedMs: Long = 0L,
     val isLive: Boolean = false,
+    val videoAspectRatio: Float = 0f,
     val error: String? = null,
 ) {
     val hasDuration: Boolean

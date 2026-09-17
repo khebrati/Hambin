@@ -93,6 +93,7 @@ class PresentationViewModelTest {
                     durationMs = 120_000L,
                     bufferedMs = 90_000L,
                     isLive = false,
+                    videoAspectRatio = 16f / 9f,
                 ),
             ),
         )
@@ -103,6 +104,7 @@ class PresentationViewModelTest {
             assertEquals(120_000L, durationMs)
             assertEquals(90_000L, bufferedMs)
             assertFalse(isLive)
+            assertEquals(16f / 9f, videoAspectRatio)
         }
 
         viewModel.onAction(RoomAction.PlaybackPositionChanged(150_000L))
@@ -136,6 +138,27 @@ class PresentationViewModelTest {
             assertTrue(isLive)
             assertEquals(9_999L, positionMs)
         }
+    }
+
+    @Test
+    fun roomFullscreenTogglesAndResetsOnLeaveOrEnd() {
+        val viewModel = RoomViewModel(ownerRoomModel())
+
+        assertFalse(viewModel.state.value.fullscreenMode)
+
+        viewModel.onAction(RoomAction.ToggleFullscreenClicked)
+        assertTrue(viewModel.state.value.fullscreenMode)
+
+        viewModel.onAction(RoomAction.ToggleFullscreenClicked)
+        assertFalse(viewModel.state.value.fullscreenMode)
+
+        viewModel.onAction(RoomAction.ToggleFullscreenClicked)
+        viewModel.onAction(RoomAction.LeaveConfirmed)
+        assertFalse(viewModel.state.value.fullscreenMode)
+
+        viewModel.onAction(RoomAction.ToggleFullscreenClicked)
+        viewModel.onAction(RoomAction.EndStreamConfirmed)
+        assertFalse(viewModel.state.value.fullscreenMode)
     }
 
     @Test

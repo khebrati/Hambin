@@ -15,6 +15,7 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.compose.PlayerSurface
@@ -39,6 +40,10 @@ internal actual fun rememberPlatformVideoPlayer(
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
+                currentOnStateChanged(player.toVideoPlayerState())
+            }
+
+            override fun onVideoSizeChanged(videoSize: VideoSize) {
                 currentOnStateChanged(player.toVideoPlayerState())
             }
 
@@ -142,12 +147,20 @@ private fun ExoPlayer.toVideoPlayerState(): VideoPlayerState {
         playbackState == Player.STATE_ENDED -> VideoPlayerStatus.ENDED
         else -> VideoPlayerStatus.IDLE
     }
+    val aspectRatio = videoSize.let { size ->
+        if (size.height > 0) {
+            (size.width * size.pixelWidthHeightRatio) / size.height
+        } else {
+            0f
+        }
+    }
     return VideoPlayerState(
         status = status,
         positionMs = currentPosition.coerceAtLeast(0L),
         durationMs = durationMs,
         bufferedMs = bufferedPosition.coerceAtLeast(0L),
         isLive = isLive,
+        videoAspectRatio = aspectRatio,
         error = playerError?.errorCodeName,
     )
 }

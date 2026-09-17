@@ -4,6 +4,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -37,6 +39,7 @@ import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
@@ -62,6 +65,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -75,8 +79,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -84,6 +91,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -99,11 +107,13 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import roomio.sharedui.generated.resources.*
+import top.roomio.app.platform.rememberFullscreenController
 import top.roomio.app.room.player.VideoPlayerHandle
 import top.roomio.app.room.player.VideoPlayerSurface
 import top.roomio.app.room.player.rememberPlatformVideoPlayer
@@ -228,6 +238,17 @@ internal fun RoomScreen(
         onAction(RoomAction.VideoUrlPasted(clip.ifEmpty { sampleUrl }))
     }
 
+    val fullscreenController = rememberFullscreenController {
+        onAction(RoomAction.ToggleFullscreenClicked)
+    }
+    val fullscreenActive = state.fullscreenMode && state.hasPlayer
+    LaunchedEffect(fullscreenActive, fullscreenController) {
+        fullscreenController?.setFullscreen(fullscreenActive)
+    }
+    DisposableEffect(fullscreenController) {
+        onDispose { fullscreenController?.setFullscreen(false) }
+    }
+
     LaunchedEffect(effects) {
         effects.collect { effect ->
             snackbarHost.showSnackbar(
@@ -241,33 +262,69 @@ internal fun RoomScreen(
         }
     }
 
-    Scaffold(
-        modifier = modifier.windowInsetsPadding(WindowInsets.safeDrawing),
-        topBar = {
-            RoomTopBar(
-                title = state.model.title,
-                subtitle = if (state.model.role == RoomRole.GUEST) {
-                    "${state.model.partyCode} · ${stringResource(Res.string.guest)}"
-                } else {
-                    null
-                },
-                showLink = state.hasPlayer,
-                showTheme = true,
-                onInvite = { onAction(RoomAction.InviteClicked) },
-                onShowLink = { onAction(RoomAction.LinkClicked) },
-                onLeave = { onAction(RoomAction.LeaveClicked) },
-                onToggleTheme = { isDark = !isDark },
-            )
-        },
-        snackbarHost = { SnackbarHost(snackbarHost) },
-    ) { contentPadding ->
-        BoxWithConstraints(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(contentPadding)
-                .verticalScroll(rememberScrollState()),
-        ) {
-            val compact = maxWidth < 840.dp || state.theaterMode
+    if (fullscreenActive) {
+        FullscreenCinema(
+            playback = state.playback,
+            positionMs = state.positionMs,
+            durationMs = state.durationMs,
+            isLive = state.isLive,
+            videoAspectRatio = state.videoAspectRatio,
+            volume = state.volume,
+            micMuted = state.micMuted,
+            player = player,
+            snackbarHost = snackbarHost,
+            onTogglePlayback = {
+                onAction(RoomAction.TogglePlaybackClicked)
+                playerHandle?.togglePlayPause()
+            },
+            onPositionChange = {
+                onAction(RoomAction.PlaybackPositionChanged(it))
+                playerHandle?.seekTo(it)
+            },
+            onSkip = {
+                onAction(RoomAction.PlaybackSkipped(it))
+                playerHandle?.seekBy((it * 15_000f).toLong())
+            },
+            onVolumeChange = {
+                onAction(RoomAction.VolumeChanged(it))
+                playerHandle?.setVolume(it)
+            },
+            onToggleVolume = {
+                onAction(RoomAction.ToggleVolumeClicked)
+                playerHandle?.setVolume(if (state.volume == 0f) 0.72f else 0f)
+            },
+            onToggleFullscreen = { onAction(RoomAction.ToggleFullscreenClicked) },
+            onSync = { onAction(RoomAction.SyncClicked) },
+            onToggleMic = { onAction(RoomAction.ToggleMicClicked) },
+        )
+    } else {
+        Scaffold(
+            modifier = modifier.windowInsetsPadding(WindowInsets.safeDrawing),
+            topBar = {
+                RoomTopBar(
+                    title = state.model.title,
+                    subtitle = if (state.model.role == RoomRole.GUEST) {
+                        "${state.model.partyCode} · ${stringResource(Res.string.guest)}"
+                    } else {
+                        null
+                    },
+                    showLink = state.hasPlayer,
+                    showTheme = true,
+                    onInvite = { onAction(RoomAction.InviteClicked) },
+                    onShowLink = { onAction(RoomAction.LinkClicked) },
+                    onLeave = { onAction(RoomAction.LeaveClicked) },
+                    onToggleTheme = { isDark = !isDark },
+                )
+            },
+            snackbarHost = { SnackbarHost(snackbarHost) },
+        ) { contentPadding ->
+            BoxWithConstraints(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(contentPadding)
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                val compact = maxWidth < 840.dp
             val cinema: @Composable ColumnScope.() -> Unit = {
                 if (!state.model.ownerPresent) {
                     OwnerAwayBanner(state.model.ownerName)
@@ -282,6 +339,7 @@ internal fun RoomScreen(
                     durationMs = state.durationMs,
                     isLive = state.isLive,
                     volume = state.volume,
+                    micMuted = state.micMuted,
                     player = player,
                     onVideoUrlChange = { onAction(RoomAction.VideoUrlChanged(it)) },
                     onPaste = pasteVideoLink,
@@ -315,7 +373,9 @@ internal fun RoomScreen(
                         onAction(RoomAction.ToggleVolumeClicked)
                         playerHandle?.setVolume(if (state.volume == 0f) 0.72f else 0f)
                     },
-                    onToggleTheater = { onAction(RoomAction.ToggleTheaterClicked) },
+                    onToggleFullscreen = { onAction(RoomAction.ToggleFullscreenClicked) },
+                    onSync = { onAction(RoomAction.SyncClicked) },
+                    onToggleMic = { onAction(RoomAction.ToggleMicClicked) },
                 )
                 if (state.hasPlayer) {
                     Spacer(Modifier.height(RoomioDesignSystem.spacing.small))
@@ -349,7 +409,7 @@ internal fun RoomScreen(
                     verticalArrangement = Arrangement.spacedBy(RoomioDesignSystem.spacing.small),
                 ) {
                     cinema()
-                    if (!state.theaterMode) support()
+                    support()
                 }
             } else {
                 Row(
@@ -367,6 +427,7 @@ internal fun RoomScreen(
                 }
             }
         }
+    }
     }
 
     if (state.inviteOpen) {
@@ -548,6 +609,7 @@ private fun CinemaCard(
     durationMs: Long,
     isLive: Boolean,
     volume: Float,
+    micMuted: Boolean,
     player: @Composable (Modifier) -> Unit,
     onVideoUrlChange: (String) -> Unit,
     onPaste: () -> Unit,
@@ -558,7 +620,9 @@ private fun CinemaCard(
     onSkip: (Float) -> Unit,
     onVolumeChange: (Float) -> Unit,
     onToggleVolume: () -> Unit,
-    onToggleTheater: () -> Unit,
+    onToggleFullscreen: () -> Unit,
+    onSync: () -> Unit,
+    onToggleMic: () -> Unit,
 ) {
     val hasPlayer = playback in setOf(RoomPlaybackState.PLAYING, RoomPlaybackState.PAUSED, RoomPlaybackState.BUFFERING)
     Card(
@@ -594,12 +658,15 @@ private fun CinemaCard(
                     durationMs = durationMs,
                     isLive = isLive,
                     volume = volume,
+                    micMuted = micMuted,
                     onTogglePlayback = onTogglePlayback,
                     onPositionChange = onPositionChange,
                     onSkip = onSkip,
                     onVolumeChange = onVolumeChange,
                     onToggleVolume = onToggleVolume,
-                    onToggleTheater = onToggleTheater,
+                    onToggleFullscreen = onToggleFullscreen,
+                    onSync = onSync,
+                    onToggleMic = onToggleMic,
                 )
                 playback == RoomPlaybackState.LOADING -> LoadingCinema()
                 isOwner -> OwnerCinemaEntry(
@@ -806,12 +873,15 @@ private fun PlayerControls(
     durationMs: Long,
     isLive: Boolean,
     volume: Float,
+    micMuted: Boolean,
     onTogglePlayback: () -> Unit,
     onPositionChange: (Long) -> Unit,
     onSkip: (Float) -> Unit,
     onVolumeChange: (Float) -> Unit,
     onToggleVolume: () -> Unit,
-    onToggleTheater: () -> Unit,
+    onToggleFullscreen: () -> Unit,
+    onSync: () -> Unit,
+    onToggleMic: () -> Unit,
 ) {
     val colors = RoomioDesignSystem.colors
     Column(
@@ -851,7 +921,7 @@ private fun PlayerControls(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     PlaybackTime(positionMs, durationMs, isLive, Modifier.weight(1f))
                     TransportControls(paused, isLive, onTogglePlayback, onSkip)
-                    VolumeControls(volume, onVolumeChange, onToggleVolume, onToggleTheater, Modifier.weight(1f))
+                    VolumeControls(volume, micMuted, onVolumeChange, onToggleVolume, onToggleFullscreen, onSync, onToggleMic, Modifier)
                 }
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -859,7 +929,7 @@ private fun PlayerControls(
                         PlaybackTime(positionMs, durationMs, isLive, Modifier.weight(1f))
                         TransportControls(paused, isLive, onTogglePlayback, onSkip)
                     }
-                    VolumeControls(volume, onVolumeChange, onToggleVolume, onToggleTheater, Modifier.fillMaxWidth())
+                    VolumeControls(volume, micMuted, onVolumeChange, onToggleVolume, onToggleFullscreen, onSync, onToggleMic, Modifier.fillMaxWidth())
                 }
             }
         }
@@ -917,6 +987,8 @@ private fun formatPlaybackTime(millis: Long): String {
     return if (hours > 0L) "$hours:${pad(minutes)}:${pad(seconds)}" else "${pad(minutes)}:${pad(seconds)}"
 }
 
+private const val CONTROLS_AUTO_HIDE_MS = 3_000L
+
 @Composable
 private fun TransportControls(
     paused: Boolean,
@@ -948,12 +1020,23 @@ private fun TransportControls(
 @Composable
 private fun VolumeControls(
     volume: Float,
+    micMuted: Boolean,
     onVolumeChange: (Float) -> Unit,
     onToggleVolume: () -> Unit,
-    onToggleTheater: () -> Unit,
+    onToggleFullscreen: () -> Unit,
+    onSync: () -> Unit,
+    onToggleMic: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End) {
+        MaterialIconButton(Icons.Filled.Sync, stringResource(Res.string.sync_to_room), size = 40.dp, iconSize = 20.dp, onClick = onSync)
+        MaterialIconButton(
+            if (micMuted) Icons.Filled.MicOff else Icons.Filled.Mic,
+            stringResource(if (micMuted) Res.string.unmute else Res.string.mute),
+            size = 40.dp,
+            iconSize = 20.dp,
+            onClick = onToggleMic,
+        )
         MaterialIconButton(
             if (volume == 0f) Icons.Filled.VolumeOff else Icons.Filled.VolumeUp,
             stringResource(if (volume == 0f) Res.string.unmute_video else Res.string.mute_video),
@@ -964,14 +1047,224 @@ private fun VolumeControls(
         Slider(
             value = volume,
             onValueChange = onVolumeChange,
-            modifier = Modifier.widthIn(min = 80.dp, max = 108.dp).weight(1f, fill = false),
+            modifier = Modifier.widthIn(min = 64.dp, max = 108.dp).weight(1f, fill = false),
             colors = SliderDefaults.colors(
                 thumbColor = MaterialTheme.colorScheme.primary,
                 activeTrackColor = MaterialTheme.colorScheme.primary,
                 inactiveTrackColor = RoomioDesignSystem.colors.mediaOutline,
             ),
         )
-        MaterialIconButton(Icons.Filled.Fullscreen, stringResource(Res.string.toggle_theater), size = 40.dp, iconSize = 22.dp, onClick = onToggleTheater)
+        MaterialIconButton(Icons.Filled.Fullscreen, stringResource(Res.string.enter_fullscreen), size = 40.dp, iconSize = 22.dp, onClick = onToggleFullscreen)
+    }
+}
+
+@Composable
+private fun FullscreenCinema(
+    playback: RoomPlaybackState,
+    positionMs: Long,
+    durationMs: Long,
+    isLive: Boolean,
+    videoAspectRatio: Float,
+    volume: Float,
+    micMuted: Boolean,
+    player: @Composable (Modifier) -> Unit,
+    snackbarHost: SnackbarHostState,
+    onTogglePlayback: () -> Unit,
+    onPositionChange: (Long) -> Unit,
+    onSkip: (Float) -> Unit,
+    onVolumeChange: (Float) -> Unit,
+    onToggleVolume: () -> Unit,
+    onToggleFullscreen: () -> Unit,
+    onSync: () -> Unit,
+    onToggleMic: () -> Unit,
+) {
+    var controlsVisible by remember { mutableStateOf(true) }
+    LaunchedEffect(controlsVisible) {
+        if (controlsVisible) {
+            delay(CONTROLS_AUTO_HIDE_MS)
+            controlsVisible = false
+        }
+    }
+    val paused = playback == RoomPlaybackState.PAUSED
+    val buffering = playback == RoomPlaybackState.BUFFERING
+    val mediaColors = RoomioDesignSystem.colors
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() },
+            ) {
+                controlsVisible = !controlsVisible
+            },
+    ) {
+        BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            val aspectRatio = if (videoAspectRatio > 0f) videoAspectRatio else 16f / 9f
+            val containerAspect = maxWidth.value / maxHeight.value
+            val playerModifier = if (aspectRatio >= containerAspect) {
+                Modifier.width(maxWidth).height(maxWidth / aspectRatio)
+            } else {
+                Modifier.height(maxHeight).width(maxHeight * aspectRatio)
+            }
+            player(playerModifier)
+        }
+        if (paused) {
+            FilledIconButton(
+                onClick = onTogglePlayback,
+                modifier = Modifier.align(Alignment.Center).size(72.dp),
+                colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.primary),
+            ) {
+                Icon(Icons.Filled.PlayArrow, contentDescription = stringResource(Res.string.play), modifier = Modifier.size(38.dp))
+            }
+        }
+        if (controlsVisible) {
+            CompositionLocalProvider(LocalContentColor provides mediaColors.onMedia) {
+                FullscreenControls(
+                    paused = paused,
+                    buffering = buffering,
+                    positionMs = positionMs,
+                    durationMs = durationMs,
+                    isLive = isLive,
+                    volume = volume,
+                    micMuted = micMuted,
+                    onTogglePlayback = onTogglePlayback,
+                    onPositionChange = onPositionChange,
+                    onSkip = onSkip,
+                    onVolumeChange = onVolumeChange,
+                    onToggleVolume = onToggleVolume,
+                    onToggleFullscreen = onToggleFullscreen,
+                    onSync = onSync,
+                    onToggleMic = onToggleMic,
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
+            }
+        }
+        SnackbarHost(
+            snackbarHost,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = if (controlsVisible) 128.dp else 24.dp),
+        )
+    }
+}
+
+@Composable
+private fun FullscreenControls(
+    paused: Boolean,
+    buffering: Boolean,
+    positionMs: Long,
+    durationMs: Long,
+    isLive: Boolean,
+    volume: Float,
+    micMuted: Boolean,
+    onTogglePlayback: () -> Unit,
+    onPositionChange: (Long) -> Unit,
+    onSkip: (Float) -> Unit,
+    onVolumeChange: (Float) -> Unit,
+    onToggleVolume: () -> Unit,
+    onToggleFullscreen: () -> Unit,
+    onSync: () -> Unit,
+    onToggleMic: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = RoomioDesignSystem.colors
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(Color.Black.copy(alpha = 0.55f))
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        if (isLive) {
+            LiveIndicator()
+        } else {
+            val fraction = if (durationMs > 0L) {
+                (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
+            } else {
+                0f
+            }
+            Slider(
+                value = fraction,
+                onValueChange = { onPositionChange((it * durationMs).toLong()) },
+                modifier = Modifier.fillMaxWidth().height(28.dp),
+                colors = SliderDefaults.colors(
+                    thumbColor = MaterialTheme.colorScheme.primary,
+                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                    inactiveTrackColor = colors.mediaOutline,
+                ),
+            )
+        }
+        if (buffering) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                CircularProgressIndicator(modifier = Modifier.size(16.dp), color = colors.onMedia, strokeWidth = 2.dp)
+                Text(stringResource(Res.string.buffering), style = MaterialTheme.typography.labelMedium, color = colors.onMedia)
+            }
+        }
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            if (maxWidth >= 560.dp) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    PlaybackTime(positionMs, durationMs, isLive, Modifier.weight(1f))
+                    TransportControls(paused, isLive, onTogglePlayback, onSkip)
+                    FullscreenActionControls(
+                        volume, micMuted, onVolumeChange, onToggleVolume, onSync, onToggleMic, onToggleFullscreen,
+                        Modifier,
+                    )
+                }
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        PlaybackTime(positionMs, durationMs, isLive, Modifier.weight(1f))
+                        TransportControls(paused, isLive, onTogglePlayback, onSkip)
+                    }
+                    FullscreenActionControls(
+                        volume, micMuted, onVolumeChange, onToggleVolume, onSync, onToggleMic, onToggleFullscreen,
+                        Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FullscreenActionControls(
+    volume: Float,
+    micMuted: Boolean,
+    onVolumeChange: (Float) -> Unit,
+    onToggleVolume: () -> Unit,
+    onSync: () -> Unit,
+    onToggleMic: () -> Unit,
+    onToggleFullscreen: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End) {
+        MaterialIconButton(Icons.Filled.Sync, stringResource(Res.string.sync_to_room), size = 40.dp, iconSize = 20.dp, onClick = onSync)
+        MaterialIconButton(
+            if (micMuted) Icons.Filled.MicOff else Icons.Filled.Mic,
+            stringResource(if (micMuted) Res.string.unmute else Res.string.mute),
+            size = 40.dp,
+            iconSize = 20.dp,
+            onClick = onToggleMic,
+        )
+        MaterialIconButton(
+            if (volume == 0f) Icons.Filled.VolumeOff else Icons.Filled.VolumeUp,
+            stringResource(if (volume == 0f) Res.string.unmute_video else Res.string.mute_video),
+            size = 40.dp,
+            iconSize = 20.dp,
+            onClick = onToggleVolume,
+        )
+        Slider(
+            value = volume,
+            onValueChange = onVolumeChange,
+            modifier = Modifier.widthIn(min = 64.dp, max = 96.dp).weight(1f, fill = false),
+            colors = SliderDefaults.colors(
+                thumbColor = MaterialTheme.colorScheme.primary,
+                activeTrackColor = MaterialTheme.colorScheme.primary,
+                inactiveTrackColor = RoomioDesignSystem.colors.mediaOutline,
+            ),
+        )
+        MaterialIconButton(Icons.Filled.FullscreenExit, stringResource(Res.string.exit_fullscreen), size = 40.dp, iconSize = 20.dp, onClick = onToggleFullscreen)
     }
 }
 
