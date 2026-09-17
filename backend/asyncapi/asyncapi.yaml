@@ -1,0 +1,270 @@
+asyncapi: 3.0.0
+info:
+  title: Hambin Room Realtime
+  version: 1.0.0
+  description: >
+    Versioned JSON over one authenticated room WebSocket. Connect by first
+    issuing a single-use, 30-second ticket through POST
+    /v1/rooms/{roomId}/realtime-ticket, then GET
+    /v1/rooms/{roomId}/realtime?ticket={ticket}. Access tokens are never placed
+    in URLs. Playback reports are retained for 15 seconds and never persisted.
+servers:
+  production:
+    host: api.example.com
+    protocol: wss
+    pathname: /v1/rooms/{roomId}/realtime
+    variables:
+      roomId:
+        default: room-id
+channels:
+  room:
+    address: /v1/rooms/{roomId}/realtime
+    parameters:
+      roomId:
+        description: Room identifier
+    messages:
+      snapshot:
+        $ref: "#/components/messages/Snapshot"
+      event:
+        $ref: "#/components/messages/Event"
+      syncResult:
+        $ref: "#/components/messages/SyncResult"
+      pong:
+        $ref: "#/components/messages/Pong"
+      error:
+        $ref: "#/components/messages/Error"
+      playbackReport:
+        $ref: "#/components/messages/PlaybackReport"
+      syncRequest:
+        $ref: "#/components/messages/SyncRequest"
+      ping:
+        $ref: "#/components/messages/Ping"
+      ack:
+        $ref: "#/components/messages/Ack"
+operations:
+  receiveFromServer:
+    action: receive
+    channel:
+      $ref: "#/channels/room"
+    messages:
+      - $ref: "#/components/messages/Snapshot"
+      - $ref: "#/components/messages/Event"
+      - $ref: "#/components/messages/SyncResult"
+      - $ref: "#/components/messages/Pong"
+      - $ref: "#/components/messages/Error"
+  sendToServer:
+    action: send
+    channel:
+      $ref: "#/channels/room"
+    messages:
+      - $ref: "#/components/messages/PlaybackReport"
+      - $ref: "#/components/messages/SyncRequest"
+      - $ref: "#/components/messages/Ping"
+      - $ref: "#/components/messages/Ack"
+components:
+  messages:
+    Snapshot:
+      name: snapshot
+      title: Full room snapshot
+      description: Sent on connection or recovery. Replaces client room state.
+      contentType: application/json
+      payload:
+        type: object
+        required: [type, room, members, stream]
+        properties:
+          type:
+            const: snapshot
+          room:
+            $ref: "#/components/schemas/Room"
+          members:
+            type: array
+            items:
+              $ref: "#/components/schemas/MemberSummary"
+          stream:
+            $ref: "#/components/schemas/Stream"
+    Event:
+      name: event
+      title: Durable room event
+      description: Delivered at-least-once from the transactional outbox.
+      contentType: application/json
+      payload:
+        type: object
+        required: [type, topic, eventId, payload]
+        properties:
+          type:
+            const: event
+          topic:
+            type: string
+            enum:
+              - room.created
+              - member.joined
+              - member.left
+              - member.absent
+              - member.returned
+              - owner.presence
+              - stream.started
+              - stream.aborted
+              - room.closed
+          eventId:
+            type: string
+          payload:
+            type: object
+            additionalProperties: true
+    SyncResult:
+      name: syncResult
+      title: Sync result
+      description: >
+        Returns only a target position and outcome. Never reveals participant
+        drift or leader identity, never rewinds the requester, and is never
+        broadcast to other participants.
+      contentType: application/json
+      payload:
+        type: object
+        required: [type, status, targetPositionMs]
+        properties:
+          type:
+            const: sync.result
+          status:
+            type: string
+            enum: [APPLIED, ALREADY_LEADING, UNAVAILABLE]
+          targetPositionMs:
+            type: integer
+            format: int64
+    Pong:
+      name: pong
+      title: Pong
+      contentType: application/json
+      payload:
+        type: object
+        required: [type]
+        properties:
+          type:
+            const: pong
+    Error:
+      name: error
+      title: Stable error
+      contentType: application/json
+      payload:
+        type: object
+        required: [type, code, message]
+        properties:
+          type:
+            const: error
+          code:
+            type: string
+          message:
+            type: string
+    PlaybackReport:
+      name: playbackReport
+      title: Playback report
+      description: Sent on connect, seek, play, pause, and every five seconds while active.
+      contentType: application/json
+      payload:
+        type: object
+        required: [type, streamSessionId, positionMs, playing]
+        properties:
+          type:
+            const: playback.report
+          streamSessionId:
+            type: string
+          positionMs:
+            type: integer
+            format: int64
+          playing:
+            type: boolean
+    SyncRequest:
+      name: syncRequest
+      title: Explicit sync request
+      contentType: application/json
+      payload:
+        type: object
+        required: [type, streamSessionId, positionMs]
+        properties:
+          type:
+            const: sync.request
+          streamSessionId:
+            type: string
+          positionMs:
+            type: integer
+            format: int64
+    Ping:
+      name: ping
+      title: Ping
+      contentType: application/json
+      payload:
+        type: object
+        required: [type]
+        properties:
+          type:
+            const: ping
+    Ack:
+      name: ack
+      title: Event acknowledgement
+      contentType: application/json
+      payload:
+        type: object
+        required: [type, eventId]
+        properties:
+          type:
+            const: ack
+          eventId:
+            type: string
+  schemas:
+    Room:
+      type: object
+      properties:
+        id:
+          type: string
+        code:
+          type: string
+        title:
+          type: string
+        ownerIdentityId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: string
+          format: date-time
+    MemberSummary:
+      type: object
+      properties:
+        membershipId:
+          type: string
+        identityId:
+          type: string
+        displayName:
+          type: string
+        avatar:
+          type: string
+        isOwner:
+          type: boolean
+        present:
+          type: boolean
+    Stream:
+      type: object
+      properties:
+        id:
+          type: string
+        roomId:
+          type: string
+        sessionId:
+          type: string
+        revision:
+          type: integer
+          format: int64
+        state:
+          type: string
+          enum: [EMPTY, ACTIVE, ABORTED]
+        url:
+          type: string
+        startedAt:
+          type: string
+          format: date-time
+        abortedAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time

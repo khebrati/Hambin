@@ -1,0 +1,663 @@
+openapi: 3.1.0
+info:
+  title: Hambin API
+  version: 1.0.0
+  description: >
+    Client-neutral HTTP API for room management, presence, shared stream
+    authorization, realtime tickets, and LiveKit voice tokens. Clients retain
+    complete local control over pause, seek, and volume; those actions never
+    mutate durable stream state.
+servers:
+  - url: https://api.example.com
+    description: Production
+tags:
+  - name: Guest sessions
+  - name: Rooms
+  - name: Stream
+  - name: Realtime
+  - name: Voice
+  - name: Internal
+paths:
+  /healthz:
+    get:
+      operationId: health
+      security: []
+      responses:
+        "200":
+          description: Service is healthy
+  /v1/guest-sessions:
+    post:
+      tags: [Guest sessions]
+      operationId: createGuestSession
+      summary: Create a durable anonymous identity
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GuestSessionRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /v1/guest-sessions/refresh:
+    post:
+      tags: [Guest sessions]
+      operationId: refreshGuestSession
+      summary: Rotate a refresh token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "200":
+          description: Rotated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /v1/guest-sessions/revoke:
+    post:
+      tags: [Guest sessions]
+      operationId: revokeGuestSession
+      summary: Revoke a refresh token
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "204":
+          description: Revoked
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /v1/guest-sessions/profile:
+    patch:
+      tags: [Guest sessions]
+      operationId: updateProfile
+      summary: Update the caller's display name, avatar, and language
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GuestSessionRequest"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [identity]
+                properties:
+                  identity:
+                    $ref: "#/components/schemas/GuestIdentity"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /v1/rooms:
+    post:
+      tags: [Rooms]
+      operationId: createRoom
+      summary: Create a room and join as owner
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  maxLength: 80
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RoomAndMembership"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /v1/rooms/{code}/preview:
+    get:
+      tags: [Rooms]
+      operationId: previewRoom
+      summary: Preview a room by party code
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PartyCode"
+      responses:
+        "200":
+          description: Preview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RoomPreview"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /v1/rooms/{code}/join:
+    post:
+      tags: [Rooms]
+      operationId: joinRoom
+      summary: Join a room by party code
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PartyCode"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Joined
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RoomAndMembership"
+        "409":
+          description: |
+            ROOM_ENDED, ROOM_FULL, or ALREADY_IN_ROOM
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /v1/rooms/{roomId}/snapshot:
+    get:
+      tags: [Rooms]
+      operationId: roomSnapshot
+      summary: Fetch the current room, members, and stream
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/RoomId"
+      responses:
+        "200":
+          description: Snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Snapshot"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /v1/rooms/{roomId}/leave:
+    post:
+      tags: [Rooms]
+      operationId: leaveRoom
+      summary: Leave a room immediately
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/RoomId"
+      responses:
+        "200":
+          description: Left
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [roomClosed]
+                properties:
+                  roomClosed:
+                    type: boolean
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /v1/rooms/{roomId}/stream/start:
+    post:
+      tags: [Stream]
+      operationId: startStream
+      summary: Start a shared stream (present owner only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/RoomId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url:
+                  type: string
+                  format: uri
+                  description: HTTPS direct-video URL
+      responses:
+        "201":
+          description: Started
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [stream]
+                properties:
+                  stream:
+                    $ref: "#/components/schemas/Stream"
+        "400":
+          description: INVALID_STREAM_URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: FORBIDDEN or OWNER_ABSENT
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: STALE_STREAM_REVISION
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /v1/rooms/{roomId}/stream/abort:
+    post:
+      tags: [Stream]
+      operationId: abortStream
+      summary: Abort the shared stream for everyone (present owner only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/RoomId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Aborted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [stream]
+                properties:
+                  stream:
+                    $ref: "#/components/schemas/Stream"
+        "409":
+          description: NO_ACTIVE_STREAM
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /v1/rooms/{roomId}/realtime-ticket:
+    post:
+      tags: [Realtime]
+      operationId: issueRealtimeTicket
+      summary: Issue a single-use 30-second realtime ticket
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/RoomId"
+      responses:
+        "201":
+          description: Issued
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ticket, expiresAt]
+                properties:
+                  ticket:
+                    type: string
+                  expiresAt:
+                    type: string
+                    format: date-time
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /v1/rooms/{roomId}/realtime:
+    get:
+      tags: [Realtime]
+      operationId: connectRealtime
+      summary: Upgrade to the room WebSocket using a ticket
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/RoomId"
+        - name: ticket
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "101":
+          description: Switching Protocols
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /v1/rooms/{roomId}/voice/session-token:
+    post:
+      tags: [Voice]
+      operationId: issueVoiceToken
+      summary: Issue a room-scoped LiveKit token to an active member
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/RoomId"
+      responses:
+        "201":
+          description: Issued
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [token, url, expiresAt]
+                properties:
+                  token:
+                    type: string
+                  url:
+                    type: string
+                  expiresAt:
+                    type: string
+                    format: date-time
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "503":
+          description: VOICE_DISABLED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /internal/livekit/webhook:
+    post:
+      tags: [Internal]
+      operationId: livekitWebhook
+      summary: Signed LiveKit webhook ingestion
+      security: []
+      responses:
+        "204":
+          description: Accepted
+        "401":
+          description: INVALID_WEBHOOK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema:
+        type: string
+        maxLength: 128
+    PartyCode:
+      name: code
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: "^[0-9A-HJKMNP-TV-Z]{8}$"
+    RoomId:
+      name: roomId
+      in: path
+      required: true
+      schema:
+        type: string
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: Missing or invalid credentials
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: Not permitted
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+  schemas:
+    GuestSessionRequest:
+      type: object
+      required: [name, avatar, language]
+      properties:
+        name:
+          type: string
+          maxLength: 48
+        avatar:
+          type: string
+          maxLength: 32
+        language:
+          type: string
+          maxLength: 16
+    RefreshRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken:
+          type: string
+    GuestIdentity:
+      type: object
+      required: [id, name, avatar, language, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        avatar:
+          type: string
+        language:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    Session:
+      type: object
+      required: [identity, accessToken, accessExpiresAt, refreshToken, refreshExpiresAt]
+      properties:
+        identity:
+          $ref: "#/components/schemas/GuestIdentity"
+        accessToken:
+          type: string
+        accessExpiresAt:
+          type: string
+          format: date-time
+        refreshToken:
+          type: string
+        refreshExpiresAt:
+          type: string
+          format: date-time
+    Room:
+      type: object
+      required: [id, code, title, ownerIdentityId, createdAt]
+      properties:
+        id:
+          type: string
+        code:
+          type: string
+        title:
+          type: string
+        ownerIdentityId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: string
+          format: date-time
+        tombstoneUntil:
+          type: string
+          format: date-time
+    Membership:
+      type: object
+      required: [id, roomId, identityId, displayName, avatar, isOwner, joinedAt]
+      properties:
+        id:
+          type: string
+        roomId:
+          type: string
+        identityId:
+          type: string
+        displayName:
+          type: string
+        avatar:
+          type: string
+        isOwner:
+          type: boolean
+        joinedAt:
+          type: string
+          format: date-time
+        leftAt:
+          type: string
+          format: date-time
+        graceExpiresAt:
+          type: string
+          format: date-time
+        wsConnected:
+          type: boolean
+        livekitConnected:
+          type: boolean
+    MemberSummary:
+      type: object
+      required: [membershipId, identityId, displayName, avatar, isOwner, present]
+      properties:
+        membershipId:
+          type: string
+        identityId:
+          type: string
+        displayName:
+          type: string
+        avatar:
+          type: string
+        isOwner:
+          type: boolean
+        present:
+          type: boolean
+    RoomAndMembership:
+      type: object
+      required: [room, membership]
+      properties:
+        room:
+          $ref: "#/components/schemas/Room"
+        membership:
+          $ref: "#/components/schemas/Membership"
+    RoomPreview:
+      type: object
+      required: [code, title, ownerName, ownerPresent, participantCount, availability, streamState]
+      properties:
+        code:
+          type: string
+        title:
+          type: string
+        ownerName:
+          type: string
+        ownerPresent:
+          type: boolean
+        participantCount:
+          type: integer
+        availability:
+          type: string
+          enum: [OPEN, FULL, ENDED]
+        streamState:
+          type: string
+          enum: [EMPTY, ACTIVE, ABORTED]
+    Stream:
+      type: object
+      required: [id, roomId, sessionId, revision, state, url, updatedAt]
+      properties:
+        id:
+          type: string
+        roomId:
+          type: string
+        sessionId:
+          type: string
+        revision:
+          type: integer
+          format: int64
+        state:
+          type: string
+          enum: [EMPTY, ACTIVE, ABORTED]
+        url:
+          type: string
+        startedAt:
+          type: string
+          format: date-time
+        abortedAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    Snapshot:
+      type: object
+      required: [room, members, stream]
+      properties:
+        room:
+          $ref: "#/components/schemas/Room"
+        members:
+          type: array
+          items:
+            $ref: "#/components/schemas/MemberSummary"
+        stream:
+          $ref: "#/components/schemas/Stream"
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          enum:
+            - INVALID_JSON
+            - INVALID_PROFILE
+            - INVALID_TOKEN
+            - UNAUTHENTICATED
+            - SESSION_EXPIRED
+            - SESSION_REVOKED
+            - IDENTITY_NOT_FOUND
+            - ROOM_NOT_FOUND
+            - ROOM_ENDED
+            - ROOM_FULL
+            - ALREADY_IN_ROOM
+            - NOT_A_MEMBER
+            - INVALID_PARTY_CODE
+            - FORBIDDEN
+            - OWNER_ABSENT
+            - INVALID_STREAM_URL
+            - STALE_STREAM_REVISION
+            - NO_ACTIVE_STREAM
+            - INVALID_TICKET
+            - VOICE_DISABLED
+            - INVALID_WEBHOOK
+            - RATE_LIMITED
+            - INTERNAL_ERROR
+        message:
+          type: string
