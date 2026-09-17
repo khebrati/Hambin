@@ -101,40 +101,78 @@ Leave outbound rules as the default (allow all).
 
 ## Part 4 — Point your domains at the VM
 
-You need three DNS names. The examples below assume `example.com`; substitute
-your own domain.
+You need three hostnames. This guide groups them under a namespace (for
+example `roomio`) so they are easy to find; substitute your own domain and
+namespace:
 
-- `api.example.com`
-- `livekit.example.com`
-- `turn.example.com`
+- `api.roomio.<domain>` — the backend HTTPS API
+- `livekit.roomio.<domain>` — LiveKit signaling over `wss://`
+- `turn.roomio.<domain>` — LiveKit's built-in TURN relay
+
+If you would rather put the API on the namespace apex, use `roomio.<domain>`
+for `HAM_DOMAIN` and keep `livekit.`/`turn.` as siblings. Either way, all three
+hostnames resolve to the same Elastic IP.
+
+### If your domain is hosted on Cloudflare
+
+> **The most important setting:** every record below must be **DNS only**
+> (grey cloud), not **Proxied** (orange cloud). Cloudflare's proxy handles
+> HTTP(S) only, so it cannot carry WebRTC/TURN UDP traffic, and a proxied
+> record would put Cloudflare's certificate in front of your origin. With
+> **DNS only**, Caddy obtains and serves the real Let's Encrypt certificate.
+
+1. Sign in at <https://dash.cloudflare.com> and click your domain (for example
+   `audiosense.ir`).
+2. Open **DNS → Records**.
+3. Click **Add record** and create the first one:
+   - **Type:** `A`
+   - **Name:** `api.roomio` (Cloudflare appends `.audiosense.ir` for you)
+   - **IPv4 address:** your Elastic IP (`<EIP>`)
+   - **Proxy status:** click the cloud until it reads **DNS only** (grey)
+   - **TTL:** `Auto`
+   - Click **Save**.
+4. Click **Add record** twice more, changing only **Name**:
+   - Name `livekit.roomio` → `<EIP>`, **DNS only**
+   - Name `turn.roomio` → `<EIP>`, **DNS only**
+5. Optional: to make `roomio.audiosense.ir` itself resolve, add one more `A`
+   record with Name `roomio` → `<EIP>`, **DNS only**.
+
+There is no separate "create subdomain" button in Cloudflare — adding a record
+whose name contains a dot (`api.roomio`) creates the subdomain. These three
+records are all the deployment needs. Because they are DNS-only, do not touch
+the zone's SSL/TLS mode; it does not apply to them.
+
+> Do **not** enable Cloudflare's proxy later "for security". Caddy already
+> terminates TLS, and the proxy would break TURN and add an extra hop that is
+> not designed for WebRTC.
 
 ### If your domain is hosted in Amazon Route 53
 
 1. Open **Route 53 → Hosted zones**. If your domain already has a zone, open it.
-   If not, click **Create hosted zone**, enter `example.com`, type `Public`, and
+   If not, click **Create hosted zone**, enter your domain, type `Public`, and
    create it.
 2. Inside the zone, click **Create record** and add three `A` records, each
    with **Value = `<EIP>`**, **TTL = 300**:
 
    | Record name | Type | Value |
    |-------------|------|-------|
-   | `api` | A | `<EIP>` |
-   | `livekit` | A | `<EIP>` |
-   | `turn` | A | `<EIP>` |
+   | `api.roomio` | A | `<EIP>` |
+   | `livekit.roomio` | A | `<EIP>` |
+   | `turn.roomio` | A | `<EIP>` |
 
 3. If you created a new hosted zone, copy its four **NS** records into your
    domain registrar so the internet can resolve it.
 
-### If your domain is hosted elsewhere (Namecheap, Cloudflare, GoDaddy, …)
+### If your domain is hosted elsewhere (Namecheap, GoDaddy, …)
 
-Add the same three `A` records (`api`, `livekit`, `turn`) pointing to `<EIP>`
-in that provider's DNS panel. **Turn off Cloudflare's orange-cloud proxy** for
-these records (the proxy does not pass WebRTC/TURN traffic).
+Add the same three `A` records (`api.roomio`, `livekit.roomio`,
+`turn.roomio`) pointing to `<EIP>`, and make sure any proxy/CDN feature is
+**off** for these names.
 
 Check propagation from your laptop:
 
 ```bash
-dig +short api.example.com livekit.example.com turn.example.com
+dig +short api.roomio.<domain> livekit.roomio.<domain> turn.roomio.<domain>
 # each should print <EIP>
 ```
 
@@ -169,6 +207,25 @@ exit
 ssh -i ~/Downloads/hambin.pem ubuntu@<EIP>
 docker info
 ```
+
+### Add swap (strongly recommended on 2 GB instances)
+
+Building the API image while Postgres, LiveKit, and Caddy are running can
+exhaust a 2 GB `t3.small`. When that happens the kernel OOM-kills processes and
+the instance becomes unresponsive (SSH drops, ports accept connections but
+return nothing). Add a 2 GB swap file **before** starting the stack:
+
+```bash
+sudo fallocate -l 2G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+free -h
+```
+
+A `t3.medium` (4 GB) avoids the problem entirely if you can size up for the
+first build.
 
 ---
 
@@ -225,8 +282,12 @@ Save (`Ctrl+O`, Enter) and exit (`Ctrl+X`).
 
 ## Part 7 — Start the stack
 
+Build the API image first, then start everything. Building separately keeps
+peak memory lower than `up --build` on small instances:
+
 ```bash
-docker compose up -d --build
+docker compose build api
+docker compose up -d
 ```
 
 Watch it come up:
@@ -237,9 +298,10 @@ docker compose logs -f caddy
 ```
 
 Caddy will request Let's Encrypt certificates for `api.example.com` and
-`livekit.example.com` on first start. This needs ports 80/443 open and DNS
-already pointing at `<EIP>`. Look for `certificate obtained successfully` in
-the logs, then `Ctrl+C` to stop following.
+`livekit.example.com` on first start. This needs ports 80/443 open **from the
+public internet** and DNS already pointing at `<EIP>`. Look for
+`certificate obtained successfully` in the logs, then `Ctrl+C` to stop
+following.
 
 ---
 
@@ -292,7 +354,8 @@ docker compose logs livekit | grep -i "external\|node"
 cd ~/Hambin
 git pull
 cd backend
-docker compose up -d --build
+docker compose build api
+docker compose up -d
 ```
 
 The API runs database migrations automatically at startup, so no manual
@@ -318,12 +381,34 @@ Postgres data lives in the `hambin_postgres_data` Docker volume. It survives
 
 ## Troubleshooting
 
-- **Caddy cannot get a certificate.** DNS has not propagated, or 80/443 are
-  closed. Verify `dig +short api.example.com` returns `<EIP>`, then
-  `docker compose restart caddy`.
+- **Caddy logs `Timeout during connect (likely firewall problem)`.**
+  Let's Encrypt cannot reach your VM on 80/443. This is networking, not Caddy:
+  1. AWS **Security Group** must allow inbound `80/tcp` and `443/tcp` from
+     `0.0.0.0/0` (and `::/0`).
+  2. No host firewall is blocking them. Check `sudo ufw status` (disable it if
+     active) and `sudo iptables -S | grep -E 'dport (80|443)'`.
+  3. DNS must be **DNS only** (grey cloud in Cloudflare) and resolve to `<EIP>`:
+     `dig +short api.<domain> livekit.<domain>`.
+  Fix the network, then `docker compose restart caddy`.
+- **Caddy logs `acme-staging`.**
+  You are using Let's Encrypt's **staging** CA, whose certificates browsers do
+  not trust. Remove any `acme_ca`/`ca` staging override (or a
+  `CADDY_ACME_CA`/global option) and restart Caddy so it issues production
+  certificates.
+- **Server returns `Empty reply from server`/`SSL_ERROR_SYSCALL` and SSH drops.**
+  Almost always the instance is out of memory or disk, not a TLS bug. Reboot
+  from the EC2 console if needed, reconnect, and check:
+  ```bash
+  free -h
+  df -h
+  dmesg -T | grep -i -E 'oom|killed process'
+  docker compose ps
+  ```
+  Then add swap (Part 5), reclaim space with `docker system prune -af`, and
+  restart with `docker compose build api && docker compose up -d`.
 - **Voice connects but you hear nothing.** TURN ports are likely blocked.
   Confirm 3478/udp, 3478/tcp, and 50000-50100/udp are open in the security
-  group, and that `turn.example.com` resolves to `<EIP>`.
+  group, and that `turn.<domain>` resolves to `<EIP>`.
 - **`permission denied` running docker.** Re-login after `usermod -aG docker`,
   or prefix commands with `sudo`.
 - **API restarts in a loop.** Check `docker compose logs api`; the usual cause
