@@ -9,7 +9,7 @@ Hambin stack on one Linux VM:
           ┌─────────┴──────────┐
           │  Elastic IP (static)│
           └─────────┬──────────┘
-                    │  :80/:443            :3478/udp+tcp, :50000-50100/udp
+                    │  :80/:443   :7881/tcp, :7882/udp, :3478/udp+tcp, :50000-50100/udp
               ┌─────▼─────┐                 ┌─────▼─────┐
               │   Caddy   │                 │  LiveKit  │
               │ (TLS/443) │                 │ + TURN    │
@@ -88,13 +88,21 @@ Open **EC2 → Security Groups → `hambin-sg` → Edit inbound rules** and add:
 | SSH | TCP | 22 | **My IP** | Admin access only |
 | HTTP | TCP | 80 | `0.0.0.0/0`, `::/0` | Caddy ACME + redirect to HTTPS |
 | HTTPS | TCP | 443 | `0.0.0.0/0`, `::/0` | API + LiveKit signaling |
+| Custom UDP | UDP | 7882 | `0.0.0.0/0`, `::/0` | LiveKit WebRTC media (ICE/UDP mux) |
+| Custom TCP | TCP | 7881 | `0.0.0.0/0`, `::/0` | LiveKit WebRTC over TCP fallback |
 | Custom UDP | UDP | 3478 | `0.0.0.0/0` | TURN |
 | Custom TCP | TCP | 3478 | `0.0.0.0/0` | TURN fallback |
 | Custom UDP | UDP | 50000-50100 | `0.0.0.0/0` | TURN relay allocations |
 
 Leave outbound rules as the default (allow all).
 
-> Do **not** open 5432 (Postgres) or 8080/7880/7881/7882. Those are internal.
+> **7882/udp and 7881/tcp are required.** LiveKit advertises its public IP as a
+> WebRTC host candidate on these ports. If they are blocked, ICE still
+> "connects" but DTLS never completes, so every voice call drops after ~15s
+> (LiveKit logs `connect timeout after ICE connected`). The LiveKit container
+> runs with `network_mode: host`, so these ports bind directly on the VM.
+>
+> Do **not** open 5432 (Postgres) or 7880/8080. Those stay internal.
 > Restricting SSH (22) to **My IP** is important.
 
 ---
