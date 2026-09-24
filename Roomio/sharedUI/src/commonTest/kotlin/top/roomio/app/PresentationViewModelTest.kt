@@ -16,6 +16,8 @@ import kotlinx.coroutines.test.setMain
 import top.roomio.app.manager.ManagerMode
 import top.roomio.app.manager.PartyManagerAction
 import top.roomio.app.manager.PartyManagerViewModel
+import top.roomio.app.preview.RoomPreviewAction
+import top.roomio.app.preview.RoomPreviewViewModel
 import top.roomio.app.profile.ProfileAvatar
 import top.roomio.app.profile.SettingsAction
 import top.roomio.app.profile.SettingsViewModel
@@ -67,7 +69,12 @@ class PresentationViewModelTest {
 
     @Test
     fun partyManagerStateNormalizesCodeAndRepresentsRejectedPreview() {
-        val viewModel = PartyManagerViewModel(ManagerMode.JOIN, roomRepository = testRoomRepository)
+        val viewModel = PartyManagerViewModel(
+            initialMode = ManagerMode.JOIN,
+            roomRepository = testRoomRepository,
+            profileRepository = TestProfileRepository(),
+            sessionRepository = testSessionRepository,
+        )
 
         viewModel.onAction(PartyManagerAction.CodeChanged(" moon-42 "))
 
@@ -238,6 +245,36 @@ class PresentationViewModelTest {
         with(viewModel.state.value) {
             assertEquals(RoomPlaybackState.OWNER_EMPTY, playback)
         }
+    }
+
+    @Test
+    fun joiningRoomSyncsGuestIdentityFromSavedProfile() {
+        val sessionRepository = RecordingSessionRepository()
+        val viewModel = RoomPreviewViewModel(
+            partyCode = "MOON-42",
+            roomRepository = testRoomRepository,
+            profileRepository = TestProfileRepository(UserProfile("Mira", ProfileAvatarId.ECHO)),
+            sessionRepository = sessionRepository,
+        )
+
+        viewModel.onAction(RoomPreviewAction.JoinClicked)
+
+        assertEquals("Mira" to "ECHO", sessionRepository.ensureCalls.lastOrNull())
+    }
+
+    @Test
+    fun creatingRoomSyncsGuestIdentityFromSavedProfile() {
+        val sessionRepository = RecordingSessionRepository()
+        val viewModel = PartyManagerViewModel(
+            initialMode = ManagerMode.CREATE,
+            roomRepository = testRoomRepository,
+            profileRepository = TestProfileRepository(UserProfile("Mira", ProfileAvatarId.BLOOM)),
+            sessionRepository = sessionRepository,
+        )
+
+        viewModel.onAction(PartyManagerAction.CreateClicked)
+
+        assertEquals("Mira" to "BLOOM", sessionRepository.ensureCalls.lastOrNull())
     }
 
     @Test

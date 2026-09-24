@@ -14,7 +14,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import top.roomio.domain.party.PartyException
 import top.roomio.domain.party.RoomRepository
+import top.roomio.domain.party.SessionRepository
 import top.roomio.domain.party.isConnectivity
+import top.roomio.domain.profile.ProfileRepository
 
 internal data class PartyManagerUiState(
     val mode: ManagerMode,
@@ -50,6 +52,8 @@ internal class PartyManagerViewModel(
     @Assisted loading: Boolean = false,
     @Assisted codeError: Boolean = false,
     private val roomRepository: RoomRepository,
+    private val profileRepository: ProfileRepository,
+    private val sessionRepository: SessionRepository,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(
         PartyManagerUiState(
@@ -91,6 +95,11 @@ internal class PartyManagerViewModel(
         mutableState.update { it.copy(isLoading = true) }
         viewModelScope.launch {
             try {
+                // Sync the backend identity with the saved profile first so the
+                // owner membership uses the current name and avatar.
+                profileRepository.currentProfile().let { profile ->
+                    sessionRepository.ensureSession(name = profile.name, avatar = profile.avatar.name)
+                }
                 val room = roomRepository.createRoom(title = "")
                 mutableState.update { it.copy(isLoading = false) }
                 mutableEffects.tryEmit(PartyManagerEffect.Created(room.id))

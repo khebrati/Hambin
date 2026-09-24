@@ -28,6 +28,31 @@ internal object testSessionRepository : SessionRepository {
     override suspend fun updateProfile(name: String, avatar: String, language: String) = identity
 }
 
+/** Records [ensureSession] calls so tests can assert identity synchronization. */
+internal class RecordingSessionRepository : SessionRepository {
+    val ensureCalls = mutableListOf<Pair<String, String>>()
+    private var session = GuestSession(
+        identity = GuestIdentity("test", "Nika", "COMET", "en"),
+        accessToken = "access",
+        refreshToken = "refresh",
+    )
+
+    override suspend fun ensureSession(name: String, avatar: String, language: String): GuestSession {
+        ensureCalls += name to avatar
+        session = session.copy(identity = session.identity.copy(name = name, avatar = avatar, language = language))
+        return session
+    }
+
+    override suspend fun currentSession() = session
+
+    override suspend fun refresh() = session
+
+    override suspend fun updateProfile(name: String, avatar: String, language: String): GuestIdentity {
+        session = session.copy(identity = session.identity.copy(name = name, avatar = avatar, language = language))
+        return session.identity
+    }
+}
+
 internal object testRoomRepository : RoomRepository {
     private val room = Room("room", "MOON-42", "Friday night screening", "test", false)
     override suspend fun createRoom(title: String) = room

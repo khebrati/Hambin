@@ -21,7 +21,9 @@ fun PartyException.isConnectivity(): Boolean = code == PARTY_CODE_NETWORK
 interface SessionRepository {
     /**
      * Returns the stored session, creating a guest identity if none exists.
-     * [name] and [avatar] seed the identity on first creation.
+     * [name] and [avatar] seed the identity on first creation and update the
+     * stored identity when they no longer match. Callers pass the current local
+     * profile so room membership always uses the latest name and avatar.
      */
     suspend fun ensureSession(name: String, avatar: String, language: String = "en"): GuestSession
 

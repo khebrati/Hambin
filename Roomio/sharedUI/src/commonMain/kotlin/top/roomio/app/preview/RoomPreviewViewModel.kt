@@ -16,8 +16,10 @@ import top.roomio.domain.party.PartyException
 import top.roomio.domain.party.RoomAvailability as DomainAvailability
 import top.roomio.domain.party.RoomPreview
 import top.roomio.domain.party.RoomRepository
+import top.roomio.domain.party.SessionRepository
 import top.roomio.domain.party.StreamState
 import top.roomio.domain.party.isConnectivity
+import top.roomio.domain.profile.ProfileRepository
 
 internal data class RoomPreviewUiState(
     val model: RoomPreviewModel = emptyPreviewModel(),
@@ -42,6 +44,8 @@ internal sealed interface RoomPreviewEffect {
 internal class RoomPreviewViewModel(
     @Assisted private val partyCode: String,
     private val roomRepository: RoomRepository,
+    private val profileRepository: ProfileRepository,
+    private val sessionRepository: SessionRepository,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(RoomPreviewUiState())
     val state = mutableState.asStateFlow()
@@ -86,6 +90,11 @@ internal class RoomPreviewViewModel(
         mutableState.update { it.copy(isLoading = true) }
         viewModelScope.launch {
             try {
+                // Sync the backend identity with the saved profile first so the
+                // new membership uses the current name and avatar.
+                profileRepository.currentProfile().let { profile ->
+                    sessionRepository.ensureSession(name = profile.name, avatar = profile.avatar.name)
+                }
                 val room = roomRepository.join(partyCode)
                 mutableState.update { it.copy(isLoading = false) }
                 mutableEffects.tryEmit(RoomPreviewEffect.Joined(room.id))

@@ -550,12 +550,8 @@ private fun RoomUiState.clamp(positionMs: Long): Long {
     return positionMs.coerceIn(0L, max)
 }
 
-private fun String.toRoomAvatar(): RoomAvatar = when (uppercase()) {
-    "MINT" -> RoomAvatar.MINT
-    "SUNNY" -> RoomAvatar.SUNNY
-    "BERRY" -> RoomAvatar.BERRY
-    else -> RoomAvatar.COMET
-}
+private fun String.toRoomAvatar(): RoomAvatar =
+    RoomAvatar.entries.firstOrNull { it.name == uppercase() } ?: RoomAvatar.COMET
 
 private fun VideoPlayerStatus.toRoomPlaybackState(fallback: RoomPlaybackState): RoomPlaybackState = when (this) {
     VideoPlayerStatus.IDLE, VideoPlayerStatus.READY -> fallback

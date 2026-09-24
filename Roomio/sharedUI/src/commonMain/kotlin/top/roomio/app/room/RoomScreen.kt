@@ -152,7 +152,20 @@ internal enum class RoomPlaybackState {
     ABORTED,
 }
 
-internal enum class RoomAvatar { COMET, MINT, SUNNY, BERRY }
+internal enum class RoomAvatar {
+    COMET,
+    MINT,
+    SUNNY,
+    BERRY,
+    CLOUD,
+    EMBER,
+    NOVA,
+    ORBIT,
+    PRISM,
+    ECHO,
+    SPARK,
+    BLOOM,
+}
 
 internal data class RoomParticipant(
     val name: String,
@@ -1499,6 +1512,14 @@ private fun ParticipantAvatar(participant: RoomParticipant, speaking: Boolean) {
         RoomAvatar.MINT -> painterResource(Res.drawable.avatar_mint)
         RoomAvatar.SUNNY -> painterResource(Res.drawable.avatar_sunny)
         RoomAvatar.BERRY -> painterResource(Res.drawable.avatar_berry)
+        RoomAvatar.CLOUD -> painterResource(Res.drawable.avatar_cloud)
+        RoomAvatar.EMBER -> painterResource(Res.drawable.avatar_ember)
+        RoomAvatar.NOVA -> painterResource(Res.drawable.avatar_nova)
+        RoomAvatar.ORBIT -> painterResource(Res.drawable.avatar_orbit)
+        RoomAvatar.PRISM -> painterResource(Res.drawable.avatar_prism)
+        RoomAvatar.ECHO -> painterResource(Res.drawable.avatar_echo)
+        RoomAvatar.SPARK -> painterResource(Res.drawable.avatar_spark)
+        RoomAvatar.BLOOM -> painterResource(Res.drawable.avatar_bloom)
     }
     val avatarShape = if (speaking) RoomioDesignSystem.shapes.largeIncreased else CircleShape
     Box(
