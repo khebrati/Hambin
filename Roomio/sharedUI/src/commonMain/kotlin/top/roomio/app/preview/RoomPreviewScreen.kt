@@ -37,11 +37,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -62,6 +66,7 @@ import roomio.sharedui.generated.resources.join_party
 import roomio.sharedui.generated.resources.joining_unavailable
 import roomio.sharedui.generated.resources.no_owner_in_room
 import roomio.sharedui.generated.resources.not_now
+import roomio.sharedui.generated.resources.offline_message
 import roomio.sharedui.generated.resources.open
 import roomio.sharedui.generated.resources.owner
 import roomio.sharedui.generated.resources.owner_is_away
@@ -72,6 +77,7 @@ import roomio.sharedui.generated.resources.party_label
 import roomio.sharedui.generated.resources.people_count
 import roomio.sharedui.generated.resources.person_count
 import roomio.sharedui.generated.resources.playing_now
+import roomio.sharedui.generated.resources.request_failed
 import roomio.sharedui.generated.resources.room_preview
 import roomio.sharedui.generated.resources.stream
 import roomio.sharedui.generated.resources.theme
@@ -80,6 +86,8 @@ import top.roomio.app.theme.AppTheme
 import top.roomio.app.theme.LocalThemeIsDark
 import top.roomio.app.theme.RoomioDesignSystem
 import top.roomio.app.theme.RoomioTheme
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 
 internal enum class RoomAvailability { AVAILABLE, FULL, ENDED }
 internal enum class PreviewStreamStatus { PLAYING, WAITING }
@@ -139,12 +147,27 @@ internal fun roomPreviewForCode(code: String): RoomPreviewModel? = when (code.tr
 internal fun RoomPreviewScreen(
     state: RoomPreviewUiState,
     onAction: (RoomPreviewAction) -> Unit,
+    effects: Flow<RoomPreviewEffect> = emptyFlow(),
     modifier: Modifier = Modifier,
 ) {
+    val snackbarHostState = remember { SnackbarHostState() }
+    val offlineMessage = stringResource(Res.string.offline_message)
+    val requestFailed = stringResource(Res.string.request_failed)
+    LaunchedEffect(effects) {
+        effects.collect { effect ->
+            when (effect) {
+                is RoomPreviewEffect.Error -> snackbarHostState.showSnackbar(
+                    if (effect.connectivity) offlineMessage else requestFailed,
+                )
+                else -> Unit
+            }
+        }
+    }
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.surface,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = { PreviewTopBar(onBack = { onAction(RoomPreviewAction.BackClicked) }) },
     ) { innerPadding ->
         Column(

@@ -274,6 +274,106 @@ func TestRealtimeSocketUpgradesAndSyncs(t *testing.T) {
 	}
 }
 
+// TestRealtimeReconnectKeepsOwnerPresent guards against a stale disconnect
+// clobbering a newer connect. A client that reconnects before the server has
+// detected its old socket as dead briefly has two overlapping connections for
+// the same membership; the owner must remain present until the last one
+// detaches.
+func TestRealtimeReconnectKeepsOwnerPresent(t *testing.T) {
+	env := newTestEnv(t)
+	owner := env.createGuest(t, "Mira")
+
+	created := env.post(t, "/v1/rooms", owner.AccessToken, map[string]string{"title": "Live"})
+	if created.status != http.StatusCreated {
+		t.Fatalf("create room: status %d body %s", created.status, created.body)
+	}
+	var roomRecord roomBody
+	if err := json.Unmarshal(created.body, &roomRecord); err != nil {
+		t.Fatalf("decode room: %v", err)
+	}
+	roomID := roomRecord.Room.ID
+
+	issueTicket := func() string {
+		t.Helper()
+		resp := env.post(t, "/v1/rooms/"+roomID+"/realtime-ticket", owner.AccessToken, nil)
+		if resp.status != http.StatusCreated {
+			t.Fatalf("ticket: status %d body %s", resp.status, resp.body)
+		}
+		var ticket struct {
+			Ticket string `json:"ticket"`
+		}
+		if err := json.Unmarshal(resp.body, &ticket); err != nil {
+			t.Fatalf("decode ticket: %v", err)
+		}
+		return ticket.Ticket
+	}
+
+	dial := func(ticket string) *websocket.Conn {
+		t.Helper()
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		wsURL := strings.Replace(env.server.URL, "http", "ws", 1) + "/v1/rooms/" + roomID + "/realtime?ticket=" + ticket
+		connection, _, err := websocket.Dial(ctx, wsURL, nil)
+		if err != nil {
+			t.Fatalf("websocket dial: %v", err)
+		}
+		// Consume the initial snapshot so the connection is fully attached.
+		readCtx, cancelRead := context.WithTimeout(ctx, 5*time.Second)
+		defer cancelRead()
+		_, _, err = connection.Read(readCtx)
+		if err != nil {
+			t.Fatalf("websocket read: %v", err)
+		}
+		return connection
+	}
+
+	first := dial(issueTicket())
+	second := dial(issueTicket())
+
+	ownerPresent := func() bool {
+		t.Helper()
+		snap := env.get(t, "/v1/rooms/"+roomID+"/snapshot", owner.AccessToken)
+		if snap.status != http.StatusOK {
+			t.Fatalf("snapshot: status %d body %s", snap.status, snap.body)
+		}
+		var body struct {
+			Members []struct {
+				IsOwner bool `json:"isOwner"`
+				Present bool `json:"present"`
+			} `json:"members"`
+		}
+		if err := json.Unmarshal(snap.body, &body); err != nil {
+			t.Fatalf("decode snapshot: %v", err)
+		}
+		for _, m := range body.Members {
+			if m.IsOwner {
+				return m.Present
+			}
+		}
+		t.Fatal("owner membership missing from snapshot")
+		return false
+	}
+
+	if !ownerPresent() {
+		t.Fatal("expected owner present while connected")
+	}
+
+	_ = first.Close(websocket.StatusNormalClosure, "")
+
+	// The owner must stay present because the second connection is still
+	// attached, even after the server processes the first connection's
+	// disconnect.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if !ownerPresent() {
+			t.Fatal("owner incorrectly marked absent while a live connection remains")
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+
+	_ = second.Close(websocket.StatusNormalClosure, "")
+}
+
 func (e *testEnv) post(t *testing.T, path, token string, payload any) response {
 	t.Helper()
 	return e.do(t, http.MethodPost, path, token, payload, "")

@@ -107,6 +107,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import co.touchlab.kermit.Logger
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
@@ -120,6 +121,8 @@ import top.roomio.app.room.player.rememberPlatformVideoPlayer
 import top.roomio.app.theme.AppTheme
 import top.roomio.app.theme.LocalThemeIsDark
 import top.roomio.app.theme.RoomioDesignSystem
+
+private val log = Logger.withTag("RoomScreen")
 
 /**
  * Screen fixture and state contract mirrored from the browser prototype's
@@ -158,6 +161,7 @@ internal data class RoomParticipant(
     val isHost: Boolean = false,
     val isSpeaking: Boolean = false,
     val isMuted: Boolean = false,
+    val isPresent: Boolean = true,
 )
 
 private val ownerEmptyRoom = RoomScreenModel(
@@ -213,10 +217,13 @@ internal fun RoomScreen(
     val snackbarHost = remember { SnackbarHostState() }
     val clipboard = LocalClipboardManager.current
     val syncComplete = stringResource(Res.string.sync_complete)
+    val syncUnavailable = stringResource(Res.string.sync_unavailable)
     val sampleUrl = stringResource(Res.string.sample_video_url)
     val partyCodeCopied = stringResource(Res.string.party_code_copied)
     val inviteLinkCopied = stringResource(Res.string.invite_link_copied)
     val copyUnavailable = stringResource(Res.string.copy_unavailable)
+    val offlineMessage = stringResource(Res.string.offline_message)
+    val requestFailed = stringResource(Res.string.request_failed)
 
     val playerHandle: VideoPlayerHandle? = if (playerContent == null) {
         rememberPlatformVideoPlayer { playerState ->
@@ -233,10 +240,27 @@ internal fun RoomScreen(
             CinemaScene(modifier = playerModifier, showTitle = true, muted = false)
         }
     }
+    // Load the shared stream when it becomes active (owner start or a remote
+    // stream.started event) and keep the local player's play/pause in sync.
+    var loadedVideoUrl by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(state.videoUrl, state.playback) {
+        val handle = playerHandle ?: return@LaunchedEffect
+        if (state.hasPlayer && state.videoUrl.isNotBlank() && loadedVideoUrl != state.videoUrl) {
+            loadedVideoUrl = state.videoUrl
+            handle.load(state.videoUrl)
+        }
+        when (state.playback) {
+            RoomPlaybackState.PLAYING -> if (state.hasPlayer) handle.play()
+            RoomPlaybackState.PAUSED -> handle.pause()
+            else -> Unit
+        }
+    }
     val pasteVideoLink = {
         val clip = clipboard.getText()?.text?.trim().orEmpty()
         onAction(RoomAction.VideoUrlPasted(clip.ifEmpty { sampleUrl }))
     }
+
+    val requestMicThenJoin = rememberMicPermissionHandler { onAction(RoomAction.JoinVoiceClicked) }
 
     val fullscreenController = rememberFullscreenController {
         onAction(RoomAction.ToggleFullscreenClicked)
@@ -251,14 +275,27 @@ internal fun RoomScreen(
 
     LaunchedEffect(effects) {
         effects.collect { effect ->
-            snackbarHost.showSnackbar(
-                when (effect) {
-                    RoomEffect.SYNC_COMPLETED -> syncComplete
-                    RoomEffect.PARTY_CODE_COPIED -> partyCodeCopied
-                    RoomEffect.INVITE_LINK_COPIED -> inviteLinkCopied
-                    RoomEffect.COPY_UNAVAILABLE -> copyUnavailable
-                },
-            )
+            when (effect) {
+                is RoomEffect.SeekTo -> {
+                    log.i("effect SeekTo target=${effect.positionMs}ms handle=${playerHandle != null} playback=${state.playback}")
+                    playerHandle?.seekTo(effect.positionMs)
+                }
+                RoomEffect.SyncCompleted -> {
+                    log.i("effect SyncCompleted → snackbar")
+                    snackbarHost.showSnackbar(syncComplete)
+                }
+                RoomEffect.SyncUnavailable -> {
+                    log.i("effect SyncUnavailable → snackbar")
+                    snackbarHost.showSnackbar(syncUnavailable)
+                }
+                RoomEffect.PartyCodeCopied -> snackbarHost.showSnackbar(partyCodeCopied)
+                RoomEffect.InviteLinkCopied -> snackbarHost.showSnackbar(inviteLinkCopied)
+                RoomEffect.CopyUnavailable -> snackbarHost.showSnackbar(copyUnavailable)
+                is RoomEffect.Error -> {
+                    log.i("effect Error connectivity=${effect.connectivity} → snackbar")
+                    snackbarHost.showSnackbar(if (effect.connectivity) offlineMessage else requestFailed)
+                }
+            }
         }
     }
 
@@ -340,6 +377,7 @@ internal fun RoomScreen(
                     isLive = state.isLive,
                     volume = state.volume,
                     micMuted = state.micMuted,
+                    playerError = state.playerError,
                     player = player,
                     onVideoUrlChange = { onAction(RoomAction.VideoUrlChanged(it)) },
                     onPaste = pasteVideoLink,
@@ -390,9 +428,11 @@ internal fun RoomScreen(
                 RoomSupportPanel(
                     participants = state.model.participants,
                     micMuted = state.micMuted,
+                    voiceState = state.voiceState,
                     streamActive = state.hasPlayer,
                     isOwner = state.isOwner,
                     ownerPresent = state.model.ownerPresent,
+                    onJoinVoice = requestMicThenJoin,
                     onToggleMic = { onAction(RoomAction.ToggleMicClicked) },
                     onInvite = { onAction(RoomAction.InviteClicked) },
                     onShowLink = { onAction(RoomAction.LinkClicked) },
@@ -549,27 +589,29 @@ private fun RoomTopBar(
 
 @Composable
 private fun RoomioMark(size: Dp = 48.dp) {
-    Box(
+    val primary = MaterialTheme.colorScheme.primary
+    val secondary = MaterialTheme.colorScheme.secondary
+    val container = MaterialTheme.colorScheme.primaryContainer
+    Canvas(
         modifier = Modifier
             .size(size)
             .clip(MaterialTheme.shapes.large)
-            .background(MaterialTheme.colorScheme.primaryContainer),
+            .background(container),
     ) {
-        Box(
-            Modifier
-                .size(21.dp)
-                .align(Alignment.TopStart)
-                .padding(8.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary),
+        drawCircle(
+            color = primary,
+            radius = this.size.minDimension * .23f,
+            center = Offset(this.size.width * .42f, this.size.height * .40f),
         )
-        Box(
-            Modifier
-                .size(16.dp)
-                .align(Alignment.BottomEnd)
-                .padding(8.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.secondary),
+        drawCircle(
+            color = container,
+            radius = this.size.minDimension * .20f,
+            center = Offset(this.size.width * .66f, this.size.height * .65f),
+        )
+        drawCircle(
+            color = secondary,
+            radius = this.size.minDimension * .16f,
+            center = Offset(this.size.width * .66f, this.size.height * .65f),
         )
     }
 }
@@ -610,6 +652,7 @@ private fun CinemaCard(
     isLive: Boolean,
     volume: Float,
     micMuted: Boolean,
+    playerError: String?,
     player: @Composable (Modifier) -> Unit,
     onVideoUrlChange: (String) -> Unit,
     onPaste: () -> Unit,
@@ -669,6 +712,7 @@ private fun CinemaCard(
                     onToggleMic = onToggleMic,
                 )
                 playback == RoomPlaybackState.LOADING -> LoadingCinema()
+                playback == RoomPlaybackState.ERROR && videoUrl.isNotBlank() -> PlayerErrorCinema(playerError, onRetry)
                 isOwner -> OwnerCinemaEntry(
                     playback = playback,
                     videoUrl = videoUrl,
@@ -862,6 +906,37 @@ private fun LoadingCinema() {
         CircularProgressIndicator(color = MaterialTheme.colorScheme.tertiaryContainer)
         Spacer(Modifier.height(12.dp))
         Text(stringResource(Res.string.preparing_cinema), style = MaterialTheme.typography.titleMedium)
+    }
+}
+
+@Composable
+private fun PlayerErrorCinema(error: String?, onRetry: () -> Unit) {
+    val unsupportedFormat = error?.let { code ->
+        code.contains("DECOD", ignoreCase = true) ||
+            code.contains("CODEC", ignoreCase = true) ||
+            code.contains("FORMAT", ignoreCase = true)
+    } == true
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 160.dp)
+            .background(RoomioDesignSystem.colors.mediaContainer)
+            .padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            stringResource(if (unsupportedFormat) Res.string.format_not_supported else Res.string.error_starting_stream),
+            style = MaterialTheme.typography.titleMedium,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            stringResource(if (unsupportedFormat) Res.string.format_not_supported_copy else Res.string.stream_error_copy),
+            style = MaterialTheme.typography.bodyMedium,
+            color = RoomioDesignSystem.colors.onMedia,
+        )
+        Spacer(Modifier.height(12.dp))
+        Button(onClick = onRetry) { Text(stringResource(Res.string.try_again)) }
     }
 }
 
@@ -1314,9 +1389,11 @@ private fun OwnerAwayBanner(ownerName: String) {
 private fun RoomSupportPanel(
     participants: List<RoomParticipant>,
     micMuted: Boolean,
+    voiceState: VoiceConnectionState,
     streamActive: Boolean,
     isOwner: Boolean,
     ownerPresent: Boolean,
+    onJoinVoice: () -> Unit,
     onToggleMic: () -> Unit,
     onInvite: () -> Unit,
     onShowLink: () -> Unit,
@@ -1333,7 +1410,7 @@ private fun RoomSupportPanel(
         ) {
             ParticipantSection(participants, micMuted)
             HorizontalDivider(color = DividerDefaults.color)
-            VoicePanel(micMuted, onToggleMic)
+            VoicePanel(voiceState, micMuted, onJoinVoice, onToggleMic)
             OutlinedButton(onClick = onInvite, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Filled.PersonAdd, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
@@ -1384,7 +1461,7 @@ private fun ParticipantSection(participants: List<RoomParticipant>, micMuted: Bo
 
 @Composable
 private fun ParticipantRow(participant: RoomParticipant, micMuted: Boolean) {
-    val speaking = participant.isSpeaking && !(participant.isSelf && micMuted)
+    val speaking = participant.isPresent && participant.isSpeaking && !(participant.isSelf && micMuted)
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = if (speaking) RoomioDesignSystem.shapes.extraLargeIncreased else MaterialTheme.shapes.large,
@@ -1401,6 +1478,7 @@ private fun ParticipantRow(participant: RoomParticipant, micMuted: Boolean) {
                 Text(participant.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(
                     when {
+                        !participant.isPresent -> stringResource(Res.string.away)
                         participant.isHost -> stringResource(Res.string.host)
                         speaking -> stringResource(Res.string.speaking)
                         participant.isMuted || (participant.isSelf && micMuted) -> stringResource(Res.string.mic_muted)
@@ -1451,21 +1529,40 @@ private fun ParticipantAvatar(participant: RoomParticipant, speaking: Boolean) {
 }
 
 @Composable
-private fun VoicePanel(micMuted: Boolean, onToggleMic: () -> Unit) {
+private fun VoicePanel(
+    voiceState: VoiceConnectionState,
+    micMuted: Boolean,
+    onJoinVoice: () -> Unit,
+    onToggleMic: () -> Unit,
+) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Column(Modifier.weight(1f)) {
             Text(stringResource(Res.string.voice_room), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-            Text(stringResource(if (micMuted) Res.string.your_mic_is_muted else Res.string.your_mic_is_on), style = MaterialTheme.typography.titleMedium)
-        }
-        FilledIconButton(
-            onClick = onToggleMic,
-            colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer),
-        ) {
-            Icon(
-                if (micMuted) Icons.Filled.MicOff else Icons.Filled.Mic,
-                contentDescription = stringResource(if (micMuted) Res.string.unmute else Res.string.mute),
-                modifier = Modifier.size(24.dp),
+            Text(
+                when (voiceState) {
+                    VoiceConnectionState.IDLE -> stringResource(Res.string.voice_idle_copy)
+                    VoiceConnectionState.CONNECTING -> stringResource(Res.string.joining_voice)
+                    VoiceConnectionState.FAILED -> stringResource(Res.string.voice_unavailable)
+                    VoiceConnectionState.CONNECTED -> stringResource(if (micMuted) Res.string.your_mic_is_muted else Res.string.your_mic_is_on)
+                },
+                style = MaterialTheme.typography.titleMedium,
             )
+        }
+        when (voiceState) {
+            VoiceConnectionState.CONNECTING -> CircularProgressIndicator(Modifier.size(24.dp))
+            VoiceConnectionState.CONNECTED -> FilledIconButton(
+                onClick = onToggleMic,
+                colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer),
+            ) {
+                Icon(
+                    if (micMuted) Icons.Filled.MicOff else Icons.Filled.Mic,
+                    contentDescription = stringResource(if (micMuted) Res.string.unmute else Res.string.mute),
+                    modifier = Modifier.size(24.dp),
+                )
+            }
+            else -> Button(onClick = onJoinVoice, enabled = voiceState == VoiceConnectionState.IDLE) {
+                Text(stringResource(Res.string.join_voice))
+            }
         }
     }
 }

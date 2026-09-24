@@ -22,9 +22,10 @@ const regulars: Participant[] = [
     avatarId: 'mint',
     isOwner: true,
     isSpeaking: true,
+    positionSeconds: 1542,
   },
-  { id: 'ellis', name: 'Ellis', avatarId: 'sunny', isMuted: true },
-  { id: 'jo', name: 'Jo', avatarId: 'berry' },
+  { id: 'ellis', name: 'Ellis', avatarId: 'sunny', isMuted: true, positionSeconds: 1480 },
+  { id: 'jo', name: 'Jo', avatarId: 'berry', positionSeconds: 1425 },
 ];
 
 const roomPreviews: Record<string, PartyPreview> = {
@@ -91,8 +92,8 @@ export const fakePartyRepository = {
       ownerPresent: true,
       participants: [
         makeSelf(identity, true),
-        { id: 'ellis', name: 'Ellis', avatarId: 'sunny', isSpeaking: true },
-        { id: 'jo', name: 'Jo', avatarId: 'berry', isMuted: true },
+        { id: 'ellis', name: 'Ellis', avatarId: 'sunny', isSpeaking: true, positionSeconds: 1480 },
+        { id: 'jo', name: 'Jo', avatarId: 'berry', isMuted: true, positionSeconds: 1425 },
       ],
       streamUrl: '',
     };

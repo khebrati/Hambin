@@ -6,9 +6,12 @@
     <string name="theme">Theme</string>
     <string name="abort_title">Abort stream</string>
     <string name="back">Back</string>
+    <string name="away">Away</string>
     <string name="cancel">Cancel</string>
     <string name="direct_video_url">Direct video URL</string>
     <string name="error_starting_stream">We could not start this stream</string>
+    <string name="format_not_supported">This device can\'t play this video</string>
+    <string name="format_not_supported_copy">The stream uses a format this device can\'t decode. Ask the host to use an H.264 MP4 for this watch party.</string>
     <string name="invite">Invite</string>
     <string name="leave">Leave</string>
     <string name="leave_party">Leave party?</string>
@@ -35,6 +38,7 @@
     <string name="stream_waiting">Waiting for the owner</string>
     <string name="sync">Sync</string>
     <string name="sync_complete">You are caught up with the room</string>
+    <string name="sync_unavailable">No one else is ahead right now</string>
     <string name="unmute">Unmute</string>
     <string name="url_hint">https://example.com/video</string>
     <string name="video_link">Video link</string>
@@ -90,6 +94,10 @@
     <string name="video_source">Video source</string>
     <string name="voice_party">Voice party</string>
     <string name="voice_room">Voice room</string>
+    <string name="join_voice">Join voice</string>
+    <string name="joining_voice">Joining voice…</string>
+    <string name="voice_idle_copy">Talk with the room</string>
+    <string name="voice_unavailable">Voice is unavailable on this device</string>
     <string name="waiting_for_next_stream">Waiting for the next video</string>
     <string name="waiting_room">Waiting room</string>
     <string name="you_left_party">You left the party</string>
@@ -101,7 +109,6 @@
     <string name="edit_profile">Edit profile</string>
     <string name="friends_count">%1$d friends</string>
     <string name="friends_no_owner">%1$d friends · No owner</string>
-    <string name="home_headline">Bring the film. Keep your own pace.</string>
     <string name="home_supporting_copy">Your next watch party is one room away.</string>
     <string name="join_with_code">Join with code</string>
     <string name="last_room">Last room</string>
@@ -144,6 +151,7 @@
     <string name="name_required">A name is needed before saving.</string>
     <string name="profile_preview">Profile preview</string>
     <string name="ready_to_watch">Ready to watch</string>
+    <string name="request_failed">Something went wrong. Please try again.</string>
     <string name="save_profile">Save profile</string>
     <string name="save_profile_error">We couldn't save your profile. Try again.</string>
     <string name="shown_inside_every_party">Shown inside every party</string>
@@ -157,6 +165,7 @@
     <string name="joining_unavailable">Joining is unavailable</string>
     <string name="no_owner_in_room">No owner in the room</string>
     <string name="not_now">Not now</string>
+    <string name="offline_message">You\'re offline. Check your connection and try again.</string>
     <string name="open">Open</string>
     <string name="owner_away_preview_copy">You can watch and use local controls, but the video stays locked until %1$s returns.</string>
     <string name="owner_is_away">%1$s is away</string>

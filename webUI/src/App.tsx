@@ -257,6 +257,7 @@ export function App() {
           streamStatus={streamStatus}
           theme={theme}
           aborting={aborting}
+          initialSyncSurface={preview?.syncSurface}
           onToggleTheme={toggleTheme}
           onStartStream={startStream}
           onSetStreamStatus={setStreamStatus}

@@ -19,7 +19,10 @@ import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.compose.PlayerSurface
+import co.touchlab.kermit.Logger
 import kotlinx.coroutines.delay
+
+private val log = Logger.withTag("AndroidPlayer")
 
 @Composable
 internal actual fun rememberPlatformVideoPlayer(
@@ -101,15 +104,18 @@ internal class ExoPlayerVideoPlayerHandle(
     internal val player: ExoPlayer,
 ) : VideoPlayerHandle {
     override fun load(url: String) {
+        log.i("load url=$url")
         player.setMediaItem(MediaItem.fromUri(url))
         player.prepare()
     }
 
     override fun play() {
+        log.i("play pos=${player.currentPosition}ms state=${player.playbackState}")
         player.play()
     }
 
     override fun pause() {
+        log.i("pause pos=${player.currentPosition}ms state=${player.playbackState}")
         player.pause()
     }
 
@@ -118,7 +124,9 @@ internal class ExoPlayerVideoPlayerHandle(
     }
 
     override fun seekTo(positionMs: Long) {
-        player.seekTo(positionMs.coerceAtLeast(0L))
+        val target = positionMs.coerceAtLeast(0L)
+        log.i("seekTo requested=${positionMs}ms target=${target}ms before=${player.currentPosition}ms state=${player.playbackState} playing=${player.isPlaying}")
+        player.seekTo(target)
     }
 
     override fun seekBy(deltaMs: Long) {
@@ -130,6 +138,7 @@ internal class ExoPlayerVideoPlayerHandle(
     }
 
     override fun stop() {
+        log.i("stop")
         player.stop()
         player.clearMediaItems()
     }

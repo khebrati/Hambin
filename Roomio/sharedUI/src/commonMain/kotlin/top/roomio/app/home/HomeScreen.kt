@@ -70,7 +70,6 @@ import roomio.sharedui.generated.resources.create_party
 import roomio.sharedui.generated.resources.edit_profile
 import roomio.sharedui.generated.resources.friends_no_owner
 import roomio.sharedui.generated.resources.friends_count
-import roomio.sharedui.generated.resources.home_headline
 import roomio.sharedui.generated.resources.home_supporting_copy
 import roomio.sharedui.generated.resources.join_with_code
 import roomio.sharedui.generated.resources.last_room
@@ -88,6 +87,8 @@ import top.roomio.app.theme.LocalThemeIsDark
 import top.roomio.app.theme.RoomioDesignSystem
 import top.roomio.app.theme.RoomioTheme
 import top.roomio.app.profile.ProfileAvatar
+
+private const val ShowRoomPreview = false
 
 @Immutable
 internal data class HomeRoomPreview(
@@ -163,7 +164,7 @@ internal fun HomeScreen(
                         onJoin = { onAction(HomeAction.JoinPartyClicked) },
                         modifier = Modifier.weight(1.45f),
                     )
-                    if (state.roomPreview != null) {
+                    if (ShowRoomPreview && state.roomPreview != null) {
                         HomeRoomCard(
                             room = state.roomPreview,
                             expanded = true,
@@ -189,7 +190,7 @@ internal fun HomeScreen(
                         onCreate = { onAction(HomeAction.CreatePartyClicked) },
                         onJoin = { onAction(HomeAction.JoinPartyClicked) },
                     )
-                    if (state.roomPreview != null) {
+                    if (ShowRoomPreview && state.roomPreview != null) {
                         HomeRoomCard(
                             room = state.roomPreview,
                             expanded = false,
@@ -316,11 +317,6 @@ private fun HomeStage(
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
-            )
-            Text(
-                text = stringResource(Res.string.home_headline),
-                style = MaterialTheme.typography.displaySmall,
-                fontWeight = FontWeight.Bold,
             )
             Text(
                 text = stringResource(Res.string.home_supporting_copy),

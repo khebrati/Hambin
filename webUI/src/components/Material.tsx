@@ -5,7 +5,7 @@ import {
   type ButtonHTMLAttributes,
   type ReactNode,
 } from 'react';
-import { X, type LucideIcon } from 'lucide-react';
+import { Check, X, type LucideIcon } from 'lucide-react';
 
 type ButtonVariant = 'filled' | 'tonal' | 'outlined' | 'text' | 'danger';
 
@@ -114,6 +114,142 @@ export function TextField({
         </p>
       ) : null}
     </div>
+  );
+}
+
+interface CheckboxProps {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  label: ReactNode;
+  supportingText?: string;
+  disabled?: boolean;
+}
+
+export function Checkbox({
+  checked,
+  onChange,
+  label,
+  supportingText,
+  disabled = false,
+}: CheckboxProps) {
+  const inputId = useId();
+  const supportingId = useId();
+
+  return (
+    <label
+      className={`md-checkbox ${disabled ? 'is-disabled' : ''}`}
+      htmlFor={inputId}
+    >
+      <input
+        id={inputId}
+        className="md-checkbox__input"
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.checked)}
+        aria-describedby={supportingText ? supportingId : undefined}
+      />
+      <span className="md-checkbox__box" aria-hidden="true">
+        <Check size={16} strokeWidth={3} />
+      </span>
+      <span className="md-checkbox__copy">
+        <span className="md-checkbox__label">{label}</span>
+        {supportingText ? (
+          <span id={supportingId} className="md-checkbox__supporting">
+            {supportingText}
+          </span>
+        ) : null}
+      </span>
+    </label>
+  );
+}
+
+interface SwitchProps {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  label: string;
+  supportingText?: string;
+  disabled?: boolean;
+}
+
+export function Switch({
+  checked,
+  onChange,
+  label,
+  supportingText,
+  disabled = false,
+}: SwitchProps) {
+  const inputId = useId();
+  const supportingId = useId();
+
+  return (
+    <label
+      className={`md-switch ${disabled ? 'is-disabled' : ''}`}
+      htmlFor={inputId}
+    >
+      <span className="md-switch__copy">
+        <span className="md-switch__label">{label}</span>
+        {supportingText ? (
+          <span id={supportingId} className="md-switch__supporting">
+            {supportingText}
+          </span>
+        ) : null}
+      </span>
+      <input
+        id={inputId}
+        className="md-switch__input"
+        type="checkbox"
+        role="switch"
+        checked={checked}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.checked)}
+        aria-describedby={supportingText ? supportingId : undefined}
+      />
+      <span className="md-switch__track" aria-hidden="true">
+        <span className="md-switch__handle" />
+      </span>
+    </label>
+  );
+}
+
+interface SheetProps {
+  open: boolean;
+  title: string;
+  children: ReactNode;
+  actions?: ReactNode;
+  onClose: () => void;
+}
+
+export function Sheet({ open, title, children, actions, onClose }: SheetProps) {
+  const sheetRef = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
+
+  useEffect(() => {
+    const sheet = sheetRef.current;
+    if (!sheet) return;
+    if (open && !sheet.open) sheet.showModal();
+    if (!open && sheet.open) sheet.close();
+  }, [open]);
+
+  return (
+    <dialog
+      ref={sheetRef}
+      className="md-sheet"
+      aria-labelledby={titleId}
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      onClose={onClose}
+    >
+      <span className="md-sheet__handle" aria-hidden="true" />
+      <div className="md-sheet__header">
+        <h2 id={titleId}>{title}</h2>
+        <IconButton icon={X} label="Close" onClick={onClose} />
+      </div>
+      <div className="md-sheet__content">{children}</div>
+      {actions ? <div className="md-sheet__actions">{actions}</div> : null}
+    </dialog>
   );
 }
 

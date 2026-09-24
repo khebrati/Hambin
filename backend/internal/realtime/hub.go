@@ -38,6 +38,11 @@ type Hub struct {
 	mu          sync.RWMutex
 	connections map[string]map[*Connection]struct{}
 
+	// presenceMu serializes presence transitions so a stale connection's
+	// disconnect can never mark a member absent after a newer connection has
+	// already marked them present.
+	presenceMu sync.Mutex
+
 	roomService   RoomService
 	streamService StreamService
 	syncEngine    *SyncEngine
@@ -81,12 +86,32 @@ func (h *Hub) Serve(ctx context.Context, ws *websocket.Conn, ticket Ticket) erro
 		ticket: ticket,
 		send:   make(chan []byte, sendBufferSize),
 	}
-	h.register(ticket.RoomID, connection)
-	defer h.unregister(ticket.RoomID, connection)
 
-	if _, err := h.roomService.MarkConnected(ctx, ticket.RoomID, ticket.IdentityID); err != nil {
-		h.logger.Warn("realtime mark connected failed", "error", err)
+	// A member may briefly have overlapping connections while reconnecting
+	// (the old socket has not been detected as dead yet). Only mark the member
+	// connected when the first connection attaches and disconnected when the
+	// last one detaches, so a stale disconnect never flips a present member to
+	// absent. The presence mutex keeps each transition atomic with respect to
+	// a competing connect/disconnect of the same membership.
+	h.presenceMu.Lock()
+	if h.register(ticket.RoomID, connection) {
+		if _, err := h.roomService.MarkConnected(ctx, ticket.RoomID, ticket.IdentityID); err != nil {
+			h.logger.Warn("realtime mark connected failed", "error", err)
+		}
 	}
+	h.presenceMu.Unlock()
+
+	defer func() {
+		h.presenceMu.Lock()
+		defer h.presenceMu.Unlock()
+		if h.unregister(ticket.RoomID, connection) {
+			detachCtx, cancelDetach := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancelDetach()
+			if _, err := h.roomService.MarkDisconnected(detachCtx, ticket.RoomID, ticket.IdentityID); err != nil {
+				h.logger.Warn("realtime mark disconnected failed", "error", err)
+			}
+		}
+	}()
 
 	writeCtx, cancelWrite := context.WithCancel(ctx)
 	defer cancelWrite()
@@ -98,14 +123,7 @@ func (h *Hub) Serve(ctx context.Context, ws *websocket.Conn, ticket Ticket) erro
 		h.logger.Warn("realtime snapshot failed", "error", err)
 	}
 
-	readErr := connection.readPump(ctx)
-
-	detachCtx, cancelDetach := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancelDetach()
-	if _, err := h.roomService.MarkDisconnected(detachCtx, ticket.RoomID, ticket.IdentityID); err != nil {
-		h.logger.Warn("realtime mark disconnected failed", "error", err)
-	}
-	return readErr
+	return connection.readPump(ctx)
 }
 
 func (h *Hub) snapshot(ctx context.Context, roomID string) ([]byte, error) {
@@ -131,24 +149,40 @@ func (h *Hub) snapshot(ctx context.Context, roomID string) ([]byte, error) {
 	return json.Marshal(snapshotMessage{Type: serverSnapshot, Room: r, Members: summaries, Stream: current})
 }
 
-func (h *Hub) register(roomID string, connection *Connection) {
+func (h *Hub) register(roomID string, connection *Connection) bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.connections[roomID] == nil {
 		h.connections[roomID] = make(map[*Connection]struct{})
 	}
+	isFirst := h.memberConnectionCountLocked(roomID, connection.ticket.MembershipID) == 0
 	h.connections[roomID][connection] = struct{}{}
+	return isFirst
 }
 
-func (h *Hub) unregister(roomID string, connection *Connection) {
+func (h *Hub) unregister(roomID string, connection *Connection) bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if current, ok := h.connections[roomID]; ok {
-		delete(current, connection)
-		if len(current) == 0 {
-			delete(h.connections, roomID)
+	current, ok := h.connections[roomID]
+	if !ok {
+		return false
+	}
+	delete(current, connection)
+	isLast := h.memberConnectionCountLocked(roomID, connection.ticket.MembershipID) == 0
+	if len(current) == 0 {
+		delete(h.connections, roomID)
+	}
+	return isLast
+}
+
+func (h *Hub) memberConnectionCountLocked(roomID, membershipID string) int {
+	count := 0
+	for connection := range h.connections[roomID] {
+		if connection.ticket.MembershipID == membershipID {
+			count++
 		}
 	}
+	return count
 }
 
 func (h *Hub) broadcast(roomID string, message []byte) {

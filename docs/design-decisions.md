@@ -119,4 +119,27 @@
 - **Tradeoff accepted:** TURN-over-TLS on 5349 and offsite backups/monitoring are deferred. Relay traffic remains DTLS-SRTP encrypted; only TURN-as-TLS-fallback for restrictive networks is unavailable. A dedicated Coturn (or multi-node TURN) returns at the ~100-room scaling stage.
 - **Setup guidance:** `backend/deploy-aws.md` documents the AWS console steps (EC2, Elastic IP, security group, Route 53) and how to bring the stack up.
 
+## DD-016: Offline Network Requests Show a Snackbar
+
+- **Status:** Approved for the Roomio native client
+- **Decision:** When a network-backed request fails before reaching the backend (DNS, connection, or timeout, e.g. while offline), the native client shows a short snackbar ("You're offline. Check your connection and try again.") instead of crashing or silently doing nothing. Non-connectivity failures facing user input keep their existing inline errors, such as the invalid party code hint.
+- **Scope:** Party creation, party code preview, joining, room snapshot on open, and stream start. Backend contract errors continue to map to their stable machine codes; only transport-level failures map to the shared connectivity code.
+- **Consequence:** Repository transport failures normalize to a stable `PARTY_CODE_NETWORK` (`NETWORK`) `PartyException`, allowing presentation to detect offline states uniformly. Coroutine cancellation is always rethrown. Voice and token refresh failures for non-party actions remain out of scope for this pass.
+
+## DD-017: Directional Sync with Consent (webUI prototype exploration)
+
+- **Status:** Proposed for review — three prototype variations implemented in `webUI/` for comparison
+- **Decision:** Replace the single "Sync to room" action with a directional sync flow. Tapping sync offers two intents:
+  - **Bring everyone to me:** sends a consent request to the other participants showing who is asking and the target time ("Mira wants to move to 25:42 — do you agree?"), with a "turn off sync requests from others" option that is also configurable as a room setting.
+  - **Take me to others:** opens a chooser where the requester sees each participant's current playback time (and how far ahead or behind they are) and picks one person to follow, then moves to that person's time.
+- **Rationale:** The previous single action always forwarded the user to the leading participant and gave the rest of the room no say. Directional sync keeps the two legitimate goals explicit (gather the room, or catch up to someone) and makes cross-device position changes consent-based instead of silent.
+- **Interaction consequence:** The sync surface must represent a direction chooser, an outgoing request composer with pending feedback, an incoming request with agree/decline, a participant-with-time picker, and a room-level "allow sync requests" setting. These are required states beyond the existing idle/sync states.
+- **Accessibility consequence:** Direction, target time, requester identity, and pending/agreed/declined status must be conveyed with text and shape, not color alone. Time comparisons use tabular numerals. Every new control keeps a 48dp target, and request surfaces use live-region/alert semantics.
+- **Prototype variations:** Three coherent directions are implemented behind the `sync` preview states and an in-room variation switcher:
+  - **A · Sheet:** modal bottom sheet with two expressive action cards, then a composer or participant list.
+  - **B · Inline:** the sync band itself splits into the two intents and expands in place, with an inline incoming-request banner instead of a dialog.
+  - **C · Center:** a "Sync center" bottom sheet built around a horizontal participant timeline; users pick a target marker or follow a person's marker.
+- **Conflict:** This supersedes the resolved answer to Open Question Important 7 ("do not design visible ahead/behind indicators, participant timelines, or drift badges") and refines Important 4 (the old single sync target was the leading participant). The conflict and the unresolved request semantics are tracked in `open-questions.md`.
+- **Scope:** Prototype-only, local state and fixtures. No real-time synchronization, backend contract, or persistence is implied. The native client (`Roomio/`) keeps its existing local sync placeholder until this direction is accepted and a shared contract is defined.
+
 

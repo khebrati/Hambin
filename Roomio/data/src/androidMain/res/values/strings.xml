@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="session_channel_name">Watch party</string>
+    <string name="session_channel_description">Keeps your watch party connected in the background</string>
+    <string name="session_notification_title">Roomio party active</string>
+    <string name="session_notification_text">Keeping your room connected</string>
+    <string name="session_notification_text_voice">Voice is on · Keeping your room connected</string>
+</resources>

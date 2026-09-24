@@ -28,16 +28,16 @@ import top.roomio.app.home.HomeAction
 import top.roomio.app.home.HomeScreen
 import top.roomio.app.manager.ManagerMode
 import top.roomio.app.manager.PartyManagerAction
+import top.roomio.app.manager.PartyManagerEffect
 import top.roomio.app.manager.PartyManagerScreen
 import top.roomio.app.profile.SettingsAction
 import top.roomio.app.profile.SettingsEffect
 import top.roomio.app.profile.SettingsScreen
 import top.roomio.app.preview.RoomPreviewAction
+import top.roomio.app.preview.RoomPreviewEffect
 import top.roomio.app.preview.RoomPreviewScreen
-import top.roomio.app.preview.roomPreviewForCode
 import top.roomio.app.room.RoomAction
 import top.roomio.app.room.RoomScreen
-import top.roomio.app.room.joinedRoomModel
 import top.roomio.app.ui.PresentationGraph
 
 @Serializable
@@ -61,7 +61,8 @@ internal data class RoomPreviewRoute(
 
 @Serializable
 internal data class RoomRoute(
-    val joinedPartyCode: String? = null,
+    val roomId: String,
+    val asOwner: Boolean,
 ) : NavKey
 
 @Composable
@@ -127,7 +128,9 @@ internal fun RoomioNavigation(
                             HomeAction.JoinPartyClicked -> navigate(
                                 PartyManagerRoute(PartyManagerMode.JOIN),
                             )
-                            HomeAction.OpenRoomClicked -> navigate(RoomRoute())
+                            HomeAction.OpenRoomClicked -> navigate(
+                                PartyManagerRoute(PartyManagerMode.JOIN),
+                            )
                         }
                     },
                 )
@@ -168,57 +171,59 @@ internal fun RoomioNavigation(
                         codeError = false,
                     )
                 }
+                LaunchedEffect(viewModel) {
+                    viewModel.effects.collect { effect ->
+                        when (effect) {
+                            is PartyManagerEffect.Created ->
+                                navigate(RoomRoute(roomId = effect.roomId, asOwner = true))
+                            is PartyManagerEffect.PreviewReady ->
+                                navigate(RoomPreviewRoute(effect.code))
+                            // Connectivity and generic failures are shown by the screen.
+                            else -> Unit
+                        }
+                    }
+                }
                 val state by viewModel.state.collectAsStateWithLifecycle()
                 PartyManagerScreen(
                     state = state,
+                    effects = viewModel.effects,
                     onAction = { action ->
                         viewModel.onAction(action)
-                        when (action) {
-                            PartyManagerAction.BackClicked -> navigateBack()
-                            PartyManagerAction.CreateClicked -> navigate(RoomRoute())
-                            PartyManagerAction.PreviewClicked -> {
-                                if (roomPreviewForCode(state.normalizedCode) != null) {
-                                    navigate(RoomPreviewRoute(state.normalizedCode))
-                                } else {
-                                    viewModel.onAction(PartyManagerAction.PreviewRejected)
-                                }
-                            }
-                            is PartyManagerAction.ModeSelected,
-                            is PartyManagerAction.CodeChanged,
-                            PartyManagerAction.PreviewRejected,
-                            -> Unit
+                        if (action == PartyManagerAction.BackClicked) {
+                            navigateBack()
                         }
                     },
                 )
             }
             entry<RoomPreviewRoute> { route ->
-                val preview = roomPreviewForCode(route.partyCode)
-                checkNotNull(preview) {
-                    "Unknown local party code: ${route.partyCode}"
-                }
                 val viewModel = viewModel {
-                    presentationGraph.roomPreviewViewModelFactory.create(preview)
+                    presentationGraph.roomPreviewViewModelFactory.create(route.partyCode)
+                }
+                LaunchedEffect(viewModel) {
+                    viewModel.effects.collect { effect ->
+                        when (effect) {
+                            is RoomPreviewEffect.Joined ->
+                                navigate(RoomRoute(roomId = effect.roomId, asOwner = false))
+                            // Connectivity and generic failures are shown by the screen.
+                            else -> Unit
+                        }
+                    }
                 }
                 val state by viewModel.state.collectAsStateWithLifecycle()
                 RoomPreviewScreen(
                     state = state,
+                    effects = viewModel.effects,
                     onAction = { action ->
-                        when (action) {
-                            RoomPreviewAction.BackClicked -> navigateBack()
-                            RoomPreviewAction.JoinClicked -> {
-                                if (state.canJoin) {
-                                    navigate(RoomRoute(joinedPartyCode = state.model.code))
-                                }
-                            }
+                        viewModel.onAction(action)
+                        if (action == RoomPreviewAction.BackClicked) {
+                            navigateBack()
                         }
                     },
                 )
             }
             entry<RoomRoute> { route ->
-                val model = route.joinedPartyCode?.let(::joinedRoomModel)
-                    ?: top.roomio.app.room.ownerRoomModel()
                 val viewModel = viewModel {
-                    presentationGraph.roomViewModelFactory.create(model)
+                    presentationGraph.roomViewModelFactory.create(route.roomId, route.asOwner)
                 }
                 val state by viewModel.state.collectAsStateWithLifecycle()
                 RoomScreen(

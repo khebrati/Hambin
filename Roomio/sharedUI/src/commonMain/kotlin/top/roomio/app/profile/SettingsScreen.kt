@@ -1,7 +1,6 @@
 package top.roomio.app.profile
 
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -27,7 +26,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -366,7 +364,7 @@ private fun AvatarPicker(
                     onClick = { onSelected(avatar) },
                     baseArtworkSize = minOf(itemWidth - 16.dp, 124.dp),
                     selectedArtworkSize = minOf(itemWidth - 4.dp, 144.dp),
-                    modifier = Modifier.width(itemWidth),
+                    modifier = Modifier.weight(1f),
                 )
             }
         }
@@ -450,35 +448,8 @@ private fun ProfileAvatarImage(
         targetValue = if (selected) selectedArtworkSize else baseArtworkSize,
     )
     val frameSize by animateDpAsState(
-        targetValue = if (selected) {
-            selectedArtworkSize * .72f
-        } else {
-            baseArtworkSize + 4.dp
-        },
+        targetValue = (if (selected) selectedArtworkSize else baseArtworkSize) + 4.dp,
     )
-    val rotation by animateFloatAsState(
-        targetValue = if (selected) -3f else 0f,
-    )
-    val artworkShape = if (selected) {
-        RoundedCornerShape(
-            topStart = 30.dp,
-            topEnd = 16.dp,
-            bottomEnd = 30.dp,
-            bottomStart = 20.dp,
-        )
-    } else {
-        RoomioDesignSystem.shapes.extraLargeIncreased
-    }
-    val frameShape = if (selected) {
-        RoundedCornerShape(
-            topStart = 18.dp,
-            topEnd = 30.dp,
-            bottomEnd = 18.dp,
-            bottomStart = 30.dp,
-        )
-    } else {
-        CircleShape
-    }
 
     Box(
         modifier = Modifier.size(selectedArtworkSize + 8.dp),
@@ -486,7 +457,7 @@ private fun ProfileAvatarImage(
     ) {
         Surface(
             modifier = Modifier.size(frameSize),
-            shape = frameShape,
+            shape = CircleShape,
             color = if (selected) {
                 MaterialTheme.colorScheme.tertiaryContainer
             } else {
@@ -501,10 +472,9 @@ private fun ProfileAvatarImage(
                 .size(artworkSize)
                 .zIndex(1f)
                 .graphicsLayer {
-                    rotationZ = rotation
                     translationY = if (selected) -3.dp.toPx() else 0f
                     shadowElevation = if (selected) 5.dp.toPx() else 0f
-                    shape = artworkShape
+                    shape = CircleShape
                     clip = true
                 }
                 .border(
@@ -514,7 +484,7 @@ private fun ProfileAvatarImage(
                     } else {
                         MaterialTheme.colorScheme.surfaceContainerLowest
                     },
-                    shape = artworkShape,
+                    shape = CircleShape,
                 ),
             contentScale = ContentScale.Crop,
         )

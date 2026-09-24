@@ -7,8 +7,10 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import top.roomio.app.profile.ProfileAvatar
 import top.roomio.app.profile.toPresentationAvatar
+import top.roomio.domain.party.SessionRepository
 import top.roomio.domain.profile.ProfileRepository
 
 internal data class HomeUiState(
@@ -27,7 +29,22 @@ internal sealed interface HomeAction {
 @Inject
 internal class HomeViewModel(
     profileRepository: ProfileRepository,
+    sessionRepository: SessionRepository,
 ) : ViewModel() {
+    init {
+        // Register the guest identity as soon as the app opens so rooms can be
+        // created or joined without a separate sign-in step.
+        viewModelScope.launch {
+            val profile = profileRepository.currentProfile()
+            runCatching {
+                sessionRepository.ensureSession(
+                    name = profile.name,
+                    avatar = profile.avatar.name,
+                )
+            }
+        }
+    }
+
     val state: StateFlow<HomeUiState> = profileRepository
         .observeProfile()
         .map { profile ->

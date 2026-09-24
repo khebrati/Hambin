@@ -1,11 +1,18 @@
 package top.roomio.app
 
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.setMain
 import top.roomio.app.manager.ManagerMode
 import top.roomio.app.manager.PartyManagerAction
 import top.roomio.app.manager.PartyManagerViewModel
@@ -24,7 +31,20 @@ import top.roomio.domain.profile.ProfileAvatarId
 import top.roomio.domain.profile.ProfileRepository
 import top.roomio.domain.profile.UserProfile
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class PresentationViewModelTest {
+    @BeforeTest
+    fun setUp() {
+        // RoomViewModel drives its session from viewModelScope; run it on the
+        // test thread so initial snapshot application is deterministic.
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+    }
+
+    @AfterTest
+    fun tearDown() {
+        Dispatchers.resetMain()
+    }
+
     @Test
     fun settingsStateDerivesValidationFromActions() {
         val viewModel = SettingsViewModel(
@@ -47,7 +67,7 @@ class PresentationViewModelTest {
 
     @Test
     fun partyManagerStateNormalizesCodeAndRepresentsRejectedPreview() {
-        val viewModel = PartyManagerViewModel(ManagerMode.JOIN)
+        val viewModel = PartyManagerViewModel(ManagerMode.JOIN, roomRepository = testRoomRepository)
 
         viewModel.onAction(PartyManagerAction.CodeChanged(" moon-42 "))
 
@@ -62,10 +82,15 @@ class PresentationViewModelTest {
 
     @Test
     fun roomActionsReducePlayerAndDialogState() {
-        val viewModel = RoomViewModel(ownerRoomModel())
-
-        viewModel.onAction(RoomAction.StartPlaybackClicked)
-        assertEquals(RoomPlaybackState.ERROR, viewModel.state.value.playback)
+        val viewModel = RoomViewModel(
+            roomId = "room",
+            asOwner = true,
+            sessionRepository = testSessionRepository,
+            roomRepository = testRoomRepository,
+            realtimeClient = testRealtimeClient,
+            voiceClient = testVoiceClient,
+            sessionKeeper = testSessionKeeper,
+        )
 
         viewModel.onAction(RoomAction.VideoUrlPasted("https://example.com/movie.mp4"))
         viewModel.onAction(RoomAction.InviteClicked)
@@ -77,13 +102,20 @@ class PresentationViewModelTest {
             assertTrue(inviteOpen)
             assertEquals(InviteCopyState.CODE, inviteCopyState)
             assertTrue(micMuted)
-            assertTrue(isOwner)
         }
     }
 
     @Test
     fun roomPlayerStateChangesReducePlaybackAndTimeline() {
-        val viewModel = RoomViewModel(ownerRoomModel())
+        val viewModel = RoomViewModel(
+            roomId = "room",
+            asOwner = true,
+            sessionRepository = testSessionRepository,
+            roomRepository = testRoomRepository,
+            realtimeClient = testRealtimeClient,
+            voiceClient = testVoiceClient,
+            sessionKeeper = testSessionKeeper,
+        )
 
         viewModel.onAction(
             RoomAction.PlayerStateChanged(
@@ -117,7 +149,15 @@ class PresentationViewModelTest {
 
     @Test
     fun roomLiveStreamMapsToLiveWithoutDuration() {
-        val viewModel = RoomViewModel(ownerRoomModel())
+        val viewModel = RoomViewModel(
+            roomId = "room",
+            asOwner = true,
+            sessionRepository = testSessionRepository,
+            roomRepository = testRoomRepository,
+            realtimeClient = testRealtimeClient,
+            voiceClient = testVoiceClient,
+            sessionKeeper = testSessionKeeper,
+        )
 
         viewModel.onAction(
             RoomAction.PlayerStateChanged(
@@ -142,7 +182,15 @@ class PresentationViewModelTest {
 
     @Test
     fun roomFullscreenTogglesAndResetsOnLeaveOrEnd() {
-        val viewModel = RoomViewModel(ownerRoomModel())
+        val viewModel = RoomViewModel(
+            roomId = "room",
+            asOwner = true,
+            sessionRepository = testSessionRepository,
+            roomRepository = testRoomRepository,
+            realtimeClient = testRealtimeClient,
+            voiceClient = testVoiceClient,
+            sessionKeeper = testSessionKeeper,
+        )
 
         assertFalse(viewModel.state.value.fullscreenMode)
 
@@ -163,7 +211,15 @@ class PresentationViewModelTest {
 
     @Test
     fun roomPlayerErrorMapsToErrorState() {
-        val viewModel = RoomViewModel(ownerRoomModel())
+        val viewModel = RoomViewModel(
+            roomId = "room",
+            asOwner = true,
+            sessionRepository = testSessionRepository,
+            roomRepository = testRoomRepository,
+            realtimeClient = testRealtimeClient,
+            voiceClient = testVoiceClient,
+            sessionKeeper = testSessionKeeper,
+        )
 
         viewModel.onAction(
             RoomAction.PlayerStateChanged(

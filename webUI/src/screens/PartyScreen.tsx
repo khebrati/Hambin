@@ -11,7 +11,6 @@ import {
   Minimize2,
   Pause,
   Play,
-  RefreshCw,
   Rewind,
   Square,
   UserPlus,
@@ -29,11 +28,19 @@ import {
   LoadingIndicator,
   TextField,
 } from '../components/Material';
+import {
+  SyncExperience,
+  SyncPreviewControl,
+  SyncSettingRow,
+} from '../components/SyncExperience';
 import { sampleVideoUrl } from '../data/fakeRepository';
-import type { Party, StreamStatus } from '../types';
-
-const TOTAL_SECONDS = 6138;
-const LEADING_POSITION = 1542;
+import { formatTime, TOTAL_SECONDS } from '../lib/time';
+import type {
+  Party,
+  StreamStatus,
+  SyncRequest,
+  SyncSurface,
+} from '../types';
 
 async function writeClipboardText(value: string) {
   if (!navigator.clipboard?.writeText) throw new Error('CLIPBOARD_UNAVAILABLE');
@@ -45,16 +52,24 @@ async function writeClipboardText(value: string) {
   ]);
 }
 
-function formatTime(value: number) {
-  const safeValue = Math.max(0, Math.min(value, TOTAL_SECONDS));
-  const hours = Math.floor(safeValue / 3600);
-  const minutes = Math.floor((safeValue % 3600) / 60);
-  const seconds = Math.floor(safeValue % 60);
-  return hours > 0
-    ? `${hours}:${minutes.toString().padStart(2, '0')}:${seconds
-        .toString()
-        .padStart(2, '0')}`
-    : `${minutes}:${seconds.toString().padStart(2, '0')}`;
+function buildIncomingRequest(
+  party: Party,
+  position: number,
+): SyncRequest | null {
+  const others = party.participants.filter((participant) => !participant.isSelf);
+  if (others.length === 0) return null;
+  const requester = others.reduce((best, participant) =>
+    (participant.positionSeconds ?? 0) > (best.positionSeconds ?? 0)
+      ? participant
+      : best,
+  );
+  return {
+    id: `request-${requester.id}`,
+    requesterName: requester.name,
+    requesterAvatarId: requester.avatarId,
+    targetSeconds: requester.positionSeconds ?? position,
+    direction: 'bring-to-me',
+  };
 }
 
 interface PartyScreenProps {
@@ -62,6 +77,7 @@ interface PartyScreenProps {
   streamStatus: StreamStatus;
   theme: 'light' | 'dark';
   aborting: boolean;
+  initialSyncSurface?: SyncSurface;
   onToggleTheme: () => void;
   onStartStream: (url: string) => void;
   onSetStreamStatus: (status: StreamStatus) => void;
@@ -75,6 +91,7 @@ export function PartyScreen({
   streamStatus,
   theme,
   aborting,
+  initialSyncSurface,
   onToggleTheme,
   onStartStream,
   onSetStreamStatus,
@@ -94,6 +111,12 @@ export function PartyScreen({
   const [urlOpen, setUrlOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [requestsMuted, setRequestsMuted] = useState(false);
+  const [incomingRequest, setIncomingRequest] = useState<SyncRequest | null>(() =>
+    initialSyncSurface === 'incoming'
+      ? buildIncomingRequest(party, 1122)
+      : null,
+  );
   const [inviteCopyState, setInviteCopyState] = useState<
     'idle' | 'code' | 'link' | 'error'
   >('idle');
@@ -170,9 +193,16 @@ export function PartyScreen({
     }
   };
 
-  const syncPlayback = () => {
-    setPosition(LEADING_POSITION);
-    onNotify("You're caught up with the room");
+  const jumpTo = (seconds: number) => {
+    setPosition(Math.max(0, Math.min(seconds, TOTAL_SECONDS)));
+  };
+
+  const previewIncomingRequest = () => {
+    if (requestsMuted) {
+      onNotify('Sync requests are turned off');
+      return;
+    }
+    setIncomingRequest(buildIncomingRequest(party, position));
   };
 
   return (
@@ -249,19 +279,18 @@ export function PartyScreen({
           )}
 
           {hasPlayer ? (
-            <div className="sync-band">
-              <div>
-                <span className="eyebrow">Local playback</span>
-                <strong>{streamStatus === 'paused' ? 'Paused for you' : 'Playing for you'}</strong>
-              </div>
-              <Button
-                variant="tonal"
-                icon={<RefreshCw size={19} aria-hidden="true" />}
-                onClick={syncPlayback}
-              >
-                Sync to room
-              </Button>
-            </div>
+            <SyncExperience
+              party={party}
+              selfPosition={position}
+              requestsMuted={requestsMuted}
+              onRequestsMutedChange={setRequestsMuted}
+              onJumpTo={(seconds) => jumpTo(seconds)}
+              onNotify={onNotify}
+              initialSurface={initialSyncSurface}
+              incomingRequest={incomingRequest}
+              onDismissIncoming={() => setIncomingRequest(null)}
+              onPreviewIncoming={previewIncomingRequest}
+            />
           ) : null}
 
           <div className="participants-compact">
@@ -287,6 +316,10 @@ export function PartyScreen({
               onClick={() => setMicMuted((current) => !current)}
             />
           </section>
+
+          {hasPlayer ? (
+            <SyncSettingRow muted={requestsMuted} onChange={setRequestsMuted} />
+          ) : null}
 
           <Button
             variant="outlined"
@@ -323,6 +356,10 @@ export function PartyScreen({
             >
               End stream for everyone
             </Button>
+          ) : null}
+
+          {hasPlayer ? (
+            <SyncPreviewControl onPreviewIncoming={previewIncomingRequest} />
           ) : null}
         </aside>
       </main>

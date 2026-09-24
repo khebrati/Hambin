@@ -72,7 +72,12 @@ Resolved questions are preserved with their answers for traceability.
     - Answer: The room remains active without an owner until that same owner rejoins. Other users retain local playback but cannot start, replace, or abort the shared video. Ownership does not transfer.
     - Design decision affected: Add a persistent owner-absent room state, keep owner-only controls unavailable, and restore them only when the original owner returns.
 
-12. [Resolved] What direct video URL formats and validation rules apply to the native client?
+12. [Open] Directional sync semantics, and the conflict with the resolved "no visible position differences" answer.
+    - The new `webUI` sync exploration (DD-017) shows each participant's playback time and offers "Bring everyone to me" / "Take me to others". This conflicts with the resolved answer to Important question 7, which said not to design visible ahead/behind indicators or participant timelines.
+    - Open sub-questions: Does "Bring everyone to me" need unanimous agreement, a majority, or move immediately with per-user opt-out? Can the room owner force a sync? Is "turn off sync requests from others" global, per-room, or per-sender, and does it persist across sessions? Should "Take me to others" allow following someone who is behind the requester? Which of the three variations (A · Sheet, B · Inline, C · Center) should be adopted?
+    - Design decision affected: The accepted variation and consent rules must be settled before the "Synchronization rules" in `requirements.md` are updated and before the native client implements matching behavior.
+
+13. [Resolved] What direct video URL formats and validation rules apply to the native client?
     - Answer: The Android client accepts any well-formed HTTP(S) direct video URL and plays it through Media3 ExoPlayer; progressive files and HLS live streams are supported. Validation is deferred to playback: failures surface through the player error state and a retry path. Cleartext HTTP is permitted for this feature via a debug network security configuration.
     - Design decision affected: Native URL entry needs an error-with-recovery player state rather than format pre-validation; live streams hide scrubber and skip controls. Recorded as DD-013 for the Roomio Compose client.
 
@@ -106,4 +111,4 @@ Resolved questions are preserved with their answers for traceability.
 - Voice-chat details are not yet defined beyond "voice only."
 - Initial owner assignment is still inferred from party creation, but the owner-absent and returning-owner lifecycle is defined.
 - Desktop and iOS playback engines are not yet implemented; the Android player (DD-013) is the approved reference seam for extending them.
-- Synchronization is a local placeholder until a cross-device sync contract exists.
+- Synchronization is a local placeholder until a cross-device sync contract exists. Directional sync (DD-017) is an unaccepted `webUI` exploration whose request-consent rules and chosen variation are still open.

@@ -38,10 +38,14 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -64,6 +68,7 @@ import roomio.sharedui.generated.resources.create_party_description
 import roomio.sharedui.generated.resources.finding_party
 import roomio.sharedui.generated.resources.join
 import roomio.sharedui.generated.resources.manager_create_party
+import roomio.sharedui.generated.resources.offline_message
 import roomio.sharedui.generated.resources.open_room_for_movie_night
 import roomio.sharedui.generated.resources.opening_your_room
 import roomio.sharedui.generated.resources.party_code
@@ -72,6 +77,7 @@ import roomio.sharedui.generated.resources.party_code_hints
 import roomio.sharedui.generated.resources.party_manager
 import roomio.sharedui.generated.resources.party_manager_subtitle
 import roomio.sharedui.generated.resources.preview_party
+import roomio.sharedui.generated.resources.request_failed
 import roomio.sharedui.generated.resources.step_into_their_room
 import roomio.sharedui.generated.resources.theme
 import roomio.sharedui.generated.resources.you_will_be_the_host
@@ -79,6 +85,8 @@ import top.roomio.app.theme.AppTheme
 import top.roomio.app.theme.LocalThemeIsDark
 import top.roomio.app.theme.RoomioDesignSystem
 import top.roomio.app.theme.RoomioTheme
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 
 internal enum class ManagerMode { CREATE, JOIN }
 
@@ -86,12 +94,27 @@ internal enum class ManagerMode { CREATE, JOIN }
 internal fun PartyManagerScreen(
     state: PartyManagerUiState,
     onAction: (PartyManagerAction) -> Unit,
+    effects: Flow<PartyManagerEffect> = emptyFlow(),
     modifier: Modifier = Modifier,
 ) {
+    val snackbarHostState = remember { SnackbarHostState() }
+    val offlineMessage = stringResource(Res.string.offline_message)
+    val requestFailed = stringResource(Res.string.request_failed)
+    LaunchedEffect(effects) {
+        effects.collect { effect ->
+            when (effect) {
+                is PartyManagerEffect.Error -> snackbarHostState.showSnackbar(
+                    if (effect.connectivity) offlineMessage else requestFailed,
+                )
+                else -> Unit
+            }
+        }
+    }
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.surface,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = { ManagerTopBar(onBack = { onAction(PartyManagerAction.BackClicked) }) },
     ) { innerPadding ->
         Column(
