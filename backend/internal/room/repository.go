@@ -15,6 +15,9 @@ type Repository interface {
 	ListActiveRoomIDs(ctx context.Context, now time.Time) ([]string, error)
 	ListMemberships(ctx context.Context, roomID string) ([]Membership, error)
 	GetMembership(ctx context.Context, roomID, identityID string) (Membership, error)
+	// GetMembershipByID resolves a seat by its membership ID, which is the
+	// identity LiveKit reports in voice webhooks.
+	GetMembershipByID(ctx context.Context, roomID, membershipID string) (Membership, error)
 	FindActiveMembershipByIdentity(ctx context.Context, identityID string, now time.Time) (Membership, error)
 	// JoinRoom upserts a membership (insert or reactivate) and appends events.
 	JoinRoom(ctx context.Context, membership Membership, evts ...*events.Event) error

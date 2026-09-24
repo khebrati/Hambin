@@ -49,7 +49,7 @@ func Load() (Config, error) {
 		LiveKitURL:           env("HAM_LIVEKIT_URL", ""),
 		LiveKitAPIKey:        env("HAM_LIVEKIT_API_KEY", ""),
 		LiveKitAPISecret:     env("HAM_LIVEKIT_API_SECRET", ""),
-		LiveKitTokenTTL:      envDuration("HAM_LIVEKIT_TOKEN_TTL", 5*time.Minute),
+		LiveKitTokenTTL:      envDuration("HAM_LIVEKIT_TOKEN_TTL", 2*time.Hour),
 		LogLevel:             env("HAM_LOG_LEVEL", "info"),
 		RateLimitPerMinute:   envInt("HAM_RATE_LIMIT_PER_MINUTE", 120),
 		RealtimeOutboxPeriod: envDuration("HAM_OUTBOX_PERIOD", 250*time.Millisecond),

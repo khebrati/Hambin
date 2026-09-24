@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -13,10 +14,12 @@ import (
 	"github.com/khebrati/Hambin/backend/internal/room"
 )
 
-// MembershipService is the subset of room behavior voice needs.
+// MembershipService is the subset of room behavior voice needs. Membership is
+// keyed by identity ID for token issuance; SetVoiceConnected is keyed by
+// membership ID because that is the participant identity LiveKit reports.
 type MembershipService interface {
 	Membership(ctx context.Context, roomID, identityID string) (room.Membership, error)
-	SetVoiceConnected(ctx context.Context, roomID, identityID string, connected bool) (room.Membership, error)
+	SetVoiceConnected(ctx context.Context, roomID, membershipID string, connected bool) (room.Membership, error)
 }
 
 // RoomAdmin removes LiveKit rooms when a party closes.
@@ -72,13 +75,18 @@ func (s *Service) HandleWebhook(ctx context.Context, rawToken string, body []byt
 	if err != nil {
 		return err
 	}
+	var presenceErr error
 	switch event.Event {
 	case "participant_joined":
-		_, _ = s.members.SetVoiceConnected(ctx, event.Room.Name, event.Participant.Identity, true)
+		_, presenceErr = s.members.SetVoiceConnected(ctx, event.Room.Name, event.Participant.Identity, true)
 	case "participant_left":
-		_, _ = s.members.SetVoiceConnected(ctx, event.Room.Name, event.Participant.Identity, false)
+		_, presenceErr = s.members.SetVoiceConnected(ctx, event.Room.Name, event.Participant.Identity, false)
 	}
-	return nil
+	if errors.Is(presenceErr, room.ErrNotFound) {
+		// The seat is already gone; there is nothing left to reconcile.
+		return nil
+	}
+	return presenceErr
 }
 
 // CloseRoomResources removes the LiveKit room when voice is enabled. Errors are

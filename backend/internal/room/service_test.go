@@ -200,6 +200,47 @@ func TestPresenceLifecycleAndGrace(t *testing.T) {
 	}
 }
 
+func TestSetVoiceConnectedResolvesMembershipID(t *testing.T) {
+	clock := platform.NewManualClock(time.Unix(1_700_000_000, 0))
+	service, _ := newService(clock)
+	ctx := context.Background()
+
+	r, owner, err := service.Create(ctx, "owner-1", "Mira", "COMET", "")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if _, err := service.MarkConnected(ctx, r.ID, "owner-1"); err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	if _, err := service.MarkDisconnected(ctx, r.ID, "owner-1"); err != nil {
+		t.Fatalf("disconnect: %v", err)
+	}
+
+	// LiveKit webhooks identify the participant by membership ID, which differs
+	// from the identity ID used elsewhere.
+	if owner.ID == owner.IdentityID {
+		t.Fatal("test requires distinct membership and identity IDs")
+	}
+	updated, err := service.SetVoiceConnected(ctx, r.ID, owner.ID, true)
+	if err != nil {
+		t.Fatalf("set voice connected: %v", err)
+	}
+	if !updated.LiveKitConnected {
+		t.Fatal("expected the voice attachment to be recorded")
+	}
+	if !updated.Present() {
+		t.Fatal("expected voice attachment to keep the member present")
+	}
+
+	released, err := service.SetVoiceConnected(ctx, r.ID, owner.ID, false)
+	if err != nil {
+		t.Fatalf("set voice disconnected: %v", err)
+	}
+	if released.LiveKitConnected {
+		t.Fatal("expected the voice attachment to be cleared")
+	}
+}
+
 func TestCanManageStreamRequiresPresentOwner(t *testing.T) {
 	clock := platform.NewManualClock(time.Unix(1_700_000_000, 0))
 	service, _ := newService(clock)

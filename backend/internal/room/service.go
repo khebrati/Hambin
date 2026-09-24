@@ -270,9 +270,10 @@ func (s *Service) MarkDisconnected(ctx context.Context, roomID, identityID strin
 }
 
 // SetVoiceConnected records LiveKit voice attachment, which keeps a member
-// present while the app is backgrounded.
-func (s *Service) SetVoiceConnected(ctx context.Context, roomID, identityID string, connected bool) (Membership, error) {
-	return s.updatePresence(ctx, roomID, identityID, func(m *Membership, now time.Time) bool {
+// present while the app is backgrounded. The identity is a membership ID
+// because that is what LiveKit reports for a participant.
+func (s *Service) SetVoiceConnected(ctx context.Context, roomID, membershipID string, connected bool) (Membership, error) {
+	return s.updatePresenceByMembershipID(ctx, roomID, membershipID, func(m *Membership, now time.Time) bool {
 		m.LiveKitConnected = connected
 		if connected {
 			m.GraceExpiresAt = nil
@@ -389,7 +390,21 @@ func (s *Service) closeIfEmpty(ctx context.Context, roomID string, now time.Time
 }
 
 func (s *Service) updatePresence(ctx context.Context, roomID, identityID string, mutate func(*Membership, time.Time) bool) (Membership, error) {
-	m, err := s.repo.GetMembership(ctx, roomID, identityID)
+	return s.updatePresenceWith(ctx, roomID, func() (Membership, error) {
+		return s.repo.GetMembership(ctx, roomID, identityID)
+	}, mutate)
+}
+
+// updatePresenceByMembershipID applies a presence change resolved by membership
+// ID, which is the identity LiveKit reports for a participant.
+func (s *Service) updatePresenceByMembershipID(ctx context.Context, roomID, membershipID string, mutate func(*Membership, time.Time) bool) (Membership, error) {
+	return s.updatePresenceWith(ctx, roomID, func() (Membership, error) {
+		return s.repo.GetMembershipByID(ctx, roomID, membershipID)
+	}, mutate)
+}
+
+func (s *Service) updatePresenceWith(ctx context.Context, roomID string, fetch func() (Membership, error), mutate func(*Membership, time.Time) bool) (Membership, error) {
+	m, err := fetch()
 	if err != nil {
 		return Membership{}, err
 	}

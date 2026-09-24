@@ -91,6 +91,12 @@ func (s *Store) GetMembership(ctx context.Context, roomID, identityID string) (r
 		selectMembershipSQL+` WHERE room_id = $1 AND identity_id = $2`, roomID, identityID))
 }
 
+// GetMembershipByID implements room.Repository.
+func (s *Store) GetMembershipByID(ctx context.Context, roomID, membershipID string) (room.Membership, error) {
+	return scanMembership(s.pool.QueryRow(ctx,
+		selectMembershipSQL+` WHERE room_id = $1 AND id = $2`, roomID, membershipID))
+}
+
 // FindActiveMembershipByIdentity implements room.Repository.
 func (s *Store) FindActiveMembershipByIdentity(ctx context.Context, identityID string, now time.Time) (room.Membership, error) {
 	return scanMembership(s.pool.QueryRow(ctx,

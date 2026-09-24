@@ -124,6 +124,7 @@ type fakeMembers struct {
 	membership room.Membership
 	found      bool
 	voiceCalls []bool
+	voiceIDs   []string
 }
 
 func (f *fakeMembers) Membership(context.Context, string, string) (room.Membership, error) {
@@ -133,8 +134,9 @@ func (f *fakeMembers) Membership(context.Context, string, string) (room.Membersh
 	return f.membership, nil
 }
 
-func (f *fakeMembers) SetVoiceConnected(_ context.Context, _, _ string, connected bool) (room.Membership, error) {
+func (f *fakeMembers) SetVoiceConnected(_ context.Context, _, membershipID string, connected bool) (room.Membership, error) {
 	f.voiceCalls = append(f.voiceCalls, connected)
+	f.voiceIDs = append(f.voiceIDs, membershipID)
 	return room.Membership{}, nil
 }
 
@@ -168,6 +170,9 @@ func TestServiceWebhookUpdatesVoicePresence(t *testing.T) {
 	}
 	if len(members.voiceCalls) != 1 || !members.voiceCalls[0] {
 		t.Fatalf("expected a voice-connected call, got %+v", members.voiceCalls)
+	}
+	if len(members.voiceIDs) != 1 || members.voiceIDs[0] != "membership-1" {
+		t.Fatalf("expected the membership ID to be used, got %+v", members.voiceIDs)
 	}
 }
 

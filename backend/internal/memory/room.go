@@ -87,6 +87,17 @@ func (s *RoomStore) GetMembership(_ context.Context, roomID, identityID string) 
 	return room.Membership{}, room.ErrNotFound
 }
 
+func (s *RoomStore) GetMembershipByID(_ context.Context, roomID, membershipID string) (room.Membership, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, m := range s.memberships[roomID] {
+		if m.ID == membershipID {
+			return m, nil
+		}
+	}
+	return room.Membership{}, room.ErrNotFound
+}
+
 func (s *RoomStore) FindActiveMembershipByIdentity(_ context.Context, identityID string, now time.Time) (room.Membership, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
