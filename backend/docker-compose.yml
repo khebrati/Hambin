@@ -20,6 +20,9 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+    # LiveKit runs with host networking, so reach it through the host gateway.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - api
       - livekit
@@ -37,8 +40,10 @@ services:
       HAM_LIVEKIT_URL: wss://${HAM_LIVEKIT_DOMAIN}
       HAM_LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
       HAM_LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
-    expose:
-      - "8080"
+    # Published on the loopback interface so the host-networked LiveKit server
+    # can deliver webhooks; Caddy still reaches it over the compose network.
+    ports:
+      - "127.0.0.1:8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
@@ -71,6 +76,10 @@ services:
   livekit:
     image: livekit/livekit-server:v1.8
     restart: unless-stopped
+    # Host networking is LiveKit's recommended Docker setup: it avoids Docker's
+    # UDP NAT/userland proxy, which otherwise breaks WebRTC media (ICE connects
+    # but DTLS never completes). The RTC/TURN ports must be open in the firewall.
+    network_mode: host
     command: ["--config", "/etc/livekit.yaml"]
     environment:
       LIVEKIT_KEYS: "${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}"
@@ -80,13 +89,6 @@ services:
       LIVEKIT_WEBHOOK_API_KEY: ${LIVEKIT_API_KEY}
     volumes:
       - ./livekit.yaml:/etc/livekit.yaml:ro
-    ports:
-      # Public TURN endpoint and relay allocation range. Signaling (7880) stays
-      # internal behind Caddy; host ICE ports (7881/7882) stay internal because
-      # clients are given the TURN server.
-      - "3478:3478/udp"
-      - "3478:3478/tcp"
-      - "50000-50100:50000-50100/udp"
     logging: *default-logging
     mem_limit: 1g
 

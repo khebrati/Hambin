@@ -34,8 +34,9 @@ room:
 
 webhook:
   # Signed with the LiveKit API secret; the API verifies it to maintain voice
-  # presence and release room resources.
+  # presence and release room resources. LiveKit uses host networking, so it
+  # reaches the API on the host loopback where compose publishes it.
   urls:
-    - http://api:8080/internal/livekit/webhook
+    - http://127.0.0.1:8080/internal/livekit/webhook
   # Overridden by LIVEKIT_WEBHOOK_API_KEY from .env.
   api_key: ""
