@@ -24,7 +24,9 @@ import top.roomio.domain.party.RealtimeClient
 import top.roomio.domain.party.RealtimeEvent
 import top.roomio.domain.party.RealtimeSession
 import top.roomio.domain.party.RoomRepository
+import top.roomio.domain.party.RoomSession
 import top.roomio.domain.party.RoomSnapshot
+import top.roomio.domain.party.SessionAction
 import top.roomio.domain.party.SessionKeeper
 import top.roomio.domain.party.SessionRepository
 import top.roomio.domain.party.StreamState
@@ -108,6 +110,7 @@ internal sealed interface RoomEffect {
     data object InviteLinkCopied : RoomEffect
     data object CopyUnavailable : RoomEffect
     data class Error(val connectivity: Boolean) : RoomEffect
+    data object Left : RoomEffect
 }
 
 @AssistedInject
@@ -140,6 +143,8 @@ internal class RoomViewModel(
     init {
         viewModelScope.launch { connect() }
         viewModelScope.launch { reportLoop() }
+        // Notification actions (unmute / leave) arrive through the session keeper.
+        viewModelScope.launch { sessionKeeper.actions.collect { action -> handleSessionAction(action) } }
     }
 
     @AssistedFactory
@@ -206,10 +211,8 @@ internal class RoomViewModel(
             RoomAction.LinkDismissed -> mutableState.update { it.copy(linkOpen = false) }
             RoomAction.LeaveClicked -> mutableState.update { it.copy(leaveOpen = true) }
             RoomAction.LeaveDismissed -> mutableState.update { it.copy(leaveOpen = false) }
-            RoomAction.LeaveConfirmed -> {
-                mutableState.update { it.copy(leaveOpen = false, fullscreenMode = false) }
-                leave()
-            }            RoomAction.EndStreamClicked -> mutableState.update { it.copy(abortOpen = true) }
+            RoomAction.LeaveConfirmed -> leave()
+            RoomAction.EndStreamClicked -> mutableState.update { it.copy(abortOpen = true) }
             RoomAction.EndStreamDismissed -> mutableState.update { it.copy(abortOpen = false) }
             RoomAction.EndStreamConfirmed -> {
                 mutableState.update { it.copy(abortOpen = false, playback = RoomPlaybackState.ABORTED, fullscreenMode = false) }
@@ -233,7 +236,7 @@ internal class RoomViewModel(
         try {
             applySnapshot(roomRepository.snapshot(roomId))
             // Keep the session alive in the background once the room is joined.
-            sessionKeeper.start(voiceActive = false)
+            sessionKeeper.start(RoomSession(roomId, asOwner, voiceActive = false, micMuted = true))
         } catch (cancellation: CancellationException) {
             throw cancellation
         } catch (error: Throwable) {
@@ -410,10 +413,36 @@ internal class RoomViewModel(
     }
 
     private fun leave() {
-        mutableState.update { it.copy(leaveOpen = false) }
+        mutableState.update { it.copy(leaveOpen = false, fullscreenMode = false) }
         disconnectVoice()
         sessionKeeper.stop()
+        // Navigation observes this effect, so leaving from the notification
+        // returns the app to the home screen like the in-room leave button.
+        mutableEffects.tryEmit(RoomEffect.Left)
         viewModelScope.launch { runCatching { roomRepository.leave(roomId) } }
+    }
+
+    private fun handleSessionAction(action: SessionAction) {
+        when (action) {
+            SessionAction.UnmuteVoice -> setMicrophoneEnabled(enabled = true)
+            SessionAction.MuteVoice -> setMicrophoneEnabled(enabled = false)
+            SessionAction.Leave -> leave()
+        }
+    }
+
+    /**
+     * Applies a microphone request coming from outside the screen, such as the
+     * notification, and mirrors the new state back into the foreground service.
+     */
+    private fun setMicrophoneEnabled(enabled: Boolean) {
+        val session = voice
+        if (session == null) {
+            log.w("session action ignored: voice not connected room=$roomId")
+            return
+        }
+        mutableState.update { it.copy(micMuted = !enabled) }
+        session.setMicrophoneEnabled(enabled)
+        sessionKeeper.start(RoomSession(roomId, asOwner, voiceActive = true, micMuted = !enabled))
     }
 
     private fun joinVoice() {
@@ -439,7 +468,7 @@ internal class RoomViewModel(
                 session.setMicrophoneEnabled(!mutableState.value.micMuted)
                 mutableState.update { it.copy(voiceState = VoiceConnectionState.CONNECTED) }
                 // A microphone-capable foreground service keeps voice alive off-screen.
-                sessionKeeper.start(voiceActive = true)
+                sessionKeeper.start(RoomSession(roomId, asOwner, voiceActive = true, micMuted = mutableState.value.micMuted))
                 log.i("voice connected room=$roomId")
                 session.events.collect { event -> handleVoiceEvent(event) }
                 log.w("voice event flow ended room=$roomId")
@@ -451,7 +480,7 @@ internal class RoomViewModel(
                 voice = null
             }
             if (voiceWanted) {
-                sessionKeeper.start(voiceActive = false)
+                sessionKeeper.start(RoomSession(roomId, asOwner, voiceActive = false, micMuted = true))
                 mutableState.update { it.copy(voiceState = VoiceConnectionState.CONNECTING) }
                 log.w("voice reconnecting room=$roomId in ${VOICE_RECONNECT_DELAY_MS}ms")
                 delay(VOICE_RECONNECT_DELAY_MS)
@@ -470,6 +499,7 @@ internal class RoomViewModel(
         val next = !mutableState.value.micMuted
         mutableState.update { it.copy(micMuted = next) }
         session.setMicrophoneEnabled(!next)
+        sessionKeeper.start(RoomSession(roomId, asOwner, voiceActive = true, micMuted = next))
     }
 
     private fun handleVoiceEvent(event: VoiceEvent) {

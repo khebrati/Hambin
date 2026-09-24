@@ -3,6 +3,9 @@ package top.roomio.data.party
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import kotlinx.coroutines.flow.Flow
+import top.roomio.domain.party.RoomSession
+import top.roomio.domain.party.SessionAction
 import top.roomio.domain.party.SessionKeeper
 
 internal actual fun createSessionKeeper(): SessionKeeper =
@@ -17,10 +20,15 @@ internal class AndroidSessionKeeper(
     private val context: Context,
 ) : SessionKeeper {
 
-    override fun start(voiceActive: Boolean) {
+    override val actions: Flow<SessionAction> = RoomSessionBus.actions
+
+    override fun start(room: RoomSession) {
         val intent = Intent(context, RoomSessionService::class.java).apply {
             action = RoomSessionService.ACTION_START
-            putExtra(RoomSessionService.EXTRA_VOICE_ACTIVE, voiceActive)
+            putExtra(RoomSessionService.EXTRA_ROOM_ID, room.roomId)
+            putExtra(RoomSessionService.EXTRA_ROOM_AS_OWNER, room.asOwner)
+            putExtra(RoomSessionService.EXTRA_VOICE_ACTIVE, room.voiceActive)
+            putExtra(RoomSessionService.EXTRA_MIC_MUTED, room.micMuted)
         }
         runCatching {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

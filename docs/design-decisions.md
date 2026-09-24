@@ -143,3 +143,13 @@
 - **Scope:** Prototype-only, local state and fixtures. No real-time synchronization, backend contract, or persistence is implied. The native client (`Roomio/`) keeps its existing local sync placeholder until this direction is accepted and a shared contract is defined.
 
 
+
+## DD-018: Background Room Session Foreground Service (Roomio Android)
+
+- **Status:** Approved for the Roomio native client (Android first)
+- **Decision:** While a user is inside a room, the Android client runs a foreground service that keeps the room session, realtime connection, and voice call alive off-screen. The service shows a persistent notification whose content intent deep-links back into the owning room and whose actions are **Unmute/Mute voice** and **Leave**.
+- **Tap consequence:** The notification carries the room id and owner flag as intent extras. The Android host reads and consumes those extras (including on `onNewIntent`) and the shared navigation pushes the matching room route, so tapping the notification returns the user to the room page rather than an arbitrary screen.
+- **Action consequence:** Notification actions are delivered to the service and forwarded to the in-process room session over a process-wide channel. **Unmute/Mute voice** flips the local microphone through the same path as the in-room mic control; **Leave** runs the same leave flow as the in-room confirmation, disconnecting voice, stopping the service, and returning the app home.
+- **Permission consequence:** The service uses the `microphone|dataSync` foreground service types and requests `POST_NOTIFICATIONS` at runtime on Android 13+ so the notification stays visible. If the platform refuses a microphone foreground start from the background, the service degrades to a data-sync session that still keeps the room connected.
+- **Back consequence:** In-room system back opens the leave confirmation instead of dropping straight to Home; when the video is fullscreen, back exits fullscreen first.
+- **Limitation:** Voice is owned by the in-process room session, so the service keeps an existing process alive but cannot restore voice after the process is killed; the notification only exists while the session does. Ownership of the voice call inside the service remains follow-up work.

@@ -10,7 +10,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.backhandler.BackHandler
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
@@ -36,7 +38,9 @@ import top.roomio.app.profile.SettingsScreen
 import top.roomio.app.preview.RoomPreviewAction
 import top.roomio.app.preview.RoomPreviewEffect
 import top.roomio.app.preview.RoomPreviewScreen
+import top.roomio.app.platform.rememberNotificationPermissionRequest
 import top.roomio.app.room.RoomAction
+import top.roomio.app.room.RoomEffect
 import top.roomio.app.room.RoomScreen
 import top.roomio.app.ui.PresentationGraph
 
@@ -65,6 +69,7 @@ internal data class RoomRoute(
     val asOwner: Boolean,
 ) : NavKey
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 internal fun RoomioNavigation(
     presentationGraph: PresentationGraph,
@@ -102,6 +107,14 @@ internal fun RoomioNavigation(
     fun navigateHome() {
         while (backStack.size > 1) {
             backStack.removeLastOrNull()
+        }
+    }
+
+    // A notification tap asks the app to reopen the room it is keeping alive.
+    val roomLaunchRequests = rememberRoomLaunchRequests()
+    LaunchedEffect(roomLaunchRequests) {
+        roomLaunchRequests.collect { request ->
+            navigate(RoomRoute(roomId = request.roomId, asOwner = request.asOwner))
         }
     }
 
@@ -225,16 +238,30 @@ internal fun RoomioNavigation(
                 val viewModel = viewModel {
                     presentationGraph.roomViewModelFactory.create(route.roomId, route.asOwner)
                 }
+                // The background room notification needs the runtime permission
+                // to stay visible on Android 13+.
+                val requestNotificationPermission = rememberNotificationPermissionRequest()
+                LaunchedEffect(Unit) { requestNotificationPermission() }
+                // Leaving from the notification emits the same effect as the
+                // in-room leave button so the app returns home either way.
+                LaunchedEffect(viewModel) {
+                    viewModel.effects.collect { effect ->
+                        if (effect == RoomEffect.Left) navigateHome()
+                    }
+                }
                 val state by viewModel.state.collectAsStateWithLifecycle()
+                // Back asks before leaving the room instead of dropping home.
+                BackHandler(enabled = !state.leaveOpen) {
+                    if (state.fullscreenMode) {
+                        viewModel.onAction(RoomAction.ToggleFullscreenClicked)
+                    } else {
+                        viewModel.onAction(RoomAction.LeaveClicked)
+                    }
+                }
                 RoomScreen(
                     state = state,
                     effects = viewModel.effects,
-                    onAction = { action ->
-                        viewModel.onAction(action)
-                        if (action == RoomAction.LeaveConfirmed) {
-                            navigateHome()
-                        }
-                    },
+                    onAction = viewModel::onAction,
                 )
             }
         },
