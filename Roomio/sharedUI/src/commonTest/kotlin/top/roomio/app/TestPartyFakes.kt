@@ -83,6 +83,6 @@ internal object testVoiceClient : VoiceClient {
 }
 
 internal object testSessionKeeper : SessionKeeper {
-    override fun start(voiceActive: Boolean) = Unit
+    override fun start(room: top.roomio.domain.party.RoomSession) = Unit
     override fun stop() = Unit
 }

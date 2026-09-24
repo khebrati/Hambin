@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -16,7 +17,9 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import top.roomio.app.room.RoomAction
+import top.roomio.app.room.RoomEffect
 import top.roomio.app.room.RoomViewModel
+import top.roomio.app.room.VoiceConnectionState
 import top.roomio.domain.party.Member
 import top.roomio.domain.party.RealtimeClient
 import top.roomio.domain.party.RealtimeEvent
@@ -26,6 +29,8 @@ import top.roomio.domain.party.RoomAvailability
 import top.roomio.domain.party.RoomPreview
 import top.roomio.domain.party.RoomRepository
 import top.roomio.domain.party.RoomSnapshot
+import top.roomio.domain.party.RoomSession
+import top.roomio.domain.party.SessionAction
 import top.roomio.domain.party.SessionKeeper
 import top.roomio.domain.party.StreamInfo
 import top.roomio.domain.party.StreamState
@@ -133,13 +138,75 @@ class RoomViewModelPresenceTest {
             testScheduler.runCurrent()
 
             // Entering the room starts the background session without voice.
-            assertEquals(listOf(false), keeper.started)
+            assertEquals(listOf(false), keeper.started.map { it.voiceActive })
+            assertEquals("room", keeper.started.first().roomId)
+            assertTrue(keeper.started.first().asOwner)
 
             viewModel.onAction(RoomAction.JoinVoiceClicked)
             testScheduler.runCurrent()
 
             // Joining voice upgrades the session so the microphone stays alive.
-            assertEquals(listOf(false, true), keeper.started.take(2))
+            assertEquals(listOf(false, true), keeper.started.map { it.voiceActive }.take(2))
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun notificationUnmuteEnablesMicrophone() = runTest {
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+        try {
+            val keeper = RecordingSessionKeeper()
+            val voice = RecordingVoiceClient()
+            val repository = snapshotRepository(RoomSnapshot(room, listOf(owner, guest), emptyStream()))
+            val viewModel = RoomViewModel("room", asOwner = true, testSessionRepository, repository, testRealtimeClient, voice, keeper)
+
+            viewModel.onAction(RoomAction.JoinVoiceClicked)
+            testScheduler.runCurrent()
+            // The first session drops instantly; advance to the reconnected one.
+            testScheduler.advanceTimeBy(2_000L)
+            testScheduler.runCurrent()
+            assertTrue(viewModel.state.value.micMuted)
+
+            viewModel.onAction(RoomAction.ToggleMicClicked)
+            testScheduler.runCurrent()
+            assertFalse(viewModel.state.value.micMuted)
+            assertEquals(true, voice.micStates.last())
+
+            keeper.emit(SessionAction.MuteVoice)
+            testScheduler.runCurrent()
+
+            assertTrue(viewModel.state.value.micMuted)
+            assertEquals(false, voice.micStates.last())
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun notificationLeaveEndsVoiceAndRoom() = runTest {
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+        try {
+            val keeper = RecordingSessionKeeper()
+            val voice = RecordingVoiceClient()
+            val repository = snapshotRepository(RoomSnapshot(room, listOf(owner, guest), emptyStream()))
+            val viewModel = RoomViewModel("room", asOwner = true, testSessionRepository, repository, testRealtimeClient, voice, keeper)
+            val effects = mutableListOf<RoomEffect>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                viewModel.effects.collect { effects += it }
+            }
+
+            viewModel.onAction(RoomAction.JoinVoiceClicked)
+            testScheduler.runCurrent()
+            testScheduler.advanceTimeBy(2_000L)
+            testScheduler.runCurrent()
+
+            keeper.emit(SessionAction.Leave)
+            testScheduler.runCurrent()
+
+            assertEquals(VoiceConnectionState.IDLE, viewModel.state.value.voiceState)
+            assertTrue(keeper.stops >= 1)
+            assertTrue(effects.contains(RoomEffect.Left))
         } finally {
             Dispatchers.resetMain()
         }
@@ -168,13 +235,22 @@ class RoomViewModelPresenceTest {
     }
 
     private class RecordingSessionKeeper : SessionKeeper {
-        val started = mutableListOf<Boolean>()
+        val started = mutableListOf<RoomSession>()
+        var stops = 0
+        private val mutableActions = MutableSharedFlow<SessionAction>(extraBufferCapacity = 8)
+        override val actions: Flow<SessionAction> = mutableActions
 
-        override fun start(voiceActive: Boolean) {
-            started += voiceActive
+        override fun start(room: RoomSession) {
+            started += room
         }
 
-        override fun stop() = Unit
+        override fun stop() {
+            stops++
+        }
+
+        suspend fun emit(action: SessionAction) {
+            mutableActions.emit(action)
+        }
     }
 
     private class RecordingVoiceClient : VoiceClient {

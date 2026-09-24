@@ -112,3 +112,4 @@ Resolved questions are preserved with their answers for traceability.
 - Initial owner assignment is still inferred from party creation, but the owner-absent and returning-owner lifecycle is defined.
 - Desktop and iOS playback engines are not yet implemented; the Android player (DD-013) is the approved reference seam for extending them.
 - Synchronization is a local placeholder until a cross-device sync contract exists. Directional sync (DD-017) is an unaccepted `webUI` exploration whose request-consent rules and chosen variation are still open.
+- The Android background room session (DD-018) keeps an existing process alive but does not own the LiveKit voice call, so voice cannot be restored after process death. Whether the call should move into the foreground service is unresolved.

@@ -5,4 +5,7 @@
     <string name="session_notification_title">Roomio party active</string>
     <string name="session_notification_text">Keeping your room connected</string>
     <string name="session_notification_text_voice">Voice is on · Keeping your room connected</string>
+    <string name="session_action_unmute">Unmute voice</string>
+    <string name="session_action_mute">Mute voice</string>
+    <string name="session_action_leave">Leave</string>
 </resources>

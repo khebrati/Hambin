@@ -308,6 +308,8 @@ internal fun RoomScreen(
                     log.i("effect Error connectivity=${effect.connectivity} → snackbar")
                     snackbarHost.showSnackbar(if (effect.connectivity) offlineMessage else requestFailed)
                 }
+                // Navigation owns returning home when the user leaves.
+                RoomEffect.Left -> Unit
             }
         }
     }

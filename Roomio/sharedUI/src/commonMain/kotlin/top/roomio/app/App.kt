@@ -27,6 +27,7 @@ import top.roomio.domain.party.RoomAvailability
 import top.roomio.domain.party.RoomPreview
 import top.roomio.domain.party.RoomRepository
 import top.roomio.domain.party.RoomSnapshot
+import top.roomio.domain.party.RoomSession
 import top.roomio.domain.party.SessionKeeper
 import top.roomio.domain.party.SessionRepository
 import top.roomio.domain.party.StreamInfo
@@ -163,7 +164,7 @@ private object PreviewVoiceClient : VoiceClient {
 }
 
 private object PreviewSessionKeeper : SessionKeeper {
-    override fun start(voiceActive: Boolean) = Unit
+    override fun start(room: RoomSession) = Unit
     override fun stop() = Unit
 }
 
