@@ -241,7 +241,20 @@ func (s *Service) Leave(ctx context.Context, roomID, identityID string) (bool, e
 	if err != nil {
 		return false, err
 	}
-	if err := s.repo.UpdateMembership(ctx, m, event); err != nil {
+	evts := []*events.Event{event}
+	if m.IsOwner {
+		// A leaving owner keeps their seat open but is no longer present; clients
+		// surface the owner-away state until the same owner rejoins.
+		ownerEvent, err := events.New(roomID, events.TopicOwnerPresence, map[string]any{
+			"present":   false,
+			"ownerName": m.DisplayName,
+		}, now)
+		if err != nil {
+			return false, err
+		}
+		evts = append(evts, ownerEvent)
+	}
+	if err := s.repo.UpdateMembership(ctx, m, evts...); err != nil {
 		return false, err
 	}
 	return s.closeIfEmpty(ctx, roomID, now)

@@ -20,9 +20,31 @@ internal object RoomSessionBus {
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
     )
 
+    @Volatile
+    private var leaveHandler: (() -> Unit)? = null
+
     val actions: SharedFlow<SessionAction> = mutableActions.asSharedFlow()
 
     fun send(action: SessionAction) {
         mutableActions.tryEmit(action)
+    }
+
+    /**
+     * Registers the in-process owner of the room session so [RoomSessionService]
+     * can end it when the app is dismissed. Pass null when the session stops.
+     */
+    fun registerLeaveHandler(handler: (() -> Unit)?) {
+        leaveHandler = handler
+    }
+
+    /**
+     * Asks the in-process room session to leave the room because the app is
+     * closing. Returns false when no session is registered, so the caller can
+     * stop the service itself.
+     */
+    fun requestLeaveFromTaskRemoval(): Boolean {
+        val handler = leaveHandler ?: return false
+        handler()
+        return true
     }
 }

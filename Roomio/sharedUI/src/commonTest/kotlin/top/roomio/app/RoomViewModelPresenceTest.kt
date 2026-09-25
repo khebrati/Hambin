@@ -1,5 +1,6 @@
 package top.roomio.app
 
+import androidx.lifecycle.ViewModelStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
@@ -96,6 +97,48 @@ class RoomViewModelPresenceTest {
 
             assertTrue(viewModel.state.value.model.ownerPresent)
             assertTrue(viewModel.state.value.model.participants.first { it.isHost }.isPresent)
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun leavingOwnerIsRemovedAndShownAway() = runTest {
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+        try {
+            val events = MutableSharedFlow<RealtimeEvent>()
+            val repository = snapshotRepository(RoomSnapshot(room, listOf(owner, guest), emptyStream()))
+            val viewModel = RoomViewModel("room", asOwner = false, testSessionRepository, repository, emittingRealtimeClient(events), testVoiceClient, testSessionKeeper)
+
+            assertTrue(viewModel.state.value.model.participants.any { it.isHost })
+
+            // The owner closed the app: the backend releases the membership.
+            events.emit(RealtimeEvent.MemberLeft(owner.membershipId))
+            testScheduler.runCurrent()
+
+            assertFalse(viewModel.state.value.model.ownerPresent)
+            assertFalse(viewModel.state.value.model.participants.any { it.isHost })
+            assertTrue(viewModel.state.value.model.participants.any { it.name == guest.displayName })
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun closingTheRoomViewReportsLeaveToKeeper() = runTest {
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+        try {
+            val keeper = RecordingSessionKeeper()
+            val repository = snapshotRepository(RoomSnapshot(room, listOf(owner, guest), emptyStream()))
+            val viewModel = RoomViewModel("room", asOwner = false, testSessionRepository, repository, testRealtimeClient, testVoiceClient, keeper)
+            val store = ViewModelStore()
+            store.put("room", viewModel)
+
+            // Destroying the screen (closing the app) must release the membership.
+            store.clear()
+            testScheduler.runCurrent()
+
+            assertEquals(1, keeper.stopAndLeaves)
         } finally {
             Dispatchers.resetMain()
         }
@@ -237,6 +280,7 @@ class RoomViewModelPresenceTest {
     private class RecordingSessionKeeper : SessionKeeper {
         val started = mutableListOf<RoomSession>()
         var stops = 0
+        var stopAndLeaves = 0
         private val mutableActions = MutableSharedFlow<SessionAction>(extraBufferCapacity = 8)
         override val actions: Flow<SessionAction> = mutableActions
 
@@ -246,6 +290,10 @@ class RoomViewModelPresenceTest {
 
         override fun stop() {
             stops++
+        }
+
+        override fun stopAndLeave() {
+            stopAndLeaves++
         }
 
         suspend fun emit(action: SessionAction) {

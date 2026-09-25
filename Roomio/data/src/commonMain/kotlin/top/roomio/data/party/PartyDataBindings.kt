@@ -48,7 +48,7 @@ interface PartyDataBindings {
 
         @Provides
         @SingleIn(AppScope::class)
-        fun provideSessionKeeper(): SessionKeeper = createSessionKeeper()
+        fun provideSessionKeeper(roomRepository: RoomRepository): SessionKeeper = createSessionKeeper(roomRepository)
 
         @Provides
         @SingleIn(AppScope::class)

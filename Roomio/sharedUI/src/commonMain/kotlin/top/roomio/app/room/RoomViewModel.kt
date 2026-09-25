@@ -226,7 +226,11 @@ internal class RoomViewModel(
         realtime = null
         viewModelScope.launch { runCatching { session?.close() } }
         disconnectVoice()
-        sessionKeeper.stop()
+        // The room UI is gone, which means this device left the room (the room
+        // session keeps the connection alive while the app is merely
+        // backgrounded). Report the departure before stopping the service so
+        // other participants stop seeing this member.
+        sessionKeeper.stopAndLeave()
     }
 
     private suspend fun connect() {
@@ -280,7 +284,7 @@ internal class RoomViewModel(
             is RealtimeEvent.Snapshot -> applySnapshot(event.value)
             is RealtimeEvent.MemberJoined -> upsertMember(event.member)
             is RealtimeEvent.MemberReturned -> upsertMember(event.member)
-            is RealtimeEvent.MemberLeft -> removeMember(event.membershipId)
+            is RealtimeEvent.MemberLeft -> handleMemberLeft(event.membershipId)
             is RealtimeEvent.MemberAbsent -> upsertMember(event.member)
             is RealtimeEvent.OwnerPresence -> mutableState.update {
                 it.copy(model = it.model.copy(ownerPresent = asOwner || event.present))
@@ -360,13 +364,27 @@ internal class RoomViewModel(
         refreshParticipants()
     }
 
+    /**
+     * A member closed the app or explicitly left. When it is the owner, the room
+     * stays open but loses its host, which the screen surfaces as owner-away.
+     */
+    private fun handleMemberLeft(membershipId: String) {
+        val leaving = members.firstOrNull { it.membershipId == membershipId }
+        removeMember(membershipId)
+        if (leaving?.isOwner == true) {
+            mutableState.update { it.copy(model = it.model.copy(ownerPresent = asOwner)) }
+        }
+    }
+
     private fun refreshParticipants() {
         val owner = members.firstOrNull { it.isOwner }
         mutableState.update { current ->
             current.copy(
                 model = current.model.copy(
                     participants = members.map { it.toParticipant() },
-                    ownerPresent = asOwner || (owner?.present ?: current.model.ownerPresent),
+                    // No owner in the room means the owner left; only the
+                    // owner's own device keeps reporting itself as present.
+                    ownerPresent = asOwner || (owner?.present ?: false),
                 ),
             )
         }

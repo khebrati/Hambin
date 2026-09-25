@@ -69,6 +69,17 @@ class RoomSessionService : Service() {
         super.onDestroy()
     }
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        // The user dismissed the app from recents: treat it as leaving the room
+        // so other participants stop seeing this device. The in-process session
+        // releases the membership before stopping the service; when it is gone,
+        // stop the service directly.
+        if (!RoomSessionBus.requestLeaveFromTaskRemoval()) {
+            stopSession()
+        }
+        super.onTaskRemoved(rootIntent)
+    }
+
     private fun toggleMicrophone() {
         micMuted = !micMuted
         RoomSessionBus.send(if (micMuted) SessionAction.MuteVoice else SessionAction.UnmuteVoice)

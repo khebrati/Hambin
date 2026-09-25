@@ -20,6 +20,16 @@ interface SessionKeeper {
     fun stop()
 
     /**
+     * Stops the background session because the app closed without an explicit
+     * in-room leave. Platforms that can still reach the backend first report the
+     * departure so other participants stop seeing this device, then stop the
+     * session. The default simply stops the session.
+     */
+    fun stopAndLeave() {
+        stop()
+    }
+
+    /**
      * Actions raised from outside the room UI, such as notification buttons.
      * Empty on platforms without a persistent session surface.
      */

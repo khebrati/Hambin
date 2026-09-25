@@ -2,6 +2,7 @@ package room_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -146,6 +147,46 @@ func TestExplicitLeaveOfLastMemberClosesRoom(t *testing.T) {
 	}
 	if !containsTopic(outbox.Snapshot(), events.TopicRoomClosed) {
 		t.Fatal("expected a room.closed event")
+	}
+}
+
+func TestOwnerLeaveEmitsOwnerPresence(t *testing.T) {
+	clock := platform.NewManualClock(time.Unix(1_700_000_000, 0))
+	service, outbox := newService(clock)
+	ctx := context.Background()
+
+	r, _, _ := service.Create(ctx, "owner-1", "Mira", "COMET", "")
+	if _, _, err := service.Join(ctx, r.Code, "guest-1", "Guest", "BERRY"); err != nil {
+		t.Fatalf("join: %v", err)
+	}
+
+	closed, err := service.Leave(ctx, r.ID, "owner-1")
+	if err != nil {
+		t.Fatalf("leave: %v", err)
+	}
+	if closed {
+		t.Fatal("expected the room to stay open while a guest holds a seat")
+	}
+
+	var presence *events.Event
+	for _, event := range outbox.Snapshot() {
+		if event.Topic == events.TopicOwnerPresence {
+			copy := event
+			presence = &copy
+		}
+	}
+	if presence == nil {
+		t.Fatal("expected an owner.presence event when the owner leaves")
+	}
+	var payload struct {
+		Present   bool   `json:"present"`
+		OwnerName string `json:"ownerName"`
+	}
+	if err := json.Unmarshal(presence.Payload, &payload); err != nil {
+		t.Fatalf("decode owner.presence: %v", err)
+	}
+	if payload.Present {
+		t.Fatal("expected the leaving owner to be reported absent")
 	}
 }
 

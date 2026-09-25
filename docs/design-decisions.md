@@ -153,3 +153,11 @@
 - **Permission consequence:** The service uses the `microphone|dataSync` foreground service types and requests `POST_NOTIFICATIONS` at runtime on Android 13+ so the notification stays visible. If the platform refuses a microphone foreground start from the background, the service degrades to a data-sync session that still keeps the room connected.
 - **Back consequence:** In-room system back opens the leave confirmation instead of dropping straight to Home; when the video is fullscreen, back exits fullscreen first.
 - **Limitation:** Voice is owned by the in-process room session, so the service keeps an existing process alive but cannot restore voice after the process is killed; the notification only exists while the session does. Ownership of the voice call inside the service remains follow-up work.
+
+## DD-019: Closing the Android App Leaves the Room
+
+- **Status:** Approved for the Roomio native client (Android first)
+- **Decision:** Backgrounding a room keeps the session alive through the DD-018 foreground service, but closing the app is a leave. When the room screen is destroyed or the task is removed from recents, the client sends the same `POST /v1/rooms/{roomId}/leave` request as the in-room Leave action before stopping the foreground service, so the membership is released for every other participant.
+- **Rationale:** A user who swipes the app away has left the party. Without an explicit leave the backend only saw a dropped socket, marked the member *absent* during the reconnect grace period, and kept them in the participant list as "away" even though they were gone.
+- **Consequence:** The service exposes a task-removal hook that ends the session (`SessionKeeper.stopAndLeave`). The in-process session releases the membership first and only then stops the service, so the process stays alive long enough to deliver the request. When the owner closes the app, the backend emits `member.left` plus `owner.presence: false`; guests and the owner are removed from the voice party list and the owner-away banner remains until the same owner rejoins, consistent with DD-005.
+- **Scope:** Android. Other platforms have no background session to keep alive, so process exit continues to release the socket without an explicit leave.
