@@ -22,6 +22,7 @@ import kotlinx.coroutines.withContext
 import kotlin.random.Random
 import top.roomio.app.room.player.VideoPlayerState
 import top.roomio.app.room.player.VideoPlayerStatus
+import top.roomio.app.room.player.AudioTrack
 import top.roomio.app.room.player.SubtitleTrack
 import top.roomio.domain.party.Member
 import top.roomio.domain.party.PartyException
@@ -58,6 +59,8 @@ internal data class RoomUiState(
     val videoAspectRatio: Float = 0f,
     val playerError: String? = null,
     val subtitleTracks: List<SubtitleTrack> = emptyList(),
+    val audioTracks: List<AudioTrack> = emptyList(),
+    val audioTrackSelectionId: String? = null,
     val volume: Float = 0.72f,
     val micMuted: Boolean = false,
     val voiceState: VoiceConnectionState = VoiceConnectionState.IDLE,
@@ -192,6 +195,8 @@ internal class RoomViewModel(
                     videoAspectRatio = playerState.videoAspectRatio,
                     playerError = playerState.error,
                     subtitleTracks = playerState.subtitles,
+                    audioTracks = playerState.audioTracks,
+                    audioTrackSelectionId = playerState.audioTrackSelectionId,
                 )
             }
             RoomAction.InviteCopyFailed -> {

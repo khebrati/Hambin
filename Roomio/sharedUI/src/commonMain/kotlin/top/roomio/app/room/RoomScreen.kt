@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
@@ -120,6 +121,7 @@ import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import roomio.sharedui.generated.resources.*
 import top.roomio.app.platform.rememberFullscreenController
+import top.roomio.app.room.player.AudioTrack
 import top.roomio.app.room.player.VideoPlayerHandle
 import top.roomio.app.room.player.VideoPlayerSurface
 import top.roomio.app.room.player.SubtitleTrack
@@ -253,6 +255,7 @@ internal fun RoomScreen(
         null
     }
     var subtitleDialogOpen by remember { mutableStateOf(false) }
+    var audioTrackDialogOpen by remember { mutableStateOf(false) }
     var resumePlaybackAfterSubtitlePicker by remember { mutableStateOf(false) }
     val pickSubtitleFile = rememberPlatformSubtitlePicker { subtitleFile ->
         playerHandle?.addSubtitle(subtitleFile)
@@ -338,6 +341,8 @@ internal fun RoomScreen(
             volume = state.volume,
             micMuted = state.micMuted,
             subtitleTracks = state.subtitleTracks,
+            audioTracks = state.audioTracks,
+            audioTrackSelectionId = state.audioTrackSelectionId,
             player = player,
             snackbarHost = snackbarHost,
             onTogglePlayback = {
@@ -364,6 +369,7 @@ internal fun RoomScreen(
             onSync = { onAction(RoomAction.SyncClicked) },
             onToggleMic = { onAction(RoomAction.ToggleMicClicked) },
             onOpenSubtitles = { subtitleDialogOpen = true },
+            onOpenAudioTracks = { audioTrackDialogOpen = true },
         )
     } else {
         Scaffold(
@@ -409,6 +415,8 @@ internal fun RoomScreen(
                     volume = state.volume,
                     micMuted = state.micMuted,
                     subtitleTracks = state.subtitleTracks,
+                    audioTracks = state.audioTracks,
+                    audioTrackSelectionId = state.audioTrackSelectionId,
                     playerError = state.playerError,
                     player = player,
                     onVideoUrlChange = { onAction(RoomAction.VideoUrlChanged(it)) },
@@ -447,6 +455,7 @@ internal fun RoomScreen(
                     onSync = { onAction(RoomAction.SyncClicked) },
                     onToggleMic = { onAction(RoomAction.ToggleMicClicked) },
                     onOpenSubtitles = { subtitleDialogOpen = true },
+                    onOpenAudioTracks = { audioTrackDialogOpen = true },
                 )
                 if (state.hasPlayer) {
                     Spacer(Modifier.height(RoomioDesignSystem.spacing.small))
@@ -533,6 +542,17 @@ internal fun RoomScreen(
                 subtitleDialogOpen = false
                 resumePlaybackAfterSubtitlePicker = state.playback == RoomPlaybackState.PLAYING
                 pickSubtitleFile?.invoke()
+            },
+        )
+    }
+    if (audioTrackDialogOpen) {
+        AudioTrackSelectionDialog(
+            tracks = state.audioTracks,
+            selectedTrackId = state.audioTrackSelectionId,
+            onDismiss = { audioTrackDialogOpen = false },
+            onSelect = { trackId ->
+                playerHandle?.selectAudioTrack(trackId)
+                audioTrackDialogOpen = false
             },
         )
     }
@@ -701,6 +721,8 @@ private fun CinemaCard(
     volume: Float,
     micMuted: Boolean,
     subtitleTracks: List<SubtitleTrack>,
+    audioTracks: List<AudioTrack>,
+    audioTrackSelectionId: String?,
     playerError: String?,
     player: @Composable (Modifier) -> Unit,
     onVideoUrlChange: (String) -> Unit,
@@ -716,6 +738,7 @@ private fun CinemaCard(
     onSync: () -> Unit,
     onToggleMic: () -> Unit,
     onOpenSubtitles: () -> Unit,
+    onOpenAudioTracks: () -> Unit,
 ) {
     val hasPlayer = playback in setOf(RoomPlaybackState.PLAYING, RoomPlaybackState.PAUSED, RoomPlaybackState.BUFFERING)
     Card(
@@ -753,6 +776,8 @@ private fun CinemaCard(
                     volume = volume,
                     micMuted = micMuted,
                     subtitleTracks = subtitleTracks,
+                    audioTracks = audioTracks,
+                    audioTrackSelectionId = audioTrackSelectionId,
                     onTogglePlayback = onTogglePlayback,
                     onPositionChange = onPositionChange,
                     onSkip = onSkip,
@@ -762,6 +787,7 @@ private fun CinemaCard(
                     onSync = onSync,
                     onToggleMic = onToggleMic,
                     onOpenSubtitles = onOpenSubtitles,
+                    onOpenAudioTracks = onOpenAudioTracks,
                 )
                 playback == RoomPlaybackState.LOADING -> LoadingCinema()
                 playback == RoomPlaybackState.ERROR && videoUrl.isNotBlank() -> PlayerErrorCinema(playerError, onRetry)
@@ -1002,6 +1028,8 @@ private fun PlayerControls(
     volume: Float,
     micMuted: Boolean,
     subtitleTracks: List<SubtitleTrack>,
+    audioTracks: List<AudioTrack>,
+    audioTrackSelectionId: String?,
     onTogglePlayback: () -> Unit,
     onPositionChange: (Long) -> Unit,
     onSkip: (Float) -> Unit,
@@ -1011,6 +1039,7 @@ private fun PlayerControls(
     onSync: () -> Unit,
     onToggleMic: () -> Unit,
     onOpenSubtitles: () -> Unit,
+    onOpenAudioTracks: () -> Unit,
 ) {
     val colors = RoomioDesignSystem.colors
     Column(
@@ -1046,11 +1075,25 @@ private fun PlayerControls(
             }
         }
         BoxWithConstraints(Modifier.fillMaxWidth()) {
-            if (maxWidth >= 520.dp) {
+            if (maxWidth >= 560.dp) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     PlaybackTime(positionMs, durationMs, isLive, Modifier.weight(1f))
                     TransportControls(paused, isLive, onTogglePlayback, onSkip)
-                    VolumeControls(volume, micMuted, subtitleTracks.any(SubtitleTrack::selected), onOpenSubtitles, onVolumeChange, onToggleVolume, onToggleFullscreen, onSync, onToggleMic, Modifier)
+                    VolumeControls(
+                        volume,
+                        micMuted,
+                        subtitleTracks.any(SubtitleTrack::selected),
+                        audioTracks.isNotEmpty(),
+                        audioTrackSelectionId != null,
+                        onOpenSubtitles,
+                        onOpenAudioTracks,
+                        onVolumeChange,
+                        onToggleVolume,
+                        onToggleFullscreen,
+                        onSync,
+                        onToggleMic,
+                        Modifier,
+                    )
                 }
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -1058,7 +1101,21 @@ private fun PlayerControls(
                         PlaybackTime(positionMs, durationMs, isLive, Modifier.weight(1f))
                         TransportControls(paused, isLive, onTogglePlayback, onSkip)
                     }
-                    VolumeControls(volume, micMuted, subtitleTracks.any(SubtitleTrack::selected), onOpenSubtitles, onVolumeChange, onToggleVolume, onToggleFullscreen, onSync, onToggleMic, Modifier.fillMaxWidth())
+                    VolumeControls(
+                        volume,
+                        micMuted,
+                        subtitleTracks.any(SubtitleTrack::selected),
+                        audioTracks.isNotEmpty(),
+                        audioTrackSelectionId != null,
+                        onOpenSubtitles,
+                        onOpenAudioTracks,
+                        onVolumeChange,
+                        onToggleVolume,
+                        onToggleFullscreen,
+                        onSync,
+                        onToggleMic,
+                        Modifier.fillMaxWidth(),
+                    )
                 }
             }
         }
@@ -1151,7 +1208,10 @@ private fun VolumeControls(
     volume: Float,
     micMuted: Boolean,
     subtitlesSelected: Boolean,
+    hasAlternativeAudioTracks: Boolean,
+    audioTrackSelected: Boolean,
     onOpenSubtitles: () -> Unit,
+    onOpenAudioTracks: () -> Unit,
     onVolumeChange: (Float) -> Unit,
     onToggleVolume: () -> Unit,
     onToggleFullscreen: () -> Unit,
@@ -1169,6 +1229,16 @@ private fun VolumeControls(
             iconSize = 20.dp,
             onClick = onOpenSubtitles,
         )
+        if (hasAlternativeAudioTracks) {
+            MaterialIconButton(
+                Icons.Filled.GraphicEq,
+                stringResource(Res.string.audio_tracks),
+                tonal = audioTrackSelected,
+                size = 40.dp,
+                iconSize = 20.dp,
+                onClick = onOpenAudioTracks,
+            )
+        }
         MaterialIconButton(
             if (micMuted) Icons.Filled.MicOff else Icons.Filled.Mic,
             stringResource(if (micMuted) Res.string.unmute else Res.string.mute),
@@ -1207,6 +1277,8 @@ private fun FullscreenCinema(
     volume: Float,
     micMuted: Boolean,
     subtitleTracks: List<SubtitleTrack>,
+    audioTracks: List<AudioTrack>,
+    audioTrackSelectionId: String?,
     player: @Composable (Modifier) -> Unit,
     snackbarHost: SnackbarHostState,
     onTogglePlayback: () -> Unit,
@@ -1218,6 +1290,7 @@ private fun FullscreenCinema(
     onSync: () -> Unit,
     onToggleMic: () -> Unit,
     onOpenSubtitles: () -> Unit,
+    onOpenAudioTracks: () -> Unit,
 ) {
     var controlsVisible by remember { mutableStateOf(true) }
     LaunchedEffect(controlsVisible) {
@@ -1270,6 +1343,8 @@ private fun FullscreenCinema(
                     volume = volume,
                     micMuted = micMuted,
                     subtitleTracks = subtitleTracks,
+                    audioTracks = audioTracks,
+                    audioTrackSelectionId = audioTrackSelectionId,
                     onTogglePlayback = onTogglePlayback,
                     onPositionChange = onPositionChange,
                     onSkip = onSkip,
@@ -1279,6 +1354,7 @@ private fun FullscreenCinema(
                     onSync = onSync,
                     onToggleMic = onToggleMic,
                     onOpenSubtitles = onOpenSubtitles,
+                    onOpenAudioTracks = onOpenAudioTracks,
                     modifier = Modifier.align(Alignment.BottomCenter),
                 )
             }
@@ -1302,6 +1378,8 @@ private fun FullscreenControls(
     volume: Float,
     micMuted: Boolean,
     subtitleTracks: List<SubtitleTrack>,
+    audioTracks: List<AudioTrack>,
+    audioTrackSelectionId: String?,
     onTogglePlayback: () -> Unit,
     onPositionChange: (Long) -> Unit,
     onSkip: (Float) -> Unit,
@@ -1311,6 +1389,7 @@ private fun FullscreenControls(
     onSync: () -> Unit,
     onToggleMic: () -> Unit,
     onOpenSubtitles: () -> Unit,
+    onOpenAudioTracks: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = RoomioDesignSystem.colors
@@ -1347,12 +1426,13 @@ private fun FullscreenControls(
             }
         }
         BoxWithConstraints(Modifier.fillMaxWidth()) {
-            if (maxWidth >= 560.dp) {
+            if (maxWidth >= 600.dp) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     PlaybackTime(positionMs, durationMs, isLive, Modifier.weight(1f))
                     TransportControls(paused, isLive, onTogglePlayback, onSkip)
                     FullscreenActionControls(
-                        volume, micMuted, subtitleTracks.any(SubtitleTrack::selected), onOpenSubtitles, onVolumeChange, onToggleVolume, onSync, onToggleMic, onToggleFullscreen,
+                        volume, micMuted, subtitleTracks.any(SubtitleTrack::selected), audioTracks.isNotEmpty(),
+                        audioTrackSelectionId != null, onOpenSubtitles, onOpenAudioTracks, onVolumeChange, onToggleVolume, onSync, onToggleMic, onToggleFullscreen,
                         Modifier,
                     )
                 }
@@ -1363,7 +1443,8 @@ private fun FullscreenControls(
                         TransportControls(paused, isLive, onTogglePlayback, onSkip)
                     }
                     FullscreenActionControls(
-                        volume, micMuted, subtitleTracks.any(SubtitleTrack::selected), onOpenSubtitles, onVolumeChange, onToggleVolume, onSync, onToggleMic, onToggleFullscreen,
+                        volume, micMuted, subtitleTracks.any(SubtitleTrack::selected), audioTracks.isNotEmpty(),
+                        audioTrackSelectionId != null, onOpenSubtitles, onOpenAudioTracks, onVolumeChange, onToggleVolume, onSync, onToggleMic, onToggleFullscreen,
                         Modifier.fillMaxWidth(),
                     )
                 }
@@ -1377,7 +1458,10 @@ private fun FullscreenActionControls(
     volume: Float,
     micMuted: Boolean,
     subtitlesSelected: Boolean,
+    hasAlternativeAudioTracks: Boolean,
+    audioTrackSelected: Boolean,
     onOpenSubtitles: () -> Unit,
+    onOpenAudioTracks: () -> Unit,
     onVolumeChange: (Float) -> Unit,
     onToggleVolume: () -> Unit,
     onSync: () -> Unit,
@@ -1395,6 +1479,16 @@ private fun FullscreenActionControls(
             iconSize = 20.dp,
             onClick = onOpenSubtitles,
         )
+        if (hasAlternativeAudioTracks) {
+            MaterialIconButton(
+                Icons.Filled.GraphicEq,
+                stringResource(Res.string.audio_tracks),
+                tonal = audioTrackSelected,
+                size = 40.dp,
+                iconSize = 20.dp,
+                onClick = onOpenAudioTracks,
+            )
+        }
         MaterialIconButton(
             if (micMuted) Icons.Filled.MicOff else Icons.Filled.Mic,
             stringResource(if (micMuted) Res.string.unmute else Res.string.mute),
@@ -1475,6 +1569,66 @@ private fun SubtitleSelectionDialog(
 
 @Composable
 private fun SubtitleChoice(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .clickable(onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(selected = selected, onClick = onClick)
+        Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+    }
+}
+
+@Composable
+private fun AudioTrackSelectionDialog(
+    tracks: List<AudioTrack>,
+    selectedTrackId: String?,
+    onDismiss: () -> Unit,
+    onSelect: (String?) -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(Res.string.audio_tracks)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(RoomioDesignSystem.spacing.extraSmall)) {
+                if (tracks.isEmpty()) {
+                    Text(
+                        stringResource(Res.string.no_audio_tracks),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    AudioTrackChoice(
+                        label = stringResource(Res.string.audio_track_automatic),
+                        selected = selectedTrackId == null,
+                        onClick = { onSelect(null) },
+                    )
+                    if (tracks.size > 1) {
+                        tracks.forEach { track ->
+                            AudioTrackChoice(
+                                label = track.label,
+                                selected = track.id == selectedTrackId,
+                                onClick = { onSelect(track.id) },
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(Res.string.done)) }
+        },
+    )
+}
+
+@Composable
+private fun AudioTrackChoice(
     label: String,
     selected: Boolean,
     onClick: () -> Unit,

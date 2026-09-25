@@ -169,3 +169,10 @@
 - **Interaction consequence:** A subtitles control is available in the room player controls. It lists available tracks, allows subtitles to be turned off, and opens Android's document picker for a local subtitle file.
 - **Scope consequence:** Subtitle choices apply only to the current device, consistent with independent local playback. The Android document picker and Media3 track selection remain behind the shared player/platform boundaries; other targets retain their existing placeholder player behavior.
 - **Supported local formats:** SubRip (`.srt`), WebVTT (`.vtt`), SSA/ASS (`.ssa`/`.ass`), and TTML (`.ttml`, `.dfxp`, `.xml`) as supported by Media3.
+
+## DD-021: Local Audio Track Selection in the Android Player
+
+- **Status:** Approved for the Roomio Android client
+- **Decision:** Android viewers can choose among supported audio tracks exposed by the direct video URL or restore Media3's automatic audio-track selection.
+- **Interaction consequence:** When a URL provides supported audio, an audio-track icon appears alongside the room player's other media controls. It opens a Material 3 selection dialog with the automatic option; available source labels are listed when there are multiple tracks, while a single-track URL presents Automatic as the sole option.
+- **Scope consequence:** Audio-track selection applies only to the current device and does not affect other participants. The player reports available tracks through the shared player boundary; non-Android targets continue using their existing placeholder implementation until platform playback is approved.

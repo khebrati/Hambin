@@ -22,6 +22,8 @@ internal data class VideoPlayerState(
     val videoAspectRatio: Float = 0f,
     val error: String? = null,
     val subtitles: List<SubtitleTrack> = emptyList(),
+    val audioTracks: List<AudioTrack> = emptyList(),
+    val audioTrackSelectionId: String? = null,
 ) {
     val hasDuration: Boolean
         get() = durationMs > 0L
@@ -31,6 +33,11 @@ internal data class SubtitleTrack(
     val id: String,
     val label: String,
     val selected: Boolean,
+)
+
+internal data class AudioTrack(
+    val id: String,
+    val label: String,
 )
 
 internal data class SubtitleFile(
@@ -55,6 +62,8 @@ internal interface VideoPlayerHandle {
     fun setVolume(volume: Float)
 
     fun selectSubtitle(trackId: String?)
+
+    fun selectAudioTrack(trackId: String?)
 
     fun addSubtitle(file: SubtitleFile)
 

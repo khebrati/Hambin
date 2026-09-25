@@ -123,6 +123,9 @@
     <string name="watching_as">Watching as</string>
     <string name="your_room_is_waiting">Your room is waiting</string>
     <string name="subtitles">Subtitles</string>
+    <string name="audio_tracks">Audio tracks</string>
+    <string name="audio_track_automatic">Automatic</string>
+    <string name="no_audio_tracks">No alternative audio tracks were found in this video.</string>
     <string name="subtitles_off">Off</string>
     <string name="choose_subtitle_file">Choose subtitle file</string>
     <string name="no_subtitle_tracks">No subtitle tracks were found in this video.</string>

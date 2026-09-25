@@ -65,25 +65,25 @@ internal actual fun rememberPlatformVideoPlayer(
     DisposableEffect(player, lifecycleOwner) {
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
-                currentOnStateChanged(player.toVideoPlayerState())
+                currentOnStateChanged(handle.toVideoPlayerState())
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
-                currentOnStateChanged(player.toVideoPlayerState())
+                currentOnStateChanged(handle.toVideoPlayerState())
             }
 
             override fun onVideoSizeChanged(videoSize: VideoSize) {
-                currentOnStateChanged(player.toVideoPlayerState())
+                currentOnStateChanged(handle.toVideoPlayerState())
             }
 
             override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
                 handle.selectPendingSubtitle()
-                currentOnStateChanged(player.toVideoPlayerState())
+                currentOnStateChanged(handle.toVideoPlayerState())
             }
 
             override fun onPlayerError(error: PlaybackException) {
                 currentOnStateChanged(
-                    player.toVideoPlayerState().copy(
+                    handle.toVideoPlayerState().copy(
                         status = VideoPlayerStatus.ERROR,
                         error = error.errorCodeName,
                     ),
@@ -107,7 +107,7 @@ internal actual fun rememberPlatformVideoPlayer(
     LaunchedEffect(player) {
         while (true) {
             if (player.mediaItemCount > 0) {
-                currentOnStateChanged(player.toVideoPlayerState())
+                currentOnStateChanged(handle.toVideoPlayerState())
             }
             delay(POSITION_POLL_MS)
         }
@@ -189,13 +189,16 @@ internal class ExoPlayerVideoPlayerHandle(
 ) : VideoPlayerHandle {
     override fun load(url: String) {
         log.i("load url=$url")
+        audioTrackSelectionId = null
         baseMediaItem = MediaItem.fromUri(url)
         externalSubtitle = null
         pendingSubtitleLabel = null
         player.setMediaItem(baseMediaItem!!)
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
             .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+            .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+            .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
             .build()
         player.prepare()
     }
@@ -203,6 +206,9 @@ internal class ExoPlayerVideoPlayerHandle(
     private var baseMediaItem: MediaItem? = null
     private var externalSubtitle: MediaItem.SubtitleConfiguration? = null
     private var pendingSubtitleLabel: String? = null
+    private var audioTrackSelectionId: String? = null
+
+    internal fun toVideoPlayerState(): VideoPlayerState = player.toVideoPlayerState(audioTrackSelectionId)
 
     override fun selectSubtitle(trackId: String?) {
         val parameters = player.trackSelectionParameters.buildUpon()
@@ -216,6 +222,29 @@ internal class ExoPlayerVideoPlayerHandle(
             if (group != null && trackIndex != null && trackIndex in 0 until group.length) {
                 parameters.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
                     .addOverride(TrackSelectionOverride(group.mediaTrackGroup, listOf(trackIndex)))
+            }
+        }
+        player.trackSelectionParameters = parameters.build()
+    }
+
+    override fun selectAudioTrack(trackId: String?) {
+        val parameters = player.trackSelectionParameters.buildUpon()
+            .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+            .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
+        if (trackId == null) {
+            audioTrackSelectionId = null
+        } else {
+            val indices = trackId.split(':').mapNotNull(String::toIntOrNull)
+            val groupIndex = indices.getOrNull(0)
+            val trackIndex = indices.getOrNull(1)
+            val group = groupIndex?.let(player.currentTracks.groups::getOrNull)
+            if (group != null && group.type == C.TRACK_TYPE_AUDIO && trackIndex != null &&
+                trackIndex in 0 until group.length && group.isTrackSupported(trackIndex)
+            ) {
+                audioTrackSelectionId = trackId
+                parameters.addOverride(TrackSelectionOverride(group.mediaTrackGroup, listOf(trackIndex)))
+            } else {
+                audioTrackSelectionId = null
             }
         }
         player.trackSelectionParameters = parameters.build()
@@ -298,10 +327,11 @@ internal class ExoPlayerVideoPlayerHandle(
         baseMediaItem = null
         externalSubtitle = null
         pendingSubtitleLabel = null
+        audioTrackSelectionId = null
     }
 }
 
-private fun ExoPlayer.toVideoPlayerState(): VideoPlayerState {
+private fun ExoPlayer.toVideoPlayerState(audioTrackSelectionId: String?): VideoPlayerState {
     val rawDuration = duration
     val isLive = isCurrentMediaItemLive || rawDuration == C.TIME_UNSET
     val durationMs = if (rawDuration == C.TIME_UNSET || rawDuration < 0L) 0L else rawDuration
@@ -340,6 +370,17 @@ private fun ExoPlayer.toVideoPlayerState(): VideoPlayerState {
                 )
             }
         },
+        audioTracks = currentTracks.groups.flatMapIndexed { groupIndex, group ->
+            if (group.type != C.TRACK_TYPE_AUDIO) return@flatMapIndexed emptyList()
+            (0 until group.length).mapNotNull { trackIndex ->
+                if (!group.isTrackSupported(trackIndex)) return@mapNotNull null
+                AudioTrack(
+                    id = "$groupIndex:$trackIndex",
+                    label = group.getTrackFormat(trackIndex).audioTrackLabel(trackIndex),
+                )
+            }
+        },
+        audioTrackSelectionId = audioTrackSelectionId,
     )
 }
 
@@ -347,6 +388,11 @@ private fun Format.subtitleLabel(index: Int): String = label
     ?.takeIf(String::isNotBlank)
     ?: language?.takeIf(String::isNotBlank)
     ?: "Subtitle ${index + 1}"
+
+private fun Format.audioTrackLabel(index: Int): String = label
+    ?.takeIf(String::isNotBlank)
+    ?: language?.takeIf(String::isNotBlank)
+    ?: "Audio ${index + 1}"
 
 private fun Uri.displayName(resolver: ContentResolver): String {
     resolver.query(this, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->

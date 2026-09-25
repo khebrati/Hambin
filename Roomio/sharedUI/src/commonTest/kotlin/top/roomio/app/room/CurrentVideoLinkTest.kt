@@ -17,6 +17,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import top.roomio.app.room.player.AudioTrack
 import top.roomio.app.theme.AppTheme
 
 @OptIn(ExperimentalTestApi::class)
@@ -68,6 +69,47 @@ class CurrentVideoLinkTest {
         onNodeWithContentDescription("Copy link").assertExists()
         onNodeWithContentDescription("Copy link").performClick()
         assertEquals(CURRENT_VIDEO_URL, copiedText?.text)
+    }
+
+    @Test
+    fun audioTrackControlShowsAvailableSourcesAndClosesAfterSelection() = runComposeUiTest {
+        setContent {
+            AppTheme(onThemeChanged = {}) {
+                RoomScreen(
+                    state = roomState(RoomRole.GUEST).copy(
+                        audioTracks = listOf(
+                            AudioTrack("0:0", "English"),
+                            AudioTrack("0:1", "Spanish"),
+                        ),
+                    ),
+                    playerContent = { modifier -> Box(modifier) },
+                )
+            }
+        }
+
+        onNodeWithContentDescription("Audio tracks").performClick()
+        onNodeWithText("Automatic").assertExists()
+        onNodeWithText("English").assertExists()
+        onNodeWithText("Spanish").performClick()
+        onNodeWithText("Automatic").assertDoesNotExist()
+    }
+
+    @Test
+    fun audioTrackControlShowsOnlyAutomaticForASingleSource() = runComposeUiTest {
+        setContent {
+            AppTheme(onThemeChanged = {}) {
+                RoomScreen(
+                    state = roomState(RoomRole.GUEST).copy(
+                        audioTracks = listOf(AudioTrack("0:0", "English")),
+                    ),
+                    playerContent = { modifier -> Box(modifier) },
+                )
+            }
+        }
+
+        onNodeWithContentDescription("Audio tracks").performClick()
+        onNodeWithText("Automatic").assertExists()
+        onNodeWithText("English").assertDoesNotExist()
     }
 }
 
