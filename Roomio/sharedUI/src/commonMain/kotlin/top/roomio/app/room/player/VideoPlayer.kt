@@ -21,10 +21,23 @@ internal data class VideoPlayerState(
     val isLive: Boolean = false,
     val videoAspectRatio: Float = 0f,
     val error: String? = null,
+    val subtitles: List<SubtitleTrack> = emptyList(),
 ) {
     val hasDuration: Boolean
         get() = durationMs > 0L
 }
+
+internal data class SubtitleTrack(
+    val id: String,
+    val label: String,
+    val selected: Boolean,
+)
+
+internal data class SubtitleFile(
+    val uri: String,
+    val mimeType: String?,
+    val label: String,
+)
 
 internal interface VideoPlayerHandle {
     fun load(url: String)
@@ -40,6 +53,10 @@ internal interface VideoPlayerHandle {
     fun seekBy(deltaMs: Long)
 
     fun setVolume(volume: Float)
+
+    fun selectSubtitle(trackId: String?)
+
+    fun addSubtitle(file: SubtitleFile)
 
     fun stop()
 }

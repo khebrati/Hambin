@@ -71,8 +71,8 @@
 
   Client messages:
 
-  - Playback report on connect, seek, play, pause, and every five seconds while active.
-  - Explicit sync request containing stream session and current local position.
+  - Playback report on connect, seek, play, pause, and every three seconds while active.
+  - Explicit sync request containing stream session, current local position, and a client-generated correlation id.
   - Ping/pong and client acknowledgement messages.
 
   Server messages:
@@ -90,7 +90,9 @@
   - Project playing positions from server receipt time; paused positions remain eligible.
   - Select the greatest fresh position from the current stream session.
   - Return only the target position and APPLIED, ALREADY_LEADING, or UNAVAILABLE; never reveal participant drift or leader identity.
+  - Echo the request correlation id on the result so clients can discard stale replies.
   - Never rewind the requester and never broadcast the sync action to others.
+  - A connection whose send buffer overflows is closed so it reconnects and reseeds from a full snapshot instead of silently missing durable events.
   - Losing the API process discards telemetry only. Durable room/stream state survives, and reconnecting clients reseed positions.
 
   ### HTTP API

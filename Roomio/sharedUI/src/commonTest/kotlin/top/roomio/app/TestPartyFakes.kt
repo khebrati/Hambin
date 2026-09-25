@@ -69,7 +69,7 @@ internal object testRealtimeClient : RealtimeClient {
     override suspend fun connect(roomId: String): RealtimeSession = object : RealtimeSession {
         override val events: Flow<top.roomio.domain.party.RealtimeEvent> = emptyFlow()
         override suspend fun reportPlayback(streamSessionId: String, positionMs: Long, playing: Boolean) = Unit
-        override suspend fun requestSync(streamSessionId: String, positionMs: Long) = Unit
+        override suspend fun requestSync(streamSessionId: String, positionMs: Long, requestId: String) = Unit
         override suspend fun close() = Unit
     }
 }

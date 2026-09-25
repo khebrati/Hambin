@@ -44,6 +44,8 @@ data class PlaybackReportMessage(
 data class SyncRequestMessage(
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     val type: String = "sync.request",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    val requestId: String = "",
     val streamSessionId: String,
     val positionMs: Long,
 )
@@ -172,6 +174,7 @@ data class SyncResultMessageDto(
     val type: String,
     val status: String,
     val targetPositionMs: Long,
+    val requestId: String = "",
 )
 
 @Serializable

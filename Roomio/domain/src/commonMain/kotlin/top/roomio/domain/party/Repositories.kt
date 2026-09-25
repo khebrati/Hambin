@@ -68,7 +68,11 @@ interface RealtimeSession {
 
     suspend fun reportPlayback(streamSessionId: String, positionMs: Long, playing: Boolean)
 
-    suspend fun requestSync(streamSessionId: String, positionMs: Long)
+    /**
+     * Requests a sync-to-leader. [requestId] correlates the eventual
+     * [RealtimeEvent.SyncResult] with this call so stale replies can be ignored.
+     */
+    suspend fun requestSync(streamSessionId: String, positionMs: Long, requestId: String)
 
     suspend fun close()
 }

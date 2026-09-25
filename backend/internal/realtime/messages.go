@@ -26,6 +26,7 @@ const (
 
 type clientMessage struct {
 	Type            string `json:"type"`
+	RequestID       string `json:"requestId,omitempty"`
 	StreamSessionID string `json:"streamSessionId,omitempty"`
 	PositionMs      int64  `json:"positionMs,omitempty"`
 	Playing         bool   `json:"playing,omitempty"`
@@ -50,6 +51,7 @@ type syncResultMessage struct {
 	Type             string     `json:"type"`
 	Status           SyncStatus `json:"status"`
 	TargetPositionMs int64      `json:"targetPositionMs"`
+	RequestID        string     `json:"requestId,omitempty"`
 }
 
 type errorMessage struct {

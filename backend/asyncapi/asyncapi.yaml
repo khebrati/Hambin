@@ -130,6 +130,9 @@ components:
           targetPositionMs:
             type: integer
             format: int64
+          requestId:
+            type: string
+            description: Echoes the requestId of the sync.request being answered so clients can ignore stale replies.
     Pong:
       name: pong
       title: Pong
@@ -157,7 +160,7 @@ components:
     PlaybackReport:
       name: playbackReport
       title: Playback report
-      description: Sent on connect, seek, play, pause, and every five seconds while active.
+      description: Sent on connect, seek, play, pause, and every three seconds while active.
       contentType: application/json
       payload:
         type: object
@@ -182,6 +185,9 @@ components:
         properties:
           type:
             const: sync.request
+          requestId:
+            type: string
+            description: Client-generated correlation id echoed on the matching sync.result.
           streamSessionId:
             type: string
           positionMs:

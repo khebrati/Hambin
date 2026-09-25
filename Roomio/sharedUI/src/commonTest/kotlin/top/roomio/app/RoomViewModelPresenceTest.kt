@@ -19,6 +19,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import top.roomio.app.room.RoomAction
 import top.roomio.app.room.RoomEffect
+import top.roomio.app.room.RoomPlaybackState
 import top.roomio.app.room.RoomViewModel
 import top.roomio.app.room.VoiceConnectionState
 import top.roomio.domain.party.Member
@@ -35,6 +36,7 @@ import top.roomio.domain.party.SessionAction
 import top.roomio.domain.party.SessionKeeper
 import top.roomio.domain.party.StreamInfo
 import top.roomio.domain.party.StreamState
+import top.roomio.domain.party.SyncStatus
 import top.roomio.domain.party.VoiceClient
 import top.roomio.domain.party.VoiceEvent
 import top.roomio.domain.party.VoiceSession
@@ -248,8 +250,141 @@ class RoomViewModelPresenceTest {
             testScheduler.runCurrent()
 
             assertEquals(VoiceConnectionState.IDLE, viewModel.state.value.voiceState)
-            assertTrue(keeper.stops >= 1)
+            assertEquals(1, keeper.stopAndLeaves)
             assertTrue(effects.contains(RoomEffect.Left))
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun syncResultWithUnknownCorrelationIsIgnored() = runTest {
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+        try {
+            val client = RecordingRealtimeClient()
+            val repository = snapshotRepository(
+                RoomSnapshot(room, listOf(owner, guest), StreamInfo("s", 1, StreamState.ACTIVE, "https://example/video")),
+            )
+            val viewModel = RoomViewModel("room", asOwner = false, testSessionRepository, repository, client, testVoiceClient, testSessionKeeper)
+            val effects = mutableListOf<RoomEffect>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                viewModel.effects.collect { effects += it }
+            }
+
+            viewModel.onAction(RoomAction.SyncClicked)
+            testScheduler.runCurrent()
+            assertEquals(1, client.syncRequests.size)
+            val requestId = client.syncRequests.single().second
+            assertTrue(requestId.isNotEmpty(), "sync request must carry a correlation id")
+
+            // A late reply for a different request must not move the player.
+            client.emit(RealtimeEvent.SyncResult(SyncStatus.APPLIED, 9_999, "someone-else"))
+            testScheduler.runCurrent()
+            assertFalse(effects.any { it is RoomEffect.SeekTo }, "stale sync result must not seek")
+            assertEquals(0L, viewModel.state.value.positionMs)
+
+            client.emit(RealtimeEvent.SyncResult(SyncStatus.APPLIED, 4_321, requestId))
+            testScheduler.runCurrent()
+            assertTrue(effects.contains(RoomEffect.SeekTo(4_321)))
+            assertTrue(effects.contains(RoomEffect.SyncCompleted))
+            assertEquals(4_321L, viewModel.state.value.positionMs)
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun syncWithoutActiveStreamReportsUnavailable() = runTest {
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+        try {
+            val repository = snapshotRepository(RoomSnapshot(room, listOf(owner, guest), emptyStream()))
+            val viewModel = RoomViewModel("room", asOwner = false, testSessionRepository, repository, testRealtimeClient, testVoiceClient, testSessionKeeper)
+            val effects = mutableListOf<RoomEffect>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                viewModel.effects.collect { effects += it }
+            }
+
+            viewModel.onAction(RoomAction.SyncClicked)
+            testScheduler.runCurrent()
+
+            assertTrue(effects.contains(RoomEffect.SyncUnavailable))
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun staleStreamEventsAreIgnoredByRevision() = runTest {
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+        try {
+            val events = MutableSharedFlow<RealtimeEvent>()
+            val repository = snapshotRepository(
+                RoomSnapshot(room, listOf(owner, guest), StreamInfo("s1", 1, StreamState.ACTIVE, "https://example/video")),
+            )
+            val viewModel = RoomViewModel("room", asOwner = false, testSessionRepository, repository, emittingRealtimeClient(events), testVoiceClient, testSessionKeeper)
+
+            events.emit(RealtimeEvent.StreamAborted("s1", 2))
+            testScheduler.runCurrent()
+            assertEquals(RoomPlaybackState.ABORTED, viewModel.state.value.playback)
+
+            // A redelivered older started event must not resurrect playback.
+            events.emit(RealtimeEvent.StreamStarted("s1", 1, "https://example/video"))
+            testScheduler.runCurrent()
+            assertEquals(RoomPlaybackState.ABORTED, viewModel.state.value.playback)
+
+            // A newer start still applies.
+            events.emit(RealtimeEvent.StreamStarted("s2", 3, "https://example/video"))
+            testScheduler.runCurrent()
+            assertEquals(RoomPlaybackState.PLAYING, viewModel.state.value.playback)
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun voiceDisconnectClearsStaleSpeakingIndicator() = runTest {
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+        try {
+            val voice = EmittingVoiceClient()
+            val repository = snapshotRepository(RoomSnapshot(room, listOf(owner, guest), emptyStream()))
+            val viewModel = RoomViewModel("room", asOwner = true, testSessionRepository, repository, testRealtimeClient, voice, testSessionKeeper)
+
+            viewModel.onAction(RoomAction.JoinVoiceClicked)
+            testScheduler.runCurrent()
+
+            voice.emit(VoiceEvent.SpeakersChanged(setOf(owner.membershipId)))
+            testScheduler.runCurrent()
+            assertTrue(viewModel.state.value.model.participants.first { it.isHost }.isSpeaking)
+
+            voice.emit(VoiceEvent.Disconnected)
+            testScheduler.runCurrent()
+            assertFalse(
+                viewModel.state.value.model.participants.first { it.isHost }.isSpeaking,
+                "a dropped voice session must not leave the speaking indicator stuck",
+            )
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun voiceFailureClearsStaleSpeakingIndicator() = runTest {
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+        try {
+            val voice = EmittingVoiceClient()
+            val repository = snapshotRepository(RoomSnapshot(room, listOf(owner, guest), emptyStream()))
+            val viewModel = RoomViewModel("room", asOwner = true, testSessionRepository, repository, testRealtimeClient, voice, testSessionKeeper)
+
+            viewModel.onAction(RoomAction.JoinVoiceClicked)
+            testScheduler.runCurrent()
+
+            voice.emit(VoiceEvent.SpeakersChanged(setOf(owner.membershipId)))
+            testScheduler.runCurrent()
+            assertTrue(viewModel.state.value.model.participants.first { it.isHost }.isSpeaking)
+
+            voice.emit(VoiceEvent.Failed("boom"))
+            testScheduler.runCurrent()
+            assertFalse(viewModel.state.value.model.participants.first { it.isHost }.isSpeaking)
         } finally {
             Dispatchers.resetMain()
         }
@@ -272,9 +407,39 @@ class RoomViewModelPresenceTest {
         override suspend fun connect(roomId: String): RealtimeSession = object : RealtimeSession {
             override val events: Flow<RealtimeEvent> = events
             override suspend fun reportPlayback(streamSessionId: String, positionMs: Long, playing: Boolean) = Unit
-            override suspend fun requestSync(streamSessionId: String, positionMs: Long) = Unit
+            override suspend fun requestSync(streamSessionId: String, positionMs: Long, requestId: String) = Unit
             override suspend fun close() = Unit
         }
+    }
+
+    /** A voice client whose events are driven directly by the test. */
+    private class EmittingVoiceClient : VoiceClient {
+        private val mutableEvents = MutableSharedFlow<VoiceEvent>(extraBufferCapacity = 8)
+
+        override suspend fun connect(token: VoiceToken): VoiceSession = object : VoiceSession {
+            override val events: Flow<VoiceEvent> = mutableEvents
+            override fun setMicrophoneEnabled(enabled: Boolean) = Unit
+            override suspend fun disconnect() = Unit
+        }
+
+        suspend fun emit(event: VoiceEvent) = mutableEvents.emit(event)
+    }
+
+    /** Emits events on demand and records sync requests so correlation can be asserted. */
+    private class RecordingRealtimeClient : RealtimeClient {
+        private val mutableEvents = MutableSharedFlow<RealtimeEvent>(extraBufferCapacity = 16)
+        val syncRequests = mutableListOf<Pair<Long, String>>()
+
+        override suspend fun connect(roomId: String): RealtimeSession = object : RealtimeSession {
+            override val events: Flow<RealtimeEvent> = mutableEvents
+            override suspend fun reportPlayback(streamSessionId: String, positionMs: Long, playing: Boolean) = Unit
+            override suspend fun requestSync(streamSessionId: String, positionMs: Long, requestId: String) {
+                syncRequests += positionMs to requestId
+            }
+            override suspend fun close() = Unit
+        }
+
+        suspend fun emit(event: RealtimeEvent) = mutableEvents.emit(event)
     }
 
     private class RecordingSessionKeeper : SessionKeeper {

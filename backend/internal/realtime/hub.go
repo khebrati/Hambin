@@ -81,10 +81,11 @@ func (h *Hub) Publish(_ context.Context, event events.Event) error {
 // Serve runs the connection lifecycle for an accepted WebSocket.
 func (h *Hub) Serve(ctx context.Context, ws *websocket.Conn, ticket Ticket) error {
 	connection := &Connection{
-		hub:    h,
-		ws:     ws,
-		ticket: ticket,
-		send:   make(chan []byte, sendBufferSize),
+		hub:      h,
+		ws:       ws,
+		ticket:   ticket,
+		send:     make(chan []byte, sendBufferSize),
+		overflow: make(chan struct{}),
 	}
 
 	// A member may briefly have overlapping connections while reconnecting
@@ -203,6 +204,12 @@ type Connection struct {
 	ws     *websocket.Conn
 	ticket Ticket
 	send   chan []byte
+
+	// overflow is closed the first time the send buffer fills. The write pump
+	// then closes the socket so the client reconnects and reseeds from a full
+	// snapshot rather than silently missing durable events.
+	overflow  chan struct{}
+	closeOnce sync.Once
 }
 
 func (c *Connection) readPump(ctx context.Context) error {
@@ -244,7 +251,12 @@ func (c *Connection) handle(message clientMessage) {
 			return
 		}
 		result := c.hub.syncEngine.Sync(c.ticket.RoomID, message.StreamSessionID, message.PositionMs)
-		c.enqueueMust(syncResultMessage{Type: serverSyncResult, Status: result.Status, TargetPositionMs: result.TargetMs})
+		c.enqueueMust(syncResultMessage{
+			Type:             serverSyncResult,
+			Status:           result.Status,
+			TargetPositionMs: result.TargetMs,
+			RequestID:        message.RequestID,
+		})
 	case clientAck:
 		// Delivery is at-least-once; acknowledgements need no server state.
 	default:
@@ -256,6 +268,12 @@ func (c *Connection) writePump(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
+			return
+		case <-c.overflow:
+			// The consumer cannot keep up. Drop the connection so the client
+			// reconnects and receives a fresh snapshot; a dropped durable event
+			// would otherwise go unnoticed until the next reconnect.
+			_ = c.ws.CloseNow()
 			return
 		case message, ok := <-c.send:
 			if !ok {
@@ -275,8 +293,12 @@ func (c *Connection) enqueue(message []byte) {
 	select {
 	case c.send <- message:
 	default:
-		// Drop for slow clients; they recover from the next snapshot/reseed.
+		c.signalOverflow()
 	}
+}
+
+func (c *Connection) signalOverflow() {
+	c.closeOnce.Do(func() { close(c.overflow) })
 }
 
 func (c *Connection) enqueueMust(value any) {

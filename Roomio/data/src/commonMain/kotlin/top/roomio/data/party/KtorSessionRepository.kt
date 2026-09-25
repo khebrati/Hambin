@@ -38,8 +38,20 @@ class KtorSessionRepository(
                 }
                 // The saved profile changed after the identity was created; push
                 // the new name/avatar to the backend so room membership stays
-                // current.
-                return@normalized current.copy(identity = updateProfile(name, avatar, language))
+                // current. An expired access token is refreshed transparently.
+                // If the whole session is unrecoverable the store is cleared, so
+                // register a fresh identity instead of staying stuck offline.
+                val updated = try {
+                    updateProfile(name, avatar, language)
+                } catch (cancellation: CancellationException) {
+                    throw cancellation
+                } catch (error: Throwable) {
+                    if (tokens.current() != null) throw error
+                    null
+                }
+                if (updated != null) {
+                    return@normalized current.copy(identity = updated)
+                }
             }
             val session = http.post("${config.baseUrl}/v1/guest-sessions") {
                 contentType(ContentType.Application.Json)
@@ -71,7 +83,7 @@ class KtorSessionRepository(
     }
 
     override suspend fun updateProfile(name: String, avatar: String, language: String): GuestIdentity =
-        normalized {
+        authed {
             val identity = http.patch("${config.baseUrl}/v1/guest-sessions/profile") {
                 contentType(ContentType.Application.Json)
                 setBody(GuestSessionRequest(name = name, avatar = avatar, language = language))
@@ -79,6 +91,24 @@ class KtorSessionRepository(
             tokens.updateIdentity(identity)
             identity
         }
+
+    /**
+     * Runs an authenticated request, refreshing the session once when the
+     * access token is stale. Without this, a profile update after the access
+     * token's short TTL fails forever and blocks room creation.
+     */
+    private suspend fun <T> authed(block: suspend () -> T): T = try {
+        block()
+    } catch (cancellation: CancellationException) {
+        throw cancellation
+    } catch (error: Throwable) {
+        val partyError = error.asPartyException()
+        if (partyError.isAuthFailure() && runCatching { refresh() }.isSuccess) {
+            block()
+        } else {
+            throw partyError
+        }
+    }
 
     /** Normalizes transport failures to [PartyException] so callers handle one error type. */
     private suspend fun <T> normalized(block: suspend () -> T): T = try {

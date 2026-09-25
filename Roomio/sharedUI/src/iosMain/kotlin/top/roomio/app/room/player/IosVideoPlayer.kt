@@ -13,3 +13,8 @@ internal actual fun VideoPlayerSurface(
     handle: VideoPlayerHandle?,
     modifier: Modifier,
 ) = Unit
+
+@Composable
+internal actual fun rememberPlatformSubtitlePicker(
+    onSubtitlePicked: (SubtitleFile) -> Unit,
+): (() -> Unit)? = null

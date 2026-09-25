@@ -44,7 +44,7 @@ internal fun parseRealtimeFrame(json: Json, text: String): RealtimeEvent {
         "sync.result" -> {
             val dto = json.decodeFromJsonElement(SyncResultMessageDto.serializer(), element)
             log.i("sync.result status=${dto.status} target=${dto.targetPositionMs}ms raw=${text.take(MAX_FRAME_LOG_CHARS)}")
-            RealtimeEvent.SyncResult(dto.status.toSyncStatus(), dto.targetPositionMs)
+            RealtimeEvent.SyncResult(dto.status.toSyncStatus(), dto.targetPositionMs, dto.requestId)
         }
         "error" -> {
             val dto = json.decodeFromJsonElement(ErrorMessageDto.serializer(), element)

@@ -37,6 +37,8 @@ sealed interface RealtimeEvent {
     data class SyncResult(
         val status: SyncStatus,
         val targetPositionMs: Long,
+        /** Echoes the [RealtimeSession.requestSync] correlation id when the server supports it. */
+        val requestId: String = "",
     ) : RealtimeEvent
 
     data class Failure(

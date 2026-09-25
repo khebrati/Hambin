@@ -161,3 +161,11 @@
 - **Rationale:** A user who swipes the app away has left the party. Without an explicit leave the backend only saw a dropped socket, marked the member *absent* during the reconnect grace period, and kept them in the participant list as "away" even though they were gone.
 - **Consequence:** The service exposes a task-removal hook that ends the session (`SessionKeeper.stopAndLeave`). The in-process session releases the membership first and only then stops the service, so the process stays alive long enough to deliver the request. When the owner closes the app, the backend emits `member.left` plus `owner.presence: false`; guests and the owner are removed from the voice party list and the owner-away banner remains until the same owner rejoins, consistent with DD-005.
 - **Scope:** Android. Other platforms have no background session to keep alive, so process exit continues to release the socket without an explicit leave.
+
+## DD-020: Local Subtitle Selection in the Android Player
+
+- **Status:** Approved for the Roomio Android client
+- **Decision:** The Android player supports soft subtitle tracks exposed by the video URL, including supported embedded/container tracks and HLS subtitle renditions, plus user-selected local subtitle files. Hardcoded subtitles are already part of the video image and need no separate track.
+- **Interaction consequence:** A subtitles control is available in the room player controls. It lists available tracks, allows subtitles to be turned off, and opens Android's document picker for a local subtitle file.
+- **Scope consequence:** Subtitle choices apply only to the current device, consistent with independent local playback. The Android document picker and Media3 track selection remain behind the shared player/platform boundaries; other targets retain their existing placeholder player behavior.
+- **Supported local formats:** SubRip (`.srt`), WebVTT (`.vtt`), SSA/ASS (`.ssa`/`.ass`), and TTML (`.ttml`, `.dfxp`, `.xml`) as supported by Media3.

@@ -47,6 +47,7 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.VolumeUp
@@ -59,6 +60,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DividerDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -70,6 +72,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -97,7 +100,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -117,6 +122,8 @@ import roomio.sharedui.generated.resources.*
 import top.roomio.app.platform.rememberFullscreenController
 import top.roomio.app.room.player.VideoPlayerHandle
 import top.roomio.app.room.player.VideoPlayerSurface
+import top.roomio.app.room.player.SubtitleTrack
+import top.roomio.app.room.player.rememberPlatformSubtitlePicker
 import top.roomio.app.room.player.rememberPlatformVideoPlayer
 import top.roomio.app.theme.AppTheme
 import top.roomio.app.theme.LocalThemeIsDark
@@ -245,6 +252,13 @@ internal fun RoomScreen(
     } else {
         null
     }
+    var subtitleDialogOpen by remember { mutableStateOf(false) }
+    var resumePlaybackAfterSubtitlePicker by remember { mutableStateOf(false) }
+    val pickSubtitleFile = rememberPlatformSubtitlePicker { subtitleFile ->
+        playerHandle?.addSubtitle(subtitleFile)
+        if (resumePlaybackAfterSubtitlePicker) playerHandle?.play()
+        resumePlaybackAfterSubtitlePicker = false
+    }
     val player: @Composable (Modifier) -> Unit = playerContent ?: { playerModifier ->
         val handle = playerHandle
         if (handle != null) {
@@ -323,6 +337,7 @@ internal fun RoomScreen(
             videoAspectRatio = state.videoAspectRatio,
             volume = state.volume,
             micMuted = state.micMuted,
+            subtitleTracks = state.subtitleTracks,
             player = player,
             snackbarHost = snackbarHost,
             onTogglePlayback = {
@@ -348,6 +363,7 @@ internal fun RoomScreen(
             onToggleFullscreen = { onAction(RoomAction.ToggleFullscreenClicked) },
             onSync = { onAction(RoomAction.SyncClicked) },
             onToggleMic = { onAction(RoomAction.ToggleMicClicked) },
+            onOpenSubtitles = { subtitleDialogOpen = true },
         )
     } else {
         Scaffold(
@@ -392,6 +408,7 @@ internal fun RoomScreen(
                     isLive = state.isLive,
                     volume = state.volume,
                     micMuted = state.micMuted,
+                    subtitleTracks = state.subtitleTracks,
                     playerError = state.playerError,
                     player = player,
                     onVideoUrlChange = { onAction(RoomAction.VideoUrlChanged(it)) },
@@ -429,6 +446,7 @@ internal fun RoomScreen(
                     onToggleFullscreen = { onAction(RoomAction.ToggleFullscreenClicked) },
                     onSync = { onAction(RoomAction.SyncClicked) },
                     onToggleMic = { onAction(RoomAction.ToggleMicClicked) },
+                    onOpenSubtitles = { subtitleDialogOpen = true },
                 )
                 if (state.hasPlayer) {
                     Spacer(Modifier.height(RoomioDesignSystem.spacing.small))
@@ -444,6 +462,7 @@ internal fun RoomScreen(
                     participants = state.model.participants,
                     micMuted = state.micMuted,
                     voiceState = state.voiceState,
+                    videoUrl = state.videoUrl,
                     streamActive = state.hasPlayer,
                     isOwner = state.isOwner,
                     ownerPresent = state.model.ownerPresent,
@@ -496,11 +515,25 @@ internal fun RoomScreen(
         )
     }
     if (state.linkOpen) {
-        RoomDialog(
-            title = stringResource(Res.string.current_video_link),
-            body = "https://roomio.app/watch/${state.model.partyCode.lowercase()}",
-            confirm = stringResource(Res.string.done),
+        CurrentVideoLinkDialog(
+            videoUrl = state.videoUrl,
             onDismiss = { onAction(RoomAction.LinkDismissed) },
+        )
+    }
+    if (subtitleDialogOpen) {
+        SubtitleSelectionDialog(
+            tracks = state.subtitleTracks,
+            canChooseFile = pickSubtitleFile != null,
+            onDismiss = { subtitleDialogOpen = false },
+            onSelect = { trackId ->
+                playerHandle?.selectSubtitle(trackId)
+                subtitleDialogOpen = false
+            },
+            onChooseFile = {
+                subtitleDialogOpen = false
+                resumePlaybackAfterSubtitlePicker = state.playback == RoomPlaybackState.PLAYING
+                pickSubtitleFile?.invoke()
+            },
         )
     }
     if (state.leaveOpen) {
@@ -667,6 +700,7 @@ private fun CinemaCard(
     isLive: Boolean,
     volume: Float,
     micMuted: Boolean,
+    subtitleTracks: List<SubtitleTrack>,
     playerError: String?,
     player: @Composable (Modifier) -> Unit,
     onVideoUrlChange: (String) -> Unit,
@@ -681,6 +715,7 @@ private fun CinemaCard(
     onToggleFullscreen: () -> Unit,
     onSync: () -> Unit,
     onToggleMic: () -> Unit,
+    onOpenSubtitles: () -> Unit,
 ) {
     val hasPlayer = playback in setOf(RoomPlaybackState.PLAYING, RoomPlaybackState.PAUSED, RoomPlaybackState.BUFFERING)
     Card(
@@ -717,6 +752,7 @@ private fun CinemaCard(
                     isLive = isLive,
                     volume = volume,
                     micMuted = micMuted,
+                    subtitleTracks = subtitleTracks,
                     onTogglePlayback = onTogglePlayback,
                     onPositionChange = onPositionChange,
                     onSkip = onSkip,
@@ -725,6 +761,7 @@ private fun CinemaCard(
                     onToggleFullscreen = onToggleFullscreen,
                     onSync = onSync,
                     onToggleMic = onToggleMic,
+                    onOpenSubtitles = onOpenSubtitles,
                 )
                 playback == RoomPlaybackState.LOADING -> LoadingCinema()
                 playback == RoomPlaybackState.ERROR && videoUrl.isNotBlank() -> PlayerErrorCinema(playerError, onRetry)
@@ -964,6 +1001,7 @@ private fun PlayerControls(
     isLive: Boolean,
     volume: Float,
     micMuted: Boolean,
+    subtitleTracks: List<SubtitleTrack>,
     onTogglePlayback: () -> Unit,
     onPositionChange: (Long) -> Unit,
     onSkip: (Float) -> Unit,
@@ -972,6 +1010,7 @@ private fun PlayerControls(
     onToggleFullscreen: () -> Unit,
     onSync: () -> Unit,
     onToggleMic: () -> Unit,
+    onOpenSubtitles: () -> Unit,
 ) {
     val colors = RoomioDesignSystem.colors
     Column(
@@ -1011,7 +1050,7 @@ private fun PlayerControls(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     PlaybackTime(positionMs, durationMs, isLive, Modifier.weight(1f))
                     TransportControls(paused, isLive, onTogglePlayback, onSkip)
-                    VolumeControls(volume, micMuted, onVolumeChange, onToggleVolume, onToggleFullscreen, onSync, onToggleMic, Modifier)
+                    VolumeControls(volume, micMuted, subtitleTracks.any(SubtitleTrack::selected), onOpenSubtitles, onVolumeChange, onToggleVolume, onToggleFullscreen, onSync, onToggleMic, Modifier)
                 }
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -1019,7 +1058,7 @@ private fun PlayerControls(
                         PlaybackTime(positionMs, durationMs, isLive, Modifier.weight(1f))
                         TransportControls(paused, isLive, onTogglePlayback, onSkip)
                     }
-                    VolumeControls(volume, micMuted, onVolumeChange, onToggleVolume, onToggleFullscreen, onSync, onToggleMic, Modifier.fillMaxWidth())
+                    VolumeControls(volume, micMuted, subtitleTracks.any(SubtitleTrack::selected), onOpenSubtitles, onVolumeChange, onToggleVolume, onToggleFullscreen, onSync, onToggleMic, Modifier.fillMaxWidth())
                 }
             }
         }
@@ -1111,6 +1150,8 @@ private fun TransportControls(
 private fun VolumeControls(
     volume: Float,
     micMuted: Boolean,
+    subtitlesSelected: Boolean,
+    onOpenSubtitles: () -> Unit,
     onVolumeChange: (Float) -> Unit,
     onToggleVolume: () -> Unit,
     onToggleFullscreen: () -> Unit,
@@ -1120,6 +1161,14 @@ private fun VolumeControls(
 ) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End) {
         MaterialIconButton(Icons.Filled.Sync, stringResource(Res.string.sync_to_room), size = 40.dp, iconSize = 20.dp, onClick = onSync)
+        MaterialIconButton(
+            Icons.Filled.Subtitles,
+            stringResource(Res.string.subtitles),
+            tonal = subtitlesSelected,
+            size = 40.dp,
+            iconSize = 20.dp,
+            onClick = onOpenSubtitles,
+        )
         MaterialIconButton(
             if (micMuted) Icons.Filled.MicOff else Icons.Filled.Mic,
             stringResource(if (micMuted) Res.string.unmute else Res.string.mute),
@@ -1157,6 +1206,7 @@ private fun FullscreenCinema(
     videoAspectRatio: Float,
     volume: Float,
     micMuted: Boolean,
+    subtitleTracks: List<SubtitleTrack>,
     player: @Composable (Modifier) -> Unit,
     snackbarHost: SnackbarHostState,
     onTogglePlayback: () -> Unit,
@@ -1167,6 +1217,7 @@ private fun FullscreenCinema(
     onToggleFullscreen: () -> Unit,
     onSync: () -> Unit,
     onToggleMic: () -> Unit,
+    onOpenSubtitles: () -> Unit,
 ) {
     var controlsVisible by remember { mutableStateOf(true) }
     LaunchedEffect(controlsVisible) {
@@ -1218,6 +1269,7 @@ private fun FullscreenCinema(
                     isLive = isLive,
                     volume = volume,
                     micMuted = micMuted,
+                    subtitleTracks = subtitleTracks,
                     onTogglePlayback = onTogglePlayback,
                     onPositionChange = onPositionChange,
                     onSkip = onSkip,
@@ -1226,6 +1278,7 @@ private fun FullscreenCinema(
                     onToggleFullscreen = onToggleFullscreen,
                     onSync = onSync,
                     onToggleMic = onToggleMic,
+                    onOpenSubtitles = onOpenSubtitles,
                     modifier = Modifier.align(Alignment.BottomCenter),
                 )
             }
@@ -1248,6 +1301,7 @@ private fun FullscreenControls(
     isLive: Boolean,
     volume: Float,
     micMuted: Boolean,
+    subtitleTracks: List<SubtitleTrack>,
     onTogglePlayback: () -> Unit,
     onPositionChange: (Long) -> Unit,
     onSkip: (Float) -> Unit,
@@ -1256,6 +1310,7 @@ private fun FullscreenControls(
     onToggleFullscreen: () -> Unit,
     onSync: () -> Unit,
     onToggleMic: () -> Unit,
+    onOpenSubtitles: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = RoomioDesignSystem.colors
@@ -1297,7 +1352,7 @@ private fun FullscreenControls(
                     PlaybackTime(positionMs, durationMs, isLive, Modifier.weight(1f))
                     TransportControls(paused, isLive, onTogglePlayback, onSkip)
                     FullscreenActionControls(
-                        volume, micMuted, onVolumeChange, onToggleVolume, onSync, onToggleMic, onToggleFullscreen,
+                        volume, micMuted, subtitleTracks.any(SubtitleTrack::selected), onOpenSubtitles, onVolumeChange, onToggleVolume, onSync, onToggleMic, onToggleFullscreen,
                         Modifier,
                     )
                 }
@@ -1308,7 +1363,7 @@ private fun FullscreenControls(
                         TransportControls(paused, isLive, onTogglePlayback, onSkip)
                     }
                     FullscreenActionControls(
-                        volume, micMuted, onVolumeChange, onToggleVolume, onSync, onToggleMic, onToggleFullscreen,
+                        volume, micMuted, subtitleTracks.any(SubtitleTrack::selected), onOpenSubtitles, onVolumeChange, onToggleVolume, onSync, onToggleMic, onToggleFullscreen,
                         Modifier.fillMaxWidth(),
                     )
                 }
@@ -1321,6 +1376,8 @@ private fun FullscreenControls(
 private fun FullscreenActionControls(
     volume: Float,
     micMuted: Boolean,
+    subtitlesSelected: Boolean,
+    onOpenSubtitles: () -> Unit,
     onVolumeChange: (Float) -> Unit,
     onToggleVolume: () -> Unit,
     onSync: () -> Unit,
@@ -1330,6 +1387,14 @@ private fun FullscreenActionControls(
 ) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End) {
         MaterialIconButton(Icons.Filled.Sync, stringResource(Res.string.sync_to_room), size = 40.dp, iconSize = 20.dp, onClick = onSync)
+        MaterialIconButton(
+            Icons.Filled.Subtitles,
+            stringResource(Res.string.subtitles),
+            tonal = subtitlesSelected,
+            size = 40.dp,
+            iconSize = 20.dp,
+            onClick = onOpenSubtitles,
+        )
         MaterialIconButton(
             if (micMuted) Icons.Filled.MicOff else Icons.Filled.Mic,
             stringResource(if (micMuted) Res.string.unmute else Res.string.mute),
@@ -1355,6 +1420,74 @@ private fun FullscreenActionControls(
             ),
         )
         MaterialIconButton(Icons.Filled.FullscreenExit, stringResource(Res.string.exit_fullscreen), size = 40.dp, iconSize = 20.dp, onClick = onToggleFullscreen)
+    }
+}
+
+@Composable
+private fun SubtitleSelectionDialog(
+    tracks: List<SubtitleTrack>,
+    canChooseFile: Boolean,
+    onDismiss: () -> Unit,
+    onSelect: (String?) -> Unit,
+    onChooseFile: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(Res.string.subtitles)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(RoomioDesignSystem.spacing.extraSmall)) {
+                if (tracks.isEmpty()) {
+                    Text(
+                        stringResource(Res.string.no_subtitle_tracks),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    SubtitleChoice(
+                        label = stringResource(Res.string.subtitles_off),
+                        selected = tracks.none(SubtitleTrack::selected),
+                        onClick = { onSelect(null) },
+                    )
+                    tracks.forEach { track ->
+                        SubtitleChoice(
+                            label = track.label,
+                            selected = track.selected,
+                            onClick = { onSelect(track.id) },
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (canChooseFile) {
+                    TextButton(onClick = onChooseFile) {
+                        Icon(Icons.Filled.Subtitles, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(Res.string.choose_subtitle_file))
+                    }
+                }
+                TextButton(onClick = onDismiss) { Text(stringResource(Res.string.done)) }
+            }
+        },
+    )
+}
+
+@Composable
+private fun SubtitleChoice(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .clickable(onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(selected = selected, onClick = onClick)
+        Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
     }
 }
 
@@ -1405,6 +1538,7 @@ private fun RoomSupportPanel(
     participants: List<RoomParticipant>,
     micMuted: Boolean,
     voiceState: VoiceConnectionState,
+    videoUrl: String,
     streamActive: Boolean,
     isOwner: Boolean,
     ownerPresent: Boolean,
@@ -1433,7 +1567,7 @@ private fun RoomSupportPanel(
             }
             if (streamActive) {
                 HorizontalDivider(color = DividerDefaults.color)
-                SourceRow(onShowLink)
+                SourceRow(videoUrl, onShowLink)
             }
             if (isOwner && ownerPresent && streamActive) {
                 Button(
@@ -1591,14 +1725,21 @@ private fun VoicePanel(
 }
 
 @Composable
-private fun SourceRow(onShowLink: () -> Unit) {
+private fun SourceRow(videoUrl: String, onShowLink: () -> Unit) {
+    val fileName = videoUrl.videoFileName() ?: stringResource(Res.string.video_link)
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(stringResource(Res.string.video_source), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(stringResource(Res.string.aurora_file_name), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(fileName, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         MaterialIconButton(Icons.Filled.ContentCopy, stringResource(Res.string.current_video_link), size = 40.dp, iconSize = 22.dp, onClick = onShowLink)
     }
+}
+
+private fun String.videoFileName(): String? {
+    val urlWithoutSuffix = substringBefore('#').substringBefore('?')
+    val path = urlWithoutSuffix.substringAfter("://", missingDelimiterValue = "").substringAfter('/', missingDelimiterValue = "")
+    return path.substringAfterLast('/').takeIf(String::isNotBlank)
 }
 
 @Composable
@@ -1823,12 +1964,81 @@ private fun InviteShareOption(
 }
 
 @Composable
-private fun RoomDialog(title: String, body: String, confirm: String, onDismiss: () -> Unit) {
+private fun CurrentVideoLinkDialog(
+    videoUrl: String,
+    onDismiss: () -> Unit,
+) {
+    val clipboard = LocalClipboardManager.current
+    var copied by remember(videoUrl) { mutableStateOf(false) }
+    var copyFailed by remember(videoUrl) { mutableStateOf(false) }
+    val copyLabel = stringResource(if (copied) Res.string.link_copied else Res.string.copy_link)
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = { Text(body) },
-        confirmButton = { TextButton(onClick = onDismiss) { Text(confirm) } },
+        title = { Text(stringResource(Res.string.current_video_link)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(RoomioDesignSystem.spacing.small)) {
+                Text(
+                    stringResource(Res.string.current_video_link_description),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(
+                    verticalAlignment = Alignment.Top,
+                    horizontalArrangement = Arrangement.spacedBy(RoomioDesignSystem.spacing.extraSmall),
+                ) {
+                    OutlinedTextField(
+                        value = videoUrl,
+                        onValueChange = {},
+                        modifier = Modifier.weight(1f),
+                        readOnly = true,
+                        minLines = 2,
+                        maxLines = 4,
+                        label = { Text(stringResource(Res.string.video_link)) },
+                    )
+                    FilledTonalIconButton(
+                        onClick = {
+                            runCatching { clipboard.setText(AnnotatedString(videoUrl)) }
+                                .onSuccess {
+                                    copied = true
+                                    copyFailed = false
+                                }
+                                .onFailure {
+                                    copied = false
+                                    copyFailed = true
+                                }
+                        },
+                        enabled = videoUrl.isNotBlank(),
+                        modifier = Modifier.semantics { contentDescription = copyLabel },
+                    ) {
+                        Icon(
+                            imageVector = if (copied) Icons.Filled.Check else Icons.Filled.ContentCopy,
+                            contentDescription = null,
+                        )
+                    }
+                }
+                if (copied) {
+                    Text(
+                        text = stringResource(Res.string.video_link_copied),
+                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                if (copyFailed) {
+                    Text(
+                        text = stringResource(Res.string.copy_video_link_unavailable_details),
+                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(Res.string.done))
+            }
+        },
     )
 }
 

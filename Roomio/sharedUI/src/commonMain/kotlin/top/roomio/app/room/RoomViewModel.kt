@@ -7,6 +7,8 @@ import dev.zacsweers.metro.Assisted
 import dev.zacsweers.metro.AssistedFactory
 import dev.zacsweers.metro.AssistedInject
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -16,8 +18,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlin.random.Random
 import top.roomio.app.room.player.VideoPlayerState
 import top.roomio.app.room.player.VideoPlayerStatus
+import top.roomio.app.room.player.SubtitleTrack
 import top.roomio.domain.party.Member
 import top.roomio.domain.party.PartyException
 import top.roomio.domain.party.RealtimeClient
@@ -52,6 +57,7 @@ internal data class RoomUiState(
     val isLive: Boolean = false,
     val videoAspectRatio: Float = 0f,
     val playerError: String? = null,
+    val subtitleTracks: List<SubtitleTrack> = emptyList(),
     val volume: Float = 0.72f,
     val micMuted: Boolean = false,
     val voiceState: VoiceConnectionState = VoiceConnectionState.IDLE,
@@ -135,6 +141,9 @@ internal class RoomViewModel(
     private var voiceWanted = false
     private var identityId: String? = null
     private var streamSessionId: String? = null
+    private var streamRevision = -1L
+    private var pendingSyncRequestId: String? = null
+    private var syncTimeoutJob: Job? = null
     private var members: List<Member> = emptyList()
     private var speakingMembershipIds: Set<String> = emptySet()
     private var closedByServer = false
@@ -182,6 +191,7 @@ internal class RoomViewModel(
                     isLive = playerState.isLive,
                     videoAspectRatio = playerState.videoAspectRatio,
                     playerError = playerState.error,
+                    subtitleTracks = playerState.subtitles,
                 )
             }
             RoomAction.InviteCopyFailed -> {
@@ -290,8 +300,13 @@ internal class RoomViewModel(
                 it.copy(model = it.model.copy(ownerPresent = asOwner || event.present))
             }
             is RealtimeEvent.StreamStarted -> {
+                if (event.revision <= streamRevision) {
+                    log.w("stream.started ignored: stale revision=${event.revision} current=$streamRevision")
+                    return
+                }
+                streamRevision = event.revision
                 streamSessionId = event.sessionId
-                log.i("stream.started session=${event.sessionId} url=${event.url}")
+                log.i("stream.started session=${event.sessionId} revision=${event.revision} url=${event.url}")
                 mutableState.update {
                     it.copy(
                         videoUrl = event.url,
@@ -299,27 +314,48 @@ internal class RoomViewModel(
                     )
                 }
             }
-            is RealtimeEvent.StreamAborted -> mutableState.update {
-                it.copy(playback = RoomPlaybackState.ABORTED)
+            is RealtimeEvent.StreamAborted -> {
+                if (event.revision <= streamRevision) {
+                    log.w("stream.aborted ignored: stale revision=${event.revision} current=$streamRevision")
+                    return
+                }
+                streamRevision = event.revision
+                // The aborted session must never be a sync or report target.
+                streamSessionId = null
+                log.i("stream.aborted session=${event.sessionId} revision=${event.revision}")
+                mutableState.update { it.copy(playback = RoomPlaybackState.ABORTED) }
             }
             RealtimeEvent.RoomClosed -> {
                 closedByServer = true
                 mutableState.update { it.copy(playback = RoomPlaybackState.ABORTED) }
             }
-            is RealtimeEvent.SyncResult -> when (event.status) {
-                SyncStatus.APPLIED -> {
-                    log.i("sync.result APPLIED target=${event.targetPositionMs}ms → SeekTo + SyncCompleted")
-                    mutableState.update { it.copy(positionMs = event.targetPositionMs) }
-                    mutableEffects.tryEmit(RoomEffect.SeekTo(event.targetPositionMs))
-                    mutableEffects.tryEmit(RoomEffect.SyncCompleted)
+            is RealtimeEvent.SyncResult -> {
+                val pending = pendingSyncRequestId
+                // An echoed requestId that does not match the in-flight request
+                // is a late reply for an earlier sync; applying it would yank the
+                // player unexpectedly. Empty ids are accepted for compatibility
+                // with a server that does not echo the correlation id.
+                if (event.requestId.isNotEmpty() && event.requestId != pending) {
+                    log.w("sync.result ignored: stale requestId=${event.requestId} pending=$pending")
+                    return
                 }
-                SyncStatus.ALREADY_LEADING -> {
-                    log.i("sync.result ALREADY_LEADING → SyncCompleted")
-                    mutableEffects.tryEmit(RoomEffect.SyncCompleted)
-                }
-                SyncStatus.UNAVAILABLE -> {
-                    log.i("sync.result UNAVAILABLE → SyncUnavailable")
-                    mutableEffects.tryEmit(RoomEffect.SyncUnavailable)
+                pendingSyncRequestId = null
+                syncTimeoutJob?.cancel()
+                when (event.status) {
+                    SyncStatus.APPLIED -> {
+                        log.i("sync.result APPLIED target=${event.targetPositionMs}ms → SeekTo + SyncCompleted")
+                        mutableState.update { it.copy(positionMs = event.targetPositionMs) }
+                        mutableEffects.tryEmit(RoomEffect.SeekTo(event.targetPositionMs))
+                        mutableEffects.tryEmit(RoomEffect.SyncCompleted)
+                    }
+                    SyncStatus.ALREADY_LEADING -> {
+                        log.i("sync.result ALREADY_LEADING → SyncCompleted")
+                        mutableEffects.tryEmit(RoomEffect.SyncCompleted)
+                    }
+                    SyncStatus.UNAVAILABLE -> {
+                        log.i("sync.result UNAVAILABLE → SyncUnavailable")
+                        mutableEffects.tryEmit(RoomEffect.SyncUnavailable)
+                    }
                 }
             }
             is RealtimeEvent.Failure -> log.w("realtime failure code=${event.code} message=${event.message}")
@@ -328,7 +364,14 @@ internal class RoomViewModel(
     }
 
     private fun applySnapshot(snapshot: RoomSnapshot) {
-        streamSessionId = snapshot.stream.sessionId.ifEmpty { null }
+        streamRevision = snapshot.stream.revision
+        // Only an active stream may be reported or synced to. An aborted
+        // session stays in the snapshot but must not be a target.
+        streamSessionId = if (snapshot.stream.state == StreamState.ACTIVE) {
+            snapshot.stream.sessionId.ifEmpty { null }
+        } else {
+            null
+        }
         members = snapshot.members
         val owner = members.firstOrNull { it.isOwner }
         val playback = when (snapshot.stream.state) {
@@ -433,7 +476,10 @@ internal class RoomViewModel(
     private fun leave() {
         mutableState.update { it.copy(leaveOpen = false, fullscreenMode = false) }
         disconnectVoice()
-        sessionKeeper.stop()
+        // The Android session keeper owns the authenticated leave request. Do
+        // not stop it first: onCleared() runs after navigation and must not lose
+        // the room context before stopAndLeave can release this membership.
+        sessionKeeper.stopAndLeave()
         // Navigation observes this effect, so leaving from the notification
         // returns the app to the home screen like the in-room leave button.
         mutableEffects.tryEmit(RoomEffect.Left)
@@ -479,16 +525,18 @@ internal class RoomViewModel(
      */
     private suspend fun runVoiceLoop() {
         while (voiceWanted && currentCoroutineContext().isActive) {
+            var session: VoiceSession? = null
             try {
                 val token = roomRepository.voiceToken(roomId)
-                val session = voiceClient.connect(token)
-                voice = session
-                session.setMicrophoneEnabled(!mutableState.value.micMuted)
+                val connected = voiceClient.connect(token)
+                session = connected
+                voice = connected
+                connected.setMicrophoneEnabled(!mutableState.value.micMuted)
                 mutableState.update { it.copy(voiceState = VoiceConnectionState.CONNECTED) }
                 // A microphone-capable foreground service keeps voice alive off-screen.
                 sessionKeeper.start(RoomSession(roomId, asOwner, voiceActive = true, micMuted = mutableState.value.micMuted))
                 log.i("voice connected room=$roomId")
-                session.events.collect { event -> handleVoiceEvent(event) }
+                connected.events.collect { event -> handleVoiceEvent(event) }
                 log.w("voice event flow ended room=$roomId")
             } catch (cancellation: CancellationException) {
                 throw cancellation
@@ -496,6 +544,13 @@ internal class RoomViewModel(
                 log.e("voice session failed room=$roomId: ${error.message ?: error::class.simpleName}")
             } finally {
                 voice = null
+                // A dead session can leave a stale speaking set behind.
+                clearSpeakingMembers()
+                // Release the room before reconnecting; the loop owns the session
+                // and must not leak the previous LiveKit room.
+                session?.let { dead ->
+                    withContext(NonCancellable) { runCatching { dead.disconnect() } }
+                }
             }
             if (voiceWanted) {
                 sessionKeeper.start(RoomSession(roomId, asOwner, voiceActive = false, micMuted = true))
@@ -523,9 +578,16 @@ internal class RoomViewModel(
     private fun handleVoiceEvent(event: VoiceEvent) {
         when (event) {
             VoiceEvent.Connected -> mutableState.update { it.copy(voiceState = VoiceConnectionState.CONNECTED) }
-            // The loop owns reconnection, so a drop only needs logging here.
-            VoiceEvent.Disconnected -> log.w("voice disconnected room=$roomId")
-            is VoiceEvent.Failed -> log.w("voice failed room=$roomId: ${event.reason}")
+            // The loop owns reconnection; clearing speakers prevents a stale
+            // "speaking" indicator from surviving the drop.
+            VoiceEvent.Disconnected -> {
+                log.w("voice disconnected room=$roomId")
+                clearSpeakingMembers()
+            }
+            is VoiceEvent.Failed -> {
+                log.w("voice failed room=$roomId: ${event.reason}")
+                clearSpeakingMembers()
+            }
             is VoiceEvent.SpeakersChanged -> {
                 speakingMembershipIds = event.speakingMembershipIds
                 refreshParticipants()
@@ -533,11 +595,18 @@ internal class RoomViewModel(
         }
     }
 
+    /** Drops the speaking indicator when voice ends, so it never stays stuck. */
+    private fun clearSpeakingMembers() {
+        if (speakingMembershipIds.isEmpty()) return
+        speakingMembershipIds = emptySet()
+        refreshParticipants()
+    }
+
     private fun disconnectVoice() {
         voiceWanted = false
         val session = voice
         voice = null
-        speakingMembershipIds = emptySet()
+        clearSpeakingMembers()
         mutableState.update { it.copy(voiceState = VoiceConnectionState.IDLE, micMuted = true) }
         if (session != null) {
             viewModelScope.launch { runCatching { session.disconnect() } }
@@ -547,19 +616,48 @@ internal class RoomViewModel(
     private fun requestSync() {
         val session = realtime
         val streamId = streamSessionId
-        val position = mutableState.value.positionMs
+        val current = mutableState.value
         when {
-            session == null -> log.w("sync skipped: realtime not connected room=$roomId")
-            streamId == null -> log.w("sync skipped: no active streamSessionId room=$roomId")
+            session == null -> {
+                log.w("sync skipped: realtime not connected room=$roomId")
+                mutableEffects.tryEmit(RoomEffect.SyncUnavailable)
+            }
+            streamId == null || !current.hasPlayer -> {
+                log.w("sync skipped: no active stream room=$roomId streamSessionId=$streamId playback=${current.playback}")
+                mutableEffects.tryEmit(RoomEffect.SyncUnavailable)
+            }
             else -> {
-                log.i("sync requested stream=$streamId position=${position}ms playback=${mutableState.value.playback}")
+                val requestId = newSyncRequestId()
+                pendingSyncRequestId = requestId
+                syncTimeoutJob?.cancel()
+                // The server answers immediately from in-memory telemetry; a
+                // missing reply means the request was lost. Surface it instead
+                // of leaving the user without feedback.
+                syncTimeoutJob = viewModelScope.launch {
+                    delay(SYNC_TIMEOUT_MS)
+                    if (pendingSyncRequestId == requestId) {
+                        pendingSyncRequestId = null
+                        log.w("sync timed out requestId=$requestId room=$roomId")
+                        mutableEffects.tryEmit(RoomEffect.SyncUnavailable)
+                    }
+                }
+                log.i("sync requested stream=$streamId position=${current.positionMs}ms requestId=$requestId")
                 viewModelScope.launch {
-                    runCatching { session.requestSync(streamId, position) }
-                        .onFailure { error -> log.e("sync request failed: ${error.message ?: error::class.simpleName}") }
+                    runCatching { session.requestSync(streamId, current.positionMs, requestId) }
+                        .onFailure { error ->
+                            log.e("sync request failed: ${error.message ?: error::class.simpleName}")
+                            if (pendingSyncRequestId == requestId) {
+                                pendingSyncRequestId = null
+                                syncTimeoutJob?.cancel()
+                                mutableEffects.tryEmit(RoomEffect.SyncUnavailable)
+                            }
+                        }
                 }
             }
         }
     }
+
+    private fun newSyncRequestId(): String = "sync-" + Random.nextLong().toULong().toString(16)
 
     private suspend fun reportLoop() {
         var skipLogged = false
@@ -576,18 +674,17 @@ internal class RoomViewModel(
                 continue
             }
             skipLogged = false
-            val reportedPositionMs = current.positionMs + REPORT_ROUND_TRIP_COMPENSATION_MS
-            log.d("report> stream=$streamId pos=${current.positionMs}ms reported=${reportedPositionMs}ms playing=${current.playback == RoomPlaybackState.PLAYING}")
+            log.d("report> stream=$streamId pos=${current.positionMs}ms playing=${current.playback == RoomPlaybackState.PLAYING}")
             runCatching {
-                session.reportPlayback(streamId, reportedPositionMs, current.playback == RoomPlaybackState.PLAYING)
+                session.reportPlayback(streamId, current.positionMs, current.playback == RoomPlaybackState.PLAYING)
             }.onFailure { error -> log.e("report failed: ${error.message ?: error::class.simpleName}") }
         }
     }
 
     private companion object {
         const val SKIP_STEP_MS = 15_000f
-        const val REPORT_INTERVAL_MS = 5_000L
-        const val REPORT_ROUND_TRIP_COMPENSATION_MS = 2_000L
+        const val REPORT_INTERVAL_MS = 3_000L
+        const val SYNC_TIMEOUT_MS = 6_000L
         const val RECONNECT_DELAY_MS = 3_000L
         const val VOICE_RECONNECT_DELAY_MS = 2_000L
     }

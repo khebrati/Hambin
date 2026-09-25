@@ -150,7 +150,7 @@ private object PreviewRealtimeClient : RealtimeClient {
     override suspend fun connect(roomId: String): RealtimeSession = object : RealtimeSession {
         override val events: Flow<RealtimeEvent> = flowOf(RealtimeEvent.Ignored)
         override suspend fun reportPlayback(streamSessionId: String, positionMs: Long, playing: Boolean) = Unit
-        override suspend fun requestSync(streamSessionId: String, positionMs: Long) = Unit
+        override suspend fun requestSync(streamSessionId: String, positionMs: Long, requestId: String) = Unit
         override suspend fun close() = Unit
     }
 }

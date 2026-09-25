@@ -148,9 +148,9 @@ internal class KtorRealtimeSession(
         socket.send(Frame.Text(frame))
     }
 
-    override suspend fun requestSync(streamSessionId: String, positionMs: Long) {
+    override suspend fun requestSync(streamSessionId: String, positionMs: Long, requestId: String) {
         val frame = json.encodeToString(
-            SyncRequestMessage(streamSessionId = streamSessionId, positionMs = positionMs),
+            SyncRequestMessage(streamSessionId = streamSessionId, positionMs = positionMs, requestId = requestId),
         )
         log.i("sync.request> $frame")
         socket.send(Frame.Text(frame))
