@@ -7,7 +7,7 @@ This is the acceptance companion to [the migration plan](watchparty-backend-migr
 | Area | Behavior that must survive | Unmodified fork status | Required migration work/test |
 | --- | --- | --- | --- |
 | Settings | Name, illustrated avatar, language and theme; persisted local settings and durable guest profile | Ephemeral name/picture commands only | Guest/profile API plus unchanged preferences/UI; restart/profile round trip. |
-| Guest ownership | Stable identity survives refresh/restart; display name is not ownership | Browser UUID/Firebase identities have different semantics | Durable UUID/hash behavior in new service; same identity regains owner permissions. |
+| Guest ownership | Stable identity survives refresh/restart; display name is not ownership | Browser UUID/Firebase identities have different semantics | Firebase anonymous UID mapped uniquely to internal UUID; same identity regains owner permissions. |
 | Create party | Optional title, default title, creator becomes owner; no registration | `/createRoom` lacks Hambin owner semantics | Atomic room + owner membership + outbox; preserved default title. |
 | Preview/cancel | Title, owner status, participant count, stream status, available/full/ended states before joining | No matching guest preview contract | Authenticated read-only preview; cancel must not consume a seat. |
 | Join/invite | Code normalization, copy/share feedback and existing links | Stock moniker/namespace names differ | Keep existing eight-character codes and parsing; invitation addresses remain usable. |
@@ -36,9 +36,10 @@ Keep useful existing `/v1` room/profile operations. Client changes are allowed a
 
 | Method/path | Success response / semantics |
 | --- | --- |
-| `POST /v1/guest-sessions` | 201: identity/access/refresh credentials; existing expiry fields retained. |
-| `POST /v1/guest-sessions/refresh` | 200: rotated credentials; preserved identity; rotation atomic. |
-| `POST /v1/guest-sessions/revoke` | 204; authenticated, idempotent revocation. |
+| `POST /v1/guest-sessions` **removed** | Client silently obtains Firebase anonymous credentials directly; no custom JWT issuer. |
+| `POST /v1/guest-sessions/refresh` **removed** | Client refreshes directly with Firebase; same UID/internal identity. |
+| `POST /v1/guest-sessions/revoke` | 204; explicitly revoke Firebase refresh tokens, release active membership, invalidate tickets and disconnect roles; no invocation on ordinary leave. |
+| `POST /v1/identities/bootstrap` **new** | 200 `{identity}`; verified Firebase UID atomically maps to one durable internal UUID/profile; concurrent calls return the same identity. |
 | `PATCH /v1/guest-sessions/profile` | 200 `{identity}`; preserve profile validation. |
 | `POST /v1/rooms` | 201 `{room,membership}`; optional title; owner joins. |
 | `GET /v1/rooms/{code}/preview` | 200 code/title/ownerName/ownerPresent/participantCount/availability/streamState. |
@@ -56,15 +57,23 @@ Keep useful existing `/v1` room/profile operations. Client changes are allowed a
 | `GET /v1/capabilities` **new** | Authenticated `{protocolVersion:2,realtime:["socket.io"],voice:["MESH"]}` when voice is available; advertise actual implementations. |
 | `POST /v1/rooms/{roomId}/voice/config` **new** | Active member only; mesh response specified below. |
 
+Authentication uses `Authorization: Bearer <Firebase ID token>` on protected HTTP requests. Firebase owns credential creation and refresh; PostgreSQL owns product profiles, room ownership, membership, streams, and events. Keep internal UUID fields in existing product DTOs; clients must not substitute a Firebase UID or socket ID. Disable automatic anonymous-account cleanup. No login/registration UI is introduced.
+
+Native data adapters use the official Firebase Auth REST anonymous-signup and Secure Token refresh APIs through Ktor; the browser harness uses Firebase web Auth. Persist credentials through the existing platform token-store boundary, serialize refresh and atomically save returned tokens/expiry, then bootstrap the profile. Only a clean install or explicit identity reset may create a new UID; transient provider failures retain credentials and ownership. Theme/language/avatar settings retain their current UI and persistence behavior. See [Auth REST](https://firebase.google.com/docs/reference/rest/auth).
+
+`verifyIdToken(token, true)` checks authentication and revocation for HTTP/ticket issuance. Recheck the ticket's verified session at namespace admission; reauthenticate established roles before ID-token expiry and check revocation/disabled status at least every sixty seconds. Refreshing credentials must not create another membership, reset playback, or change mute intent. Explicit revocation closes existing roles and invalidates unconsumed tickets. Provider outage blocks new protected operations with 503 `AUTH_UNAVAILABLE`, mapped to the existing recoverable connectivity state; it must not be treated as an invalid token or silently create a new account. Existing media can continue through transient outages; unauthorized roles cannot mutate or route new signaling. No Firebase database or App Hosting endpoint is part of this contract.
+
 All rooms in the replacement use mesh voice. No media-mode column, legacy backfill, or topology selector is required. Existing development rooms are not imported. New invitations retain the current code/URL format and durable owner behavior.
 
-Idempotency keys apply to create/join/start/abort. Preserve existing machine codes/statuses: 400 `INVALID_PROFILE`, `INVALID_PARTY_CODE`, `INVALID_STREAM_URL`; 401 `INVALID_TOKEN`, `SESSION_EXPIRED`, `SESSION_REVOKED`, `INVALID_TICKET`; 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `ROOM_NOT_FOUND`, `IDENTITY_NOT_FOUND`; 409 `ROOM_ENDED`, `ROOM_FULL`, `ALREADY_IN_ROOM`, `STALE_STREAM_REVISION`, `NO_ACTIVE_STREAM`; 429 `RATE_LIMITED`; 500 `INTERNAL_ERROR`; 503 `VOICE_DISABLED`. Preserve authentication middleware behavior for missing bearer credentials. New idempotency mismatch errors map to the existing recoverable generic operation failure; no new UI flow is required.
+Idempotency keys apply to create/join/start/abort. Preserve existing machine codes/statuses: 400 `INVALID_PROFILE`, `INVALID_PARTY_CODE`, `INVALID_STREAM_URL`; 401 `INVALID_TOKEN`, `SESSION_EXPIRED`, `SESSION_REVOKED`, `INVALID_TICKET`; 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `ROOM_NOT_FOUND`, `IDENTITY_NOT_FOUND`; 409 `ROOM_ENDED`, `ROOM_FULL`, `ALREADY_IN_ROOM`, `STALE_STREAM_REVISION`, `NO_ACTIVE_STREAM`; 429 `RATE_LIMITED`; 500 `INTERNAL_ERROR`; 503 `VOICE_DISABLED`, `AUTH_UNAVAILABLE`. Map Firebase expiry to `SESSION_EXPIRED`, revocation/disabled user to `SESSION_REVOKED`, and other invalid credentials to `INVALID_TOKEN`. Preserve authentication middleware behavior for missing bearer credentials. New idempotency mismatch errors map to the existing recoverable generic operation failure; no new UI flow is required.
 
 Validation must match the current profile limits (48 Unicode code points for name, current avatar/language byte limits), code normalization, and title/URL rules. Measure Unicode in the same units; JavaScript UTF-16 length is not Go rune count or UTF-8 byte count.
 
 ## 3. Socket.IO room contract
 
 Use `/socket.io/`, Engine.IO v4, WebSocket-only transport, default JSON parser. Room namespace: `/hambin/rooms/{roomId}`. Voice namespace: `/hambin/voice/{roomId}`. Namespace connect auth: `{ticket,protocolVersion:2}`. Tickets are random, one-use, expire after 30 seconds, and bind identity, membership, room, role, and generation. Do not put access tokens in URLs or accept a client-supplied authoritative sender ID.
+
+Each active namespace accepts `auth.refresh` with `{idToken}` and an acknowledgement `{expiresAt}`. Verify the new Firebase token with revocation checks, require the same UID/internal identity, and replace only the authentication expiry/context; membership, role generation, peers, stream, and mute state remain intact. Never log the payload. Failure acknowledges the existing authentication/connectivity error code; pause protected commands/signaling once authentication is expired or cannot be revalidated, and retry reauthentication after transient provider recovery. A permanently revoked/disabled identity disconnects through the existing session-failure path.
 
 One member may hold one room role and one voice role. Both can share one Engine.IO connection; the Android foreground session maintains it. Replacement is tracked per role so a voice connection does not kick out the room connection as the stock `socketIdMap` would.
 
@@ -126,7 +135,7 @@ Define a transport-neutral native `VoiceConfiguration` carrying the mesh connect
 
 Execute these against both the legacy baseline where applicable and the completed fork/client combination. Compare visible state and outcomes, not incidental timestamps or random IDs.
 
-1. Clean reinstall/fresh database; initial profile/settings flow, newly saved profile/session, settings updates, refresh/revoke/restart and offline refresh; no new registration screen or old-data importer.
+1. Clean reinstall/fresh database; initial profile/settings flow, newly saved profile/session, settings updates, anonymous signup/bootstrap, serialized refresh, wrong-project/forged/expired/revoked/disabled tokens, concurrent bootstrap, live namespace reauthentication, revoke/restart and Firebase outages; same UID restores the same ownership, and no transient failure creates a replacement account; no new registration screen or old-data importer.
 2. Create default/custom title; preview/cancel/join from typed and copied codes/invite links; unknown/malformed/full/ended rooms; expected loading/error recovery.
 3. Seven guests with absent owner; reject an eighth guest; original owner returns; concurrent last-seat joins; same identity races joins/creation; no owner transfer.
 4. Explicit owner leave while guests remain: video/voice continue, owner controls disable, owner-away banner appears; same owner rejoin restores controls.
