@@ -34,6 +34,7 @@ local.properties
 .env
 .env.*
 !.env.example
+**/google-services.json
 
 # Apple and Xcode user data
 .DS_Store
