@@ -32,6 +32,18 @@ npm run test:backend
 npm run test:integration
 ```
 
+### Test the Android debug app against the local stack
+
+Start the backend and Auth Emulator using the commands above, then boot the Android emulator and install the debug app:
+
+```sh
+adb devices -l
+cd Roomio
+./gradlew :androidApp:installDebug
+```
+
+Android debug builds target the host through `10.0.2.2`: Node `http://10.0.2.2:8081`, Auth Emulator `10.0.2.2:9099`, and Firebase project `demo-hambin`. The debug-only overrides are set by `AppActivity`; release builds retain the configured service URL and `hambin-dab14` Firebase project. This avoids exposing host `localhost` inside the Android virtual device. A physical device needs a reachable host LAN address and a separate local-debug config.
+
 Integration tests require actual PostgreSQL/Auth Emulator; they never replace these with mocks. The normal test command skips integration unless explicitly enabled. `/healthz` asserts process liveness; `/readyz` checks DB and event-dispatcher health. Capabilities now advertise Socket.IO; voice stays unavailable until mesh is implemented. Room namespaces use one-use tickets and bootstrap with sequenced snapshots. Only one Hambin runtime may own the migration database; an advisory-lock holder loss drains it and requires a local backend restart. Transient outbox/database failures retry and recover readiness automatically. Production refuses emulator settings.
 
 For real Firebase testing, enable Anonymous Authentication and disable automatic anonymous-account cleanup. Store the Admin service-account JSON outside the repository, set `GOOGLE_APPLICATION_CREDENTIALS` to its absolute path, use `FIREBASE_PROJECT_ID=hambin-dab14`, and unset `FIREBASE_AUTH_EMULATOR_HOST`. Android `google-services.json` is client configuration, not the Admin credential. Do not commit private keys or token dumps. Real-project smoke testing remains required before release.

@@ -5,27 +5,39 @@ import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
 import io.ktor.client.HttpClient
-import io.ktor.client.plugins.websocket.DefaultClientWebSocketSession
 import io.ktor.client.plugins.websocket.webSocketSession
 import io.ktor.client.request.post
-import io.ktor.websocket.CloseReason
-import io.ktor.websocket.Frame
-import io.ktor.websocket.close
+import io.ktor.http.ContentType
+import io.ktor.http.contentType
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.serialization.encodeToString
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
-import kotlin.time.Duration.Companion.seconds
-import kotlin.time.TimeSource
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.encodeToJsonElement
+import kotlin.random.Random
 import top.roomio.data.party.dto.PlaybackReportMessage
 import top.roomio.data.party.dto.RealtimeTicketDto
 import top.roomio.data.party.dto.SyncRequestMessage
 import top.roomio.domain.party.PARTY_CODE_NETWORK
+import top.roomio.domain.party.PartyException
 import top.roomio.domain.party.RealtimeClient
 import top.roomio.domain.party.RealtimeEvent
 import top.roomio.domain.party.RealtimeSession
@@ -40,142 +52,171 @@ class KtorRealtimeClient(
     private val config: BackendConfig,
     private val json: Json,
     private val sessions: SessionRepository,
+    private val tokens: TokenStore,
 ) : RealtimeClient {
 
     override suspend fun connect(roomId: String): RealtimeSession {
-        log.i("connect room=$roomId base=${config.baseUrl}")
-        val ticket = runCatching { issueTicket(roomId) }.getOrElse { error ->
-            log.e("connect failed: ticket not issued room=$roomId error=${error.message ?: error::class.simpleName}")
-            throw error
-        }
-        val wsUrl = config.baseUrl
-            .replace("https://", "wss://")
-            .replace("http://", "ws://")
-            .trimEnd('/') + "/v1/rooms/$roomId/realtime?ticket=$ticket"
-        log.i("connect opening ws=${maskTicket(wsUrl)}")
-        return KtorRealtimeSession(http.webSocketSession(wsUrl), json)
+        val initial = openRoomNamespace(roomId)
+        return KtorRealtimeSession(
+            initialNamespace = initial,
+            reconnect = { openRoomNamespace(roomId) },
+            sessions = sessions,
+            tokens = tokens,
+            json = json,
+        )
     }
 
-    private suspend fun issueTicket(roomId: String): String = try {
-        val ticket = fetchTicket(roomId)
-        log.i("ticket issued room=$roomId len=${ticket.length}")
-        ticket
+    private suspend fun openRoomNamespace(roomId: String): SocketIoNamespace {
+        val ticket = issueTicket(roomId)
+        val expected = "/hambin/rooms/$roomId"
+        if (ticket.namespace != expected) throw PartyException("INVALID_TICKET", "Backend returned an unexpected room namespace")
+        val socket = http.webSocketSession(socketIoUrl(config.baseUrl))
+        val connection = SocketIoConnection(socket, json)
+        return try {
+            connection.awaitOpen()
+            connection.connectNamespace(ticket.namespace, ticket.ticket)
+        } catch (error: Throwable) {
+            connection.close()
+            throw error
+        }
+    }
+
+    private suspend fun issueTicket(roomId: String): RealtimeTicketDto = try {
+        fetchTicket(roomId)
     } catch (cancellation: CancellationException) {
         throw cancellation
     } catch (error: Throwable) {
         val partyError = error.asPartyException()
-        if (partyError.isAuthFailure()) {
-            log.w("ticket auth failure room=$roomId code=${partyError.code}; refreshing session and retrying")
-            if (runCatching { sessions.refresh() }.isSuccess) {
-                val ticket = fetchTicket(roomId)
-                log.i("ticket issued after refresh room=$roomId len=${ticket.length}")
-                ticket
-            } else {
-                throw partyError
-            }
-        } else {
-            if (partyError.code == PARTY_CODE_NETWORK) {
-                log.e("ticket fetch failed before backend room=$roomId: ${error.message ?: error::class.simpleName}")
-            }
-            throw partyError
-        }
+        if (!partyError.isAuthFailure()) throw partyError
+        sessions.refresh() ?: throw partyError
+        fetchTicket(roomId)
     }
 
-    private suspend fun fetchTicket(roomId: String): String {
-        log.i("ticket fetch ${config.baseUrl}/v1/rooms/$roomId/realtime-ticket")
-        return http.post("${config.baseUrl}/v1/rooms/$roomId/realtime-ticket")
-            .bodyOrThrow<RealtimeTicketDto>()
-            .ticket
-    }
+    private suspend fun fetchTicket(roomId: String): RealtimeTicketDto = http.post(
+        "${config.baseUrl}/v1/rooms/$roomId/realtime-ticket",
+    ).bodyOrThrow()
+
 }
 
-internal class KtorRealtimeSession(
-    private val socket: DefaultClientWebSocketSession,
+private class KtorRealtimeSession(
+    initialNamespace: SocketIoNamespace,
+    private val reconnect: suspend () -> SocketIoNamespace,
+    private val sessions: SessionRepository,
+    private val tokens: TokenStore,
     private val json: Json,
 ) : RealtimeSession {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val output = Channel<RealtimeEvent>(capacity = 64)
+    private val namespaceMutex = Mutex()
+    private var namespace = initialNamespace
+    private val eventGate = SnapshotEventGate(json)
+    private var closed = false
+    override val events: Flow<RealtimeEvent> = output.receiveAsFlow()
 
-    override val events: Flow<RealtimeEvent> = flow {
-        coroutineScope {
-            // Keep the transport alive and detect half-open sockets. A dead
-            // server (or a broken proxy path) never answers a ping, so if no
-            // frame arrives within the timeout we close the socket and let the
-            // caller reconnect instead of silently holding a stale connection.
-            var lastReceive = TimeSource.Monotonic.markNow()
-            val heartbeat = launch {
-                while (isActive) {
-                    delay(HEARTBEAT_INTERVAL_MS)
-                    runCatching { socket.send(Frame.Text(PING_FRAME)) }
-                        .onFailure { error ->
-                            log.w("heartbeat ping failed: ${error.message ?: error::class.simpleName}")
-                        }
-                    if (lastReceive.elapsedNow() > HEARTBEAT_TIMEOUT) {
-                        log.w("heartbeat timeout; closing transport")
-                        runCatching {
-                            socket.close(CloseReason(CloseReason.Codes.NORMAL, "heartbeat timeout"))
-                        }
-                        break
-                    }
-                }
-            }
-            try {
-                for (frame in socket.incoming) {
-                    if (frame is Frame.Text) {
-                        val text = frame.data.decodeToString()
-                        log.d("ws< ${text.take(MAX_FRAME_LOG_CHARS)}")
-                        lastReceive = TimeSource.Monotonic.markNow()
-                        emit(parseRealtimeFrame(json, text))
-                    }
-                }
-            } catch (cancellation: CancellationException) {
-                throw cancellation
-            } catch (error: Throwable) {
-                // A dropped transport is an expected event, not a crash. Surface it
-                // so the caller can reconnect and still show a stable room.
-                log.e("ws transport failed: ${error.message ?: error::class.simpleName}")
-                emit(RealtimeEvent.Failure("REALTIME_DISCONNECTED", error.message ?: "disconnected"))
-            } finally {
-                heartbeat.cancel()
-            }
-        }
-        log.w("ws closed")
+    init {
+        scope.launch { pump() }
+        scope.launch { refreshRealtimeAuth() }
     }
 
     override suspend fun reportPlayback(streamSessionId: String, positionMs: Long, playing: Boolean) {
-        val frame = json.encodeToString(
+        emitCommand("playback.report", json.encodeToJsonElement(PlaybackReportMessage.serializer(),
             PlaybackReportMessage(streamSessionId = streamSessionId, positionMs = positionMs, playing = playing),
-        )
-        log.d("report> $frame")
-        socket.send(Frame.Text(frame))
+        ))
     }
 
     override suspend fun requestSync(streamSessionId: String, positionMs: Long, requestId: String) {
-        val frame = json.encodeToString(
+        emitCommand("sync.request", json.encodeToJsonElement(SyncRequestMessage.serializer(),
             SyncRequestMessage(streamSessionId = streamSessionId, positionMs = positionMs, requestId = requestId),
-        )
-        log.i("sync.request> $frame")
-        socket.send(Frame.Text(frame))
+        ))
     }
 
     override suspend fun close() {
-        log.i("close called")
-        socket.close(CloseReason(CloseReason.Codes.NORMAL, "client closing"))
+        closed = true
+        scope.cancel()
+        namespaceMutex.withLock { runCatching { namespace.close() } }
+        output.close()
+    }
+
+    private suspend fun emitCommand(name: String, payload: JsonElement) {
+        val ack = namespaceMutex.withLock { namespace.emit(name, payload) }
+        val obj = ack as? JsonObject ?: return
+        val code = obj["code"]?.jsonPrimitive?.contentOrNull ?: return
+        val message = obj["message"]?.jsonPrimitive?.contentOrNull ?: "Realtime command failed"
+        throw PartyException(code, message)
+    }
+
+    private suspend fun pump() {
+        var attempts = 0
+        while (scope.isActive && !closed) {
+            try {
+                val current = namespaceMutex.withLock { namespace }
+                for (incoming in current.events) {
+                    if (incoming.name == "snapshot") attempts = 0
+                    for (event in eventGate.accept(incoming)) output.send(event)
+                }
+                if (!closed) throw IllegalStateException("Socket.IO namespace ended")
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (error: Throwable) {
+                if (closed) break
+                val failure = error.asPartyException()
+                output.trySend(RealtimeEvent.Failure(failure.code.ifBlank { PARTY_CODE_NETWORK }, failure.message.orEmpty()))
+                runCatching { namespaceMutex.withLock { namespace.close() } }
+                attempts = (attempts + 1).coerceAtMost(MAX_RECONNECT_ATTEMPTS)
+                val base = (RECONNECT_BASE_MS shl (attempts - 1)).coerceAtMost(RECONNECT_MAX_MS)
+                delay(base + Random.nextLong(0, (base / 4).coerceAtLeast(1)))
+                try {
+                    val replacement = reconnect()
+                    namespaceMutex.withLock { namespace = replacement }
+                } catch (reconnectError: CancellationException) {
+                    throw reconnectError
+                } catch (reconnectError: Throwable) {
+                    output.trySend(RealtimeEvent.Failure(reconnectError.asPartyException().code, reconnectError.message.orEmpty()))
+                }
+            }
+        }
+        output.close()
+    }
+
+    private suspend fun refreshRealtimeAuth() {
+        while (scope.isActive && !closed) {
+            val credentials = tokens.credentials() ?: return
+            val waitMs = (credentials.expiresAtEpochMs - nowMs() - AUTH_REFRESH_EARLY_MS).coerceAtLeast(1_000L)
+            delay(waitMs)
+            try {
+                sessions.refresh()
+                val fresh = tokens.credentials() ?: return
+                val ack = namespaceMutex.withLock {
+                    namespace.emit("auth.refresh", buildJsonObject { put("idToken", JsonPrimitive(fresh.idToken)) })
+                }
+                val obj = ack as? JsonObject
+                val code = obj?.get("code")?.jsonPrimitive?.contentOrNull
+                if (code != null) throw PartyException(code, "Realtime authentication refresh was rejected")
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (error: Throwable) {
+                val partyError = error.asPartyException()
+                if (partyError.code != PARTY_CODE_NETWORK) {
+                    output.trySend(RealtimeEvent.Failure(partyError.code, partyError.message.orEmpty()))
+                }
+                delay(AUTH_RETRY_MS)
+            }
+        }
+    }
+
+    private companion object {
+        const val AUTH_REFRESH_EARLY_MS = 5 * 60 * 1000L
+        const val AUTH_RETRY_MS = 30_000L
+        const val RECONNECT_BASE_MS = 500L
+        const val RECONNECT_MAX_MS = 30_000L
+        const val MAX_RECONNECT_ATTEMPTS = 7
     }
 }
 
-/** Logs the WebSocket URL without revealing the single-use ticket credential. */
-private fun maskTicket(url: String): String {
-    val separator = "?ticket="
-    val index = url.indexOf(separator)
-    return if (index >= 0) url.substring(0, index) + separator + "<redacted>" else url
+private fun socketIoUrl(baseUrl: String): String = when {
+    baseUrl.startsWith("https://") -> "wss://${baseUrl.removePrefix("https://").trimEnd('/')}/socket.io/?EIO=4&transport=websocket"
+    baseUrl.startsWith("http://") -> "ws://${baseUrl.removePrefix("http://").trimEnd('/')}/socket.io/?EIO=4&transport=websocket"
+    else -> throw IllegalArgumentException("Backend URL must use HTTP or HTTPS")
 }
 
-private const val MAX_FRAME_LOG_CHARS = 200
-
-/** How often the client solicits a server pong to prove the transport is alive. */
-private const val HEARTBEAT_INTERVAL_MS = 10_000L
-
-/** Close the socket when no server frame (for example a pong) arrives within this window. */
-private val HEARTBEAT_TIMEOUT = 30.seconds
-
-/** Minimal application-level ping; the server replies with `{"type":"pong"}`. */
-private const val PING_FRAME = """{"type":"ping"}"""
+private fun nowMs(): Long = kotlin.time.Clock.System.now().toEpochMilliseconds()

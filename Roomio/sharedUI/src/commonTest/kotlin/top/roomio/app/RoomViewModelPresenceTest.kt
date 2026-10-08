@@ -22,6 +22,10 @@ import top.roomio.app.room.RoomEffect
 import top.roomio.app.room.RoomPlaybackState
 import top.roomio.app.room.RoomViewModel
 import top.roomio.app.room.VoiceConnectionState
+import top.roomio.app.room.player.AudioTrack
+import top.roomio.app.room.player.SubtitleTrack
+import top.roomio.app.room.player.VideoPlayerState
+import top.roomio.app.room.player.VideoPlayerStatus
 import top.roomio.domain.party.Member
 import top.roomio.domain.party.RealtimeClient
 import top.roomio.domain.party.RealtimeEvent
@@ -72,6 +76,42 @@ class RoomViewModelPresenceTest {
 
             assertFalse(viewModel.state.value.model.ownerPresent)
             assertFalse(viewModel.state.value.isOwner)
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun reconnectSnapshotForSameStreamPreservesViewerLocalPlayerState() = runTest {
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+        try {
+            val stream = StreamInfo("same-session", 4, StreamState.ACTIVE, "https://example/video.mp4")
+            val snapshot = RoomSnapshot(room, listOf(owner, guest), stream)
+            val events = MutableSharedFlow<RealtimeEvent>()
+            val viewModel = RoomViewModel(
+                "room", asOwner = false, testSessionRepository, snapshotRepository(snapshot),
+                emittingRealtimeClient(events), testVoiceClient, testSessionKeeper,
+            )
+            viewModel.onAction(RoomAction.PlayerStateChanged(
+                VideoPlayerState(
+                    status = VideoPlayerStatus.PAUSED,
+                    positionMs = 42_000,
+                    subtitles = listOf(SubtitleTrack("sub-1", "English", selected = true)),
+                    audioTracks = listOf(AudioTrack("audio-1", "Director commentary")),
+                    audioTrackSelectionId = "audio-1",
+                ),
+            ))
+            viewModel.onAction(RoomAction.VolumeChanged(0.35f))
+
+            events.emit(RealtimeEvent.Snapshot(snapshot))
+            testScheduler.runCurrent()
+
+            assertEquals(RoomPlaybackState.PAUSED, viewModel.state.value.playback)
+            assertEquals("https://example/video.mp4", viewModel.state.value.videoUrl)
+            assertEquals(42_000, viewModel.state.value.positionMs)
+            assertEquals(0.35f, viewModel.state.value.volume)
+            assertEquals("sub-1", viewModel.state.value.subtitleTracks.single().id)
+            assertEquals("audio-1", viewModel.state.value.audioTrackSelectionId)
         } finally {
             Dispatchers.resetMain()
         }

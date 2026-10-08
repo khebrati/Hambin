@@ -7,71 +7,116 @@ import dev.zacsweers.metro.SingleIn
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import top.roomio.domain.party.GuestIdentity
 import top.roomio.domain.party.GuestSession
 
-/**
- * Persists the guest identity and its rotated tokens in platform settings and
- * exposes them for the HTTP client's default request.
- */
+/** Firebase credentials and Hambin profile are committed as one settings value. */
 @SingleIn(AppScope::class)
 @Inject
 class TokenStore(
     private val settings: Settings,
+    private val json: Json,
 ) {
-    private val mutableSession = MutableStateFlow(readSession())
+    private val mutableRecord = MutableStateFlow(readRecord())
+    private val mutableSession = MutableStateFlow(mutableRecord.value?.toGuestSession())
 
+    /** Compatibility view for repositories and room UI; null until bootstrap succeeds. */
     val session: StateFlow<GuestSession?> = mutableSession.asStateFlow()
 
-    fun current(): GuestSession? = mutableSession.value
+    fun current(): GuestSession? = mutableRecord.value?.toGuestSession()
+    fun credentials(): FirebaseCredentials? = mutableRecord.value?.credentials()
 
-    fun save(session: GuestSession) {
-        settings.putString(ACCESS_KEY, session.accessToken)
-        settings.putString(REFRESH_KEY, session.refreshToken)
-        settings.putString(ID_KEY, session.identity.id)
-        settings.putString(NAME_KEY, session.identity.name)
-        settings.putString(AVATAR_KEY, session.identity.avatar)
-        settings.putString(LANGUAGE_KEY, session.identity.language)
-        mutableSession.value = session
-    }
-
-    fun updateIdentity(identity: GuestIdentity) {
-        val existing = mutableSession.value ?: return
-        save(existing.copy(identity = identity))
-    }
-
-    fun clear() {
-        settings.remove(ACCESS_KEY)
-        settings.remove(REFRESH_KEY)
-        settings.remove(ID_KEY)
-        settings.remove(NAME_KEY)
-        settings.remove(AVATAR_KEY)
-        settings.remove(LANGUAGE_KEY)
-        mutableSession.value = null
-    }
-
-    private fun readSession(): GuestSession? {
-        val access = settings.getStringOrNull(ACCESS_KEY) ?: return null
-        val refresh = settings.getStringOrNull(REFRESH_KEY) ?: return null
-        val id = settings.getStringOrNull(ID_KEY) ?: return null
-        return GuestSession(
-            identity = GuestIdentity(
-                id = id,
-                name = settings.getStringOrNull(NAME_KEY).orEmpty(),
-                avatar = settings.getStringOrNull(AVATAR_KEY).orEmpty(),
-                language = settings.getStringOrNull(LANGUAGE_KEY).orEmpty(),
+    fun saveCredentials(credentials: FirebaseCredentials, name: String, avatar: String, language: String) {
+        commit(
+            PersistedGuestRecord(
+                uid = credentials.uid,
+                idToken = credentials.idToken,
+                refreshToken = credentials.refreshToken,
+                expiresAtEpochMs = credentials.expiresAtEpochMs,
+                projectId = credentials.projectId,
+                profileName = name,
+                profileAvatar = avatar,
+                profileLanguage = language,
+                identity = null,
             ),
-            accessToken = access,
-            refreshToken = refresh,
         )
     }
 
-    private companion object {
-        const val ACCESS_KEY = "party.accessToken"
-        const val REFRESH_KEY = "party.refreshToken"
-        const val ID_KEY = "party.identityId"
-        const val NAME_KEY = "party.identityName"
-        const val AVATAR_KEY = "party.identityAvatar"
-        const val LANGUAGE_KEY = "party.identityLanguage"
+    fun saveCredentials(credentials: FirebaseCredentials) {
+        val current = mutableRecord.value ?: return
+        commit(current.copy(
+            idToken = credentials.idToken,
+            refreshToken = credentials.refreshToken,
+            expiresAtEpochMs = credentials.expiresAtEpochMs,
+            projectId = credentials.projectId,
+        ))
     }
+
+    fun saveIdentity(identity: GuestIdentity) {
+        val current = mutableRecord.value ?: return
+        commit(current.copy(
+            profileName = identity.name,
+            profileAvatar = identity.avatar,
+            profileLanguage = identity.language,
+            identity = StoredIdentity(identity.id, identity.name, identity.avatar, identity.language),
+        ))
+    }
+
+    fun updateProfile(name: String, avatar: String, language: String) {
+        val current = mutableRecord.value ?: return
+        commit(current.copy(profileName = name, profileAvatar = avatar, profileLanguage = language))
+    }
+
+    /** Never clear credentials on provider/network errors; only explicit reset may do so. */
+    fun clear() {
+        settings.remove(RECORD_KEY)
+        mutableRecord.value = null
+        mutableSession.value = null
+    }
+
+    private fun commit(record: PersistedGuestRecord) {
+        settings.putString(RECORD_KEY, json.encodeToString(record))
+        mutableRecord.value = record
+        mutableSession.value = record.toGuestSession()
+    }
+
+    private fun readRecord(): PersistedGuestRecord? = settings.getStringOrNull(RECORD_KEY)
+        ?.let { value -> runCatching { json.decodeFromString<PersistedGuestRecord>(value) }.getOrNull() }
+
+    private companion object {
+        const val RECORD_KEY = "party.firebaseSession.v1"
+    }
+
+    @Serializable
+    private data class PersistedGuestRecord(
+        val uid: String,
+        val idToken: String,
+        val refreshToken: String,
+        val expiresAtEpochMs: Long,
+        val projectId: String,
+        val profileName: String,
+        val profileAvatar: String,
+        val profileLanguage: String,
+        val identity: StoredIdentity? = null,
+    ) {
+        fun credentials() = FirebaseCredentials(uid, idToken, refreshToken, expiresAtEpochMs, projectId)
+        fun toGuestSession(): GuestSession? = identity?.let {
+            GuestSession(GuestIdentity(it.id, it.name, it.avatar, it.language), idToken, refreshToken)
+        }
+    }
+
+    @Serializable
+    private data class StoredIdentity(val id: String, val name: String, val avatar: String, val language: String)
 }
+
+/** Data-layer Firebase credential record; never crosses into domain or presentation. */
+data class FirebaseCredentials(
+    val uid: String,
+    val idToken: String,
+    val refreshToken: String,
+    val expiresAtEpochMs: Long,
+    val projectId: String,
+)

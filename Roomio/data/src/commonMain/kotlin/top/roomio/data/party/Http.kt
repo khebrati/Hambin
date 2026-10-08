@@ -17,8 +17,13 @@ internal suspend inline fun <reified T> HttpResponse.bodyOrThrow(): T {
 
 internal suspend fun HttpResponse.toPartyException(): PartyException {
     val error = runCatching { body<ErrorDto>() }.getOrNull()
+    val code = when (error?.code) {
+        "AUTH_UNAVAILABLE" -> PARTY_CODE_NETWORK
+        null -> if (status.value == 503) PARTY_CODE_NETWORK else "HTTP_${status.value}"
+        else -> error.code
+    }
     return PartyException(
-        code = error?.code ?: "HTTP_${status.value}",
+        code = code,
         message = error?.message ?: "Request failed",
     )
 }

@@ -369,6 +369,8 @@ internal class RoomViewModel(
     }
 
     private fun applySnapshot(snapshot: RoomSnapshot) {
+        val incomingSessionId = snapshot.stream.sessionId.takeIf { snapshot.stream.state == StreamState.ACTIVE && it.isNotEmpty() }
+        val sameActiveStream = incomingSessionId != null && incomingSessionId == streamSessionId
         streamRevision = snapshot.stream.revision
         // Only an active stream may be reported or synced to. An aborted
         // session stays in the snapshot but must not be a target.
@@ -384,8 +386,9 @@ internal class RoomViewModel(
             StreamState.ABORTED -> RoomPlaybackState.ABORTED
             StreamState.EMPTY -> if (asOwner) RoomPlaybackState.OWNER_EMPTY else RoomPlaybackState.WAITING_FOR_OWNER
         }
-        log.i("snapshot room=${snapshot.room.code} stream=${snapshot.stream.state} streamSessionId=$streamSessionId playback=$playback url=${snapshot.stream.url}")
+        log.i("snapshot room=${snapshot.room.code} stream=${snapshot.stream.state} streamSessionId=$streamSessionId playback=$playback sameActiveStream=$sameActiveStream")
         mutableState.update { current ->
+            val effectivePlayback = if (sameActiveStream) current.playback else playback
             current.copy(
                 model = RoomScreenModel(
                     title = snapshot.room.title,
@@ -393,11 +396,13 @@ internal class RoomViewModel(
                     role = if (asOwner) RoomRole.OWNER else RoomRole.GUEST,
                     ownerName = owner?.displayName.orEmpty(),
                     ownerPresent = asOwner || (owner?.present ?: false),
-                    playback = playback,
+                    playback = effectivePlayback,
                     participants = members.map { it.toParticipant() },
                 ),
-                playback = playback,
-                videoUrl = snapshot.stream.url,
+                playback = effectivePlayback,
+                // A reconnect snapshot describes the same shared stream. Keep
+                // viewer-local playback, position and track selections intact.
+                videoUrl = if (sameActiveStream) current.videoUrl else snapshot.stream.url,
             )
         }
     }

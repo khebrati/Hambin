@@ -21,6 +21,7 @@ android {
     namespace = "top.roomio.app.androidApp"
     compileSdk = 36
     buildToolsVersion = "37.0.0"
+    buildFeatures { buildConfig = true }
 
     defaultConfig {
         minSdk = 23

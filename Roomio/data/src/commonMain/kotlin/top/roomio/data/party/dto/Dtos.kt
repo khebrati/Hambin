@@ -146,6 +146,8 @@ data class VoiceTokenDto(
 @Serializable
 data class RealtimeTicketDto(
     val ticket: String,
+    val namespace: String,
+    val expiresAt: String,
 )
 
 @Serializable

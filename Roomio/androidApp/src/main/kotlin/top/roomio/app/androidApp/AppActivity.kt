@@ -14,6 +14,12 @@ import top.roomio.app.App
 class AppActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (BuildConfig.DEBUG) {
+            // Emulator-only development targets. Release builds keep the production endpoints.
+            System.setProperty("roomio.backendUrl", "http://10.0.2.2:8081")
+            System.setProperty("roomio.firebaseProjectId", "demo-hambin")
+            System.setProperty("roomio.authEmulatorHost", "10.0.2.2:9099")
+        }
         enableEdgeToEdge()
         setContent { 
             App(onThemeChanged = { ThemeChanged(it) }) 

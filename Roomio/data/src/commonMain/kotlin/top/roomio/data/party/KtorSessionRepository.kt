@@ -1,5 +1,6 @@
 package top.roomio.data.party
 
+import co.touchlab.kermit.Logger
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
@@ -10,13 +11,15 @@ import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlin.time.Clock
 import top.roomio.data.party.dto.GuestSessionRequest
 import top.roomio.data.party.dto.ProfileResponseDto
-import top.roomio.data.party.dto.RefreshRequest
-import top.roomio.data.party.dto.SessionDto
 import top.roomio.data.party.dto.toDomain
 import top.roomio.domain.party.GuestIdentity
 import top.roomio.domain.party.GuestSession
+import top.roomio.domain.party.PARTY_CODE_NETWORK
 import top.roomio.domain.party.PartyException
 import top.roomio.domain.party.SessionRepository
 
@@ -25,97 +28,115 @@ import top.roomio.domain.party.SessionRepository
 class KtorSessionRepository(
     private val http: HttpClient,
     private val config: BackendConfig,
+    private val auth: FirebaseAuthClient,
     private val tokens: TokenStore,
 ) : SessionRepository {
+    private val sessionMutex = Mutex()
+    private val log = Logger.withTag("BackendIdentity")
 
-    override suspend fun ensureSession(name: String, avatar: String, language: String): GuestSession =
-        normalized {
-            val current = tokens.current()
-            if (current != null) {
-                val identity = current.identity
-                if (identity.name == name && identity.avatar == avatar && identity.language == language) {
-                    return@normalized current
-                }
-                // The saved profile changed after the identity was created; push
-                // the new name/avatar to the backend so room membership stays
-                // current. An expired access token is refreshed transparently.
-                // If the whole session is unrecoverable the store is cleared, so
-                // register a fresh identity instead of staying stuck offline.
-                val updated = try {
-                    updateProfile(name, avatar, language)
-                } catch (cancellation: CancellationException) {
-                    throw cancellation
-                } catch (error: Throwable) {
-                    if (tokens.current() != null) throw error
-                    null
-                }
-                if (updated != null) {
-                    return@normalized current.copy(identity = updated)
-                }
+    override suspend fun ensureSession(name: String, avatar: String, language: String): GuestSession = normalized {
+        sessionMutex.withLock {
+        var credentials = tokens.credentials()
+            if (credentials == null) {
+                credentials = auth.signUpAnonymously()
+                // Save first: an outage during bootstrap must retry this same Firebase UID.
+                tokens.saveCredentials(credentials, name, avatar, language)
             }
-            val session = http.post("${config.baseUrl}/v1/guest-sessions") {
-                contentType(ContentType.Application.Json)
-                setBody(GuestSessionRequest(name = name, avatar = avatar, language = language))
-            }.bodyOrThrow<SessionDto>().toDomain()
-            tokens.save(session)
-            session
+            credentials = refreshIfNeeded(credentials)
+            val current = tokens.current()
+            val identity = when {
+                current == null -> bootstrap(name, avatar, language)
+                current.identity.name != name || current.identity.avatar != avatar || current.identity.language != language ->
+                    updateProfileLocked(name, avatar, language)
+                else -> current.identity
+            }
+            tokens.saveIdentity(identity)
+            tokens.current() ?: throw PartyException("INVALID_TOKEN", "Guest profile was not saved")
         }
+    }
 
     override suspend fun currentSession(): GuestSession? = tokens.current()
 
-    override suspend fun refresh(): GuestSession? {
-        val current = tokens.current() ?: return null
-        return try {
-            normalized {
-                val session = http.post("${config.baseUrl}/v1/guest-sessions/refresh") {
-                    contentType(ContentType.Application.Json)
-                    setBody(RefreshRequest(current.refreshToken))
-                }.bodyOrThrow<SessionDto>().toDomain()
-                tokens.save(session)
-                session
-            }
+    override suspend fun refresh(): GuestSession? = sessionMutex.withLock {
+        val credentials = tokens.credentials() ?: return@withLock null
+        refreshLocked(credentials)
+        tokens.current()
+    }
+
+    override suspend fun updateProfile(name: String, avatar: String, language: String): GuestIdentity = normalized {
+        sessionMutex.withLock {
+            updateProfileLocked(name, avatar, language)
+        }
+    }
+
+    private suspend fun updateProfileLocked(name: String, avatar: String, language: String): GuestIdentity {
+        var credentials = tokens.credentials()
+            ?: throw PartyException("INVALID_TOKEN", "Guest identity is not initialized")
+        credentials = refreshIfNeeded(credentials)
+        val request = GuestSessionRequest(name = name, avatar = avatar, language = language)
+        val identity = try {
+            patchProfile(request)
         } catch (error: PartyException) {
-            if (error.code == "SESSION_EXPIRED" || error.code == "SESSION_REVOKED" || error.code == "INVALID_TOKEN") {
-                tokens.clear()
-            }
+            if (!error.isAuthFailure()) throw error
+            credentials = refreshLocked(credentials)
+            patchProfile(request)
+        }
+        tokens.saveIdentity(identity)
+        tokens.updateProfile(name, avatar, language)
+        return identity
+    }
+
+    private suspend fun bootstrap(name: String, avatar: String, language: String): GuestIdentity {
+        val response = http.post("${config.baseUrl}/v1/identities/bootstrap") {
+            contentType(ContentType.Application.Json)
+            setBody(GuestSessionRequest(name, avatar, language))
+        }
+        val identity = try {
+            response.bodyOrThrow<ProfileResponseDto>().identity.toDomain()
+        } catch (error: PartyException) {
+            log.w("endpoint=identities/bootstrap status=${response.status.value} code=${error.code}")
             throw error
         }
+        log.i("endpoint=identities/bootstrap status=${response.status.value} result=success")
+        tokens.saveIdentity(identity)
+        return identity
     }
 
-    override suspend fun updateProfile(name: String, avatar: String, language: String): GuestIdentity =
-        authed {
-            val identity = http.patch("${config.baseUrl}/v1/guest-sessions/profile") {
-                contentType(ContentType.Application.Json)
-                setBody(GuestSessionRequest(name = name, avatar = avatar, language = language))
-            }.bodyOrThrow<ProfileResponseDto>().identity.toDomain()
-            tokens.updateIdentity(identity)
-            identity
-        }
+    private suspend fun patchProfile(request: GuestSessionRequest): GuestIdentity = http.patch(
+        "${config.baseUrl}/v1/guest-sessions/profile",
+    ) {
+        contentType(ContentType.Application.Json)
+        setBody(request)
+    }.bodyOrThrow<ProfileResponseDto>().identity.toDomain()
 
-    /**
-     * Runs an authenticated request, refreshing the session once when the
-     * access token is stale. Without this, a profile update after the access
-     * token's short TTL fails forever and blocks room creation.
-     */
-    private suspend fun <T> authed(block: suspend () -> T): T = try {
-        block()
-    } catch (cancellation: CancellationException) {
-        throw cancellation
-    } catch (error: Throwable) {
-        val partyError = error.asPartyException()
-        if (partyError.isAuthFailure() && runCatching { refresh() }.isSuccess) {
-            block()
+    private suspend fun refreshIfNeeded(current: FirebaseCredentials): FirebaseCredentials =
+        if (current.expiresAtEpochMs - Clock.System.now().toEpochMilliseconds() <= REFRESH_EARLY_MS) {
+            refreshLocked(current)
         } else {
-            throw partyError
+            current
         }
+
+    private suspend fun refreshLocked(current: FirebaseCredentials): FirebaseCredentials {
+        val fresh = auth.refresh(current)
+        if (fresh.uid != current.uid || fresh.projectId != config.firebaseProjectId) {
+            throw PartyException("INVALID_TOKEN", "Firebase refresh changed project identity")
+        }
+        tokens.saveCredentials(fresh)
+        return fresh
     }
 
-    /** Normalizes transport failures to [PartyException] so callers handle one error type. */
     private suspend fun <T> normalized(block: suspend () -> T): T = try {
         block()
     } catch (cancellation: CancellationException) {
         throw cancellation
     } catch (error: Throwable) {
-        throw error.asPartyException()
+        when (error) {
+            is PartyException -> throw error
+            else -> throw error.asPartyException()
+        }
+    }
+
+    private companion object {
+        const val REFRESH_EARLY_MS = 5 * 60 * 1000L
     }
 }
