@@ -122,14 +122,18 @@ private data class VoiceMember(val membershipId: String, val generation: String,
 private class PeerState(
     val member: VoiceMember,
     var peer: PeerConnection,
-    val pendingIce: ArrayDeque<IceCandidate> = ArrayDeque(),
+    val generationFence: PeerGenerationFence,
+    val pendingIce: ArrayDeque<Pair<Long, IceCandidate>> = ArrayDeque(),
     var remoteDescriptionSet: Boolean = false,
-    var negotiationGeneration: Long = 0,
     var retries: Int = 0,
+    var remoteAudioTrack: AudioTrack? = null,
     @Volatile var connected: Boolean = false,
     @Volatile var iceState: PeerConnection.IceConnectionState = PeerConnection.IceConnectionState.NEW,
     val energyDelta: AudioEnergyDelta = AudioEnergyDelta(),
-)
+) {
+    val localPeerGeneration: Long get() = generationFence.localGeneration
+    val remotePeerGeneration: Long? get() = generationFence.remoteGeneration
+}
 
 private class MeshVoiceSession(
     private val context: Context,
@@ -146,12 +150,15 @@ private class MeshVoiceSession(
     override val events: Flow<VoiceEvent> = output.receiveAsFlow()
     private val peers = linkedMapOf<String, PeerState>()
     private val memberStates = linkedMapOf<String, VoiceMember>()
+    private val peerEpochs = mutableMapOf<String, Long>()
     private val retryingPeers = mutableSetOf<String>()
     private val activityTracker = VoiceActivityTracker()
     private val speakingLock = Any()
     private val eventMutex = Mutex()
     private val initialRoster = CompletableDeferred<Unit>()
     private val ready = CompletableDeferred<Unit>()
+    @Volatile private var rosterReady = false
+    @Volatile private var connectedAnnounced = false
     private var connection: SocketIoConnection? = null
     private var namespace: SocketIoNamespace? = null
     private var factory: PeerConnectionFactory? = null
@@ -194,23 +201,87 @@ private class MeshVoiceSession(
     }
 
     private suspend fun receiveEvents() {
-        val ns = namespace ?: return
-        try {
-            for (event in ns.events) {
-                when (event.name) {
-                    "voice.roster" -> applyRoster(event.payload)
-                    "signal" -> receiveSignal(event.payload)
-                    "error" -> {
-                        val code = event.payload.jsonObject["code"]?.jsonPrimitive?.contentOrNull
-                        if (code == "SESSION_REVOKED" || code == "INVALID_TICKET") fail("Voice session expired")
+        var reconnectAttempt = 0
+        while (scope.isActive && !closed) {
+            val ns = namespace ?: run { delay(RECONNECT_BASE_MS); continue }
+            try {
+                for (event in ns.events) {
+                    when (event.name) {
+                        "voice.roster" -> applyRoster(event.payload)
+                        "signal" -> receiveSignal(event.payload)
+                        "error" -> {
+                            val code = event.payload.jsonObject["code"]?.jsonPrimitive?.contentOrNull
+                            if (code != null && code in PERMANENT_VOICE_ERRORS)
+                                throw PartyException(code, "Voice session ended")
+                        }
+                    }
+                }
+                if (closed) break
+                throw PartyException("VOICE_DISCONNECTED", "Voice signaling disconnected")
+            } catch (cancel: CancellationException) {
+                throw cancel
+            } catch (error: Throwable) {
+                if (closed) break
+                val partyError = error as? PartyException
+                if (partyError?.code?.let { it in PERMANENT_VOICE_ERRORS } == true) {
+                    fail("Voice session ended")
+                    break
+                }
+                markMeshDisconnected()
+                try {
+                    reconnectSignaling(reconnectAttempt++)
+                } catch (cancel: CancellationException) {
+                    throw cancel
+                } catch (reconnectError: Throwable) {
+                    val reconnectPartyError = reconnectError as? PartyException
+                    if (reconnectPartyError?.code?.let { it in PERMANENT_VOICE_ERRORS } == true) {
+                        fail("Voice session ended")
+                        break
                     }
                 }
             }
-            if (!closed) fail("Voice connection ended")
-        } catch (cancel: CancellationException) {
-            throw cancel
+        }
+    }
+
+    private suspend fun reconnectSignaling(attempt: Int) {
+        val backoff = (RECONNECT_BASE_MS * (1L shl attempt.coerceAtMost(6))).coerceAtMost(RECONNECT_MAX_MS)
+        delay(backoff)
+        sessions.refresh()
+        val dto = http.post("${backend.baseUrl}/v1/rooms/${descriptor.roomId}/voice/config") {
+            contentType(ContentType.Application.Json)
+            setBody(VoiceConfigurationRequest(descriptor.voiceSessionId))
+        }.bodyOrThrow<VoiceConfigurationDto>()
+        if (dto.voiceSessionId != descriptor.voiceSessionId || dto.membershipId != descriptor.membershipId) {
+            throw PartyException("SESSION_REVOKED", "Voice session was replaced")
+        }
+        descriptor = dto.toDomain()
+        rosterReady = false
+        val previous = connection
+        val socket = http.webSocketSession(socketIoUrl(backend.baseUrl))
+        val engine = SocketIoConnection(socket, json)
+        try {
+            engine.awaitOpen()
+            val nextNamespace = engine.connectNamespace(descriptor.namespace, descriptor.ticket)
+            connection = engine
+            namespace = nextNamespace
+            previous?.close()
+            scope.launch {
+                delay(ROSTER_TIMEOUT_MS)
+                if (!closed && namespace === nextNamespace && !rosterReady) engine.close()
+            }
+            // Peers and microphone capture stay alive. applyRoster is the first
+            // event reader for this namespace and owns all new negotiation.
         } catch (error: Throwable) {
-            if (!closed) fail("Voice connection was interrupted")
+            engine.close()
+            throw error
+        }
+    }
+
+    private fun markMeshDisconnected() {
+        rosterReady = false
+        if (connectedAnnounced) {
+            connectedAnnounced = false
+            output.trySend(VoiceEvent.Disconnected)
         }
     }
 
@@ -226,6 +297,10 @@ private class MeshVoiceSession(
             throw PartyException("VOICE_CAPACITY_EXCEEDED", "This voice room has too many participants")
         }
         val authoritative = roster.associateBy { it.membershipId }
+        val wasConnected = connectedAnnounced
+        val changedPeer = peers.any { (id, state) -> authoritative[id]?.let { it.generation != state.member.generation } == true } ||
+            authoritative.keys.any { it !in peers }
+        if (wasConnected && (!rosterReady || changedPeer)) markMeshDisconnected()
         peers.keys.toList().filter { it !in authoritative }.forEach { id ->
             removePeer(id)
             clearSpeaking(id)
@@ -233,10 +308,16 @@ private class MeshVoiceSession(
         memberStates.keys.toList().filter { it !in authoritative }.forEach(memberStates::remove)
         for (member in roster) {
             val previous = memberStates[member.membershipId]
-            if (previous != null && previous.generation != member.generation) removePeer(member.membershipId)
+            if (previous != null && previous.generation != member.generation) {
+                removePeer(member.membershipId)
+                clearSpeaking(member.membershipId)
+            }
             memberStates[member.membershipId] = member
             if (member.membershipId !in peers) createPeer(member)
+            peers[member.membershipId]?.remoteAudioTrack?.setEnabled(!member.muted)
+            if (member.muted) clearSpeaking(member.membershipId)
         }
+        rosterReady = true
         initialRoster.complete(Unit)
         publishConnectedWhenMeshReady()
     }
@@ -257,10 +338,14 @@ private class MeshVoiceSession(
                     publishConnectedWhenMeshReady()
                 } else if (stateValue == PeerConnection.IceConnectionState.FAILED) {
                     state?.connected = false
+                    markMeshDisconnected()
                     scope.launch { retryPeer(member.membershipId, notifyRemote = true) }
                 } else if (stateValue == PeerConnection.IceConnectionState.DISCONNECTED) {
+                    state?.connected = false
+                    markMeshDisconnected()
                     scope.launch { retryIfStillDisconnected(member.membershipId, state) }
                 } else if (stateValue == PeerConnection.IceConnectionState.CLOSED && peers[member.membershipId] === state) {
+                    markMeshDisconnected()
                     scope.launch { retryPeer(member.membershipId, notifyRemote = true) }
                 }
             }
@@ -273,19 +358,22 @@ private class MeshVoiceSession(
                     publishConnectedWhenMeshReady()
                 } else if (stateValue == PeerConnection.PeerConnectionState.FAILED) {
                     state?.connected = false
+                    markMeshDisconnected()
                     scope.launch { retryPeer(member.membershipId, notifyRemote = true) }
                 } else if (stateValue == PeerConnection.PeerConnectionState.DISCONNECTED) {
+                    state?.connected = false
                     state?.iceState = PeerConnection.IceConnectionState.DISCONNECTED
+                    markMeshDisconnected()
                     scope.launch { retryIfStillDisconnected(member.membershipId, state) }
                 } else if (stateValue == PeerConnection.PeerConnectionState.CLOSED && peers[member.membershipId] === state) {
+                    markMeshDisconnected()
                     scope.launch { retryPeer(member.membershipId, notifyRemote = true) }
                 }
             }
             override fun onIceConnectionReceivingChange(receiving: Boolean) = Unit
             override fun onIceGatheringChange(stateValue: PeerConnection.IceGatheringState) = Unit
             override fun onIceCandidate(candidate: IceCandidate) {
-                val current = state ?: return
-                val generation = current.negotiationGeneration
+                if (state == null) return
                 scope.launch { sendSignal(member, ice = candidate) }
             }
             override fun onIceCandidatesRemoved(candidates: Array<IceCandidate>) = Unit
@@ -295,7 +383,12 @@ private class MeshVoiceSession(
             override fun onRenegotiationNeeded() = Unit
             override fun onAddTrack(receiver: RtpReceiver, streams: Array<out org.webrtc.MediaStream>) = Unit
             override fun onTrack(transceiver: org.webrtc.RtpTransceiver) {
-                if (transceiver.receiver.track() is VideoTrack) transceiver.receiver.track()?.setEnabled(false)
+                val remoteTrack = transceiver.receiver.track()
+                if (remoteTrack is VideoTrack) remoteTrack.setEnabled(false)
+                if (remoteTrack is AudioTrack) {
+                    state?.remoteAudioTrack = remoteTrack
+                    remoteTrack.setEnabled(!(memberStates[member.membershipId]?.muted ?: true))
+                }
             }
             override fun onRemoveTrack(receiver: RtpReceiver) = Unit
         }) ?: throw PartyException("VOICE_PEER_FAILED", "Could not create a voice connection")
@@ -305,7 +398,9 @@ private class MeshVoiceSession(
             peer.close(); peer.dispose()
             throw PartyException("VOICE_PEER_FAILED", "Could not add microphone audio to the voice connection")
         }
-        val peerState = PeerState(member, peer, retries = retries)
+        val epoch = (peerEpochs[member.membershipId] ?: 0L) + 1L
+        peerEpochs[member.membershipId] = epoch
+        val peerState = PeerState(member, peer, PeerGenerationFence(epoch), retries = retries)
         state = peerState
         peers[member.membershipId] = peerState
         if (descriptor.membershipId < member.membershipId) scope.launch { negotiateOffer(member.membershipId) }
@@ -328,7 +423,6 @@ private class MeshVoiceSession(
 
     private suspend fun negotiateOffer(id: String) {
         val state = peers[id] ?: return
-        val generation = ++state.negotiationGeneration
         try {
             val offer = state.peer.createDescription(isOffer = true)
             state.peer.setDescription(local = true, offer)
@@ -344,10 +438,14 @@ private class MeshVoiceSession(
         val message = envelope["msg"]?.jsonPrimitive?.contentOrNull ?: return
         if (message.length > MAX_SIGNAL_CHARS) return
         val parsed = runCatching { json.parseToJsonElement(message).jsonObject }.getOrNull() ?: return
-        val state = peers[from] ?: return
+        var state = peers[from] ?: return
         val senderGeneration = parsed["generation"]?.jsonPrimitive?.contentOrNull ?: return
         val targetGeneration = parsed["targetGeneration"]?.jsonPrimitive?.contentOrNull ?: return
         if (senderGeneration != state.member.generation || targetGeneration != descriptor.voiceSessionId) return
+        val peerGeneration = parsed["peerGeneration"]?.jsonPrimitive?.contentOrNull?.toLongOrNull()
+            ?.takeIf { it > 0L } ?: return
+        val targetPeerGeneration = parsed["targetPeerGeneration"]?.jsonPrimitive?.contentOrNull?.toLongOrNull()
+            ?.takeIf { it >= 0L } ?: return
         val sdpObject = parsed["sdp"] as? JsonObject
         if (sdpObject != null) {
             val type = sdpObject["type"]?.jsonPrimitive?.contentOrNull ?: return
@@ -359,10 +457,25 @@ private class MeshVoiceSession(
                 else -> return
             }
             val description = SessionDescription(sessionType, sdp)
-            state.negotiationGeneration++
+            if (description.type == SessionDescription.Type.OFFER) {
+                if (descriptor.membershipId < from) return
+                val knownRemoteGeneration = state.remotePeerGeneration
+                if (!state.generationFence.acceptOffer(peerGeneration, targetPeerGeneration)) return
+                if (knownRemoteGeneration != null) {
+                    retryPeer(from, notifyRemote = false)
+                    state = peers[from] ?: return
+                    if (!state.generationFence.acceptOffer(peerGeneration, targetPeerGeneration)) return
+                }
+                state.remoteDescriptionSet = false
+                state.pendingIce.removeAll { it.first != peerGeneration }
+            } else {
+                if (!state.generationFence.acceptAnswer(peerGeneration, targetPeerGeneration)) return
+            }
             state.peer.setDescription(local = false, description)
             state.remoteDescriptionSet = true
-            while (state.pendingIce.isNotEmpty()) state.peer.addIceCandidate(state.pendingIce.removeFirst())
+            val candidates = state.pendingIce.filter { it.first == state.remotePeerGeneration }
+            state.pendingIce.clear()
+            candidates.forEach { (_, candidate) -> state.peer.addIceCandidate(candidate) }
             if (description.type == SessionDescription.Type.OFFER) {
                 val answer = state.peer.createDescription(isOffer = false)
                 state.peer.setDescription(local = true, answer)
@@ -375,10 +488,12 @@ private class MeshVoiceSession(
                 val mid = ice["sdpMid"]?.jsonPrimitive?.contentOrNull
                 val line = ice["sdpMLineIndex"]?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: 0
                 if (candidate.length > 4_096) return
+                if (!state.generationFence.acceptCandidate(peerGeneration, targetPeerGeneration)) return
                 val value = IceCandidate(mid, line, candidate)
-                if (state.remoteDescriptionSet) state.peer.addIceCandidate(value)
-                else if (state.pendingIce.size < MAX_PENDING_ICE) state.pendingIce.addLast(value)
+                if (state.remoteDescriptionSet && state.remotePeerGeneration == peerGeneration) state.peer.addIceCandidate(value)
+                else if (state.pendingIce.size < MAX_PENDING_ICE) state.pendingIce.addLast(peerGeneration to value)
             } else if (parsed["restart"]?.jsonPrimitive?.contentOrNull == "true") {
+                if (!state.generationFence.acceptRestart(peerGeneration, targetPeerGeneration)) return
                 retryPeer(from, notifyRemote = false)
             }
         }
@@ -390,9 +505,17 @@ private class MeshVoiceSession(
         ice: IceCandidate? = null,
         restart: Boolean = false,
     ) {
+        val state = peers[member.membershipId] ?: return
+        val targetPeerGeneration = when {
+            restart -> state.remotePeerGeneration ?: return
+            sdp?.type == SessionDescription.Type.OFFER -> 0L
+            else -> state.remotePeerGeneration ?: 0L
+        }
         val message = buildJsonObject {
             put("generation", JsonPrimitive(descriptor.voiceSessionId))
             put("targetGeneration", JsonPrimitive(member.generation))
+            put("peerGeneration", JsonPrimitive(state.localPeerGeneration))
+            put("targetPeerGeneration", JsonPrimitive(targetPeerGeneration))
             if (sdp != null) put("sdp", buildJsonObject {
                 put("type", JsonPrimitive(sdp.type.canonicalForm()))
                 put("sdp", JsonPrimitive(sdp.description))
@@ -423,6 +546,7 @@ private class MeshVoiceSession(
             fail("Could not connect to every voice participant")
             return
         }
+        markMeshDisconnected()
         state.retries++
         val member = memberStates[id] ?: state.member
         if (notifyRemote) sendSignal(member, restart = true)
@@ -499,9 +623,11 @@ private class MeshVoiceSession(
     }
 
     private fun publishConnectedWhenMeshReady() {
-        if (closed || ready.isCompleted || !initialRoster.isCompleted) return
+        if (closed || !initialRoster.isCompleted || !rosterReady || connectedAnnounced) return
         if (memberStates.size != peers.size || peers.values.any { !it.connected }) return
-        if (ready.complete(Unit)) output.trySend(VoiceEvent.Connected)
+        connectedAnnounced = true
+        ready.complete(Unit)
+        output.trySend(VoiceEvent.Connected)
     }
 
     private suspend fun publishSpeakingLevels() {
@@ -597,10 +723,17 @@ private class MeshVoiceSession(
         const val MAX_PEER_RETRIES = 3
         const val RETRY_DELAY_MS = 750L
         const val MESH_CONNECT_TIMEOUT_MS = 30_000L
-        const val SPEAKING_POLL_MS = 300L
-        const val SPEAKING_LEVEL_THRESHOLD = 0.035
+        const val SPEAKING_POLL_MS = 100L
+        const val SPEAKING_LEVEL_THRESHOLD = 0.02
         const val STATS_CALLBACK_TIMEOUT_MS = 1_000L
         const val DISCONNECTED_GRACE_MS = 3_000L
+        const val RECONNECT_BASE_MS = 500L
+        const val RECONNECT_MAX_MS = 30_000L
+        const val ROSTER_TIMEOUT_MS = 10_000L
+        val PERMANENT_VOICE_ERRORS = setOf(
+            "SESSION_REVOKED", "INVALID_TOKEN", "ROOM_ENDED", "NOT_A_MEMBER", "IDENTITY_NOT_FOUND", "VOICE_DISABLED",
+        "VOICE_PEER_FAILED", "VOICE_AUDIO_UNAVAILABLE", "VOICE_CAPACITY_EXCEEDED",
+        )
         val RTC_LOCK = Any()
     }
 }

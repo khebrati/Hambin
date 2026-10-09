@@ -13,106 +13,131 @@ import kotlinx.serialization.json.Json
 import top.roomio.domain.party.GuestIdentity
 import top.roomio.domain.party.GuestSession
 
-/** Firebase credentials and Hambin profile are committed as one settings value. */
+/** Firebase credentials live in platform secure storage; only non-secret profile data uses Settings. */
 @SingleIn(AppScope::class)
 @Inject
 class TokenStore(
     private val settings: Settings,
     private val json: Json,
+    private val secureStorage: SecureCredentialStorage,
 ) {
-    private val mutableRecord = MutableStateFlow(readRecord())
-    private val mutableSession = MutableStateFlow(mutableRecord.value?.toGuestSession())
+    private var credentialsRecord: FirebaseCredentials? = readCredentials()
+    private var profile: StoredProfile = readProfile()
+    private val mutableSession = MutableStateFlow(toSession())
 
     /** Compatibility view for repositories and room UI; null until bootstrap succeeds. */
     val session: StateFlow<GuestSession?> = mutableSession.asStateFlow()
 
-    fun current(): GuestSession? = mutableRecord.value?.toGuestSession()
-    fun credentials(): FirebaseCredentials? = mutableRecord.value?.credentials()
+    init {
+        // Deliberately discard credentials written by the old plaintext format. A clean
+        // install is expected for this migration, and retaining them would defeat the
+        // secure-storage boundary.
+        settings.remove(LEGACY_RECORD_KEY)
+    }
+
+    fun current(): GuestSession? = toSession()
+    fun credentials(): FirebaseCredentials? = credentialsRecord
 
     fun saveCredentials(credentials: FirebaseCredentials, name: String, avatar: String, language: String) {
-        commit(
-            PersistedGuestRecord(
-                uid = credentials.uid,
-                idToken = credentials.idToken,
-                refreshToken = credentials.refreshToken,
-                expiresAtEpochMs = credentials.expiresAtEpochMs,
-                projectId = credentials.projectId,
-                profileName = name,
-                profileAvatar = avatar,
-                profileLanguage = language,
-                identity = null,
-            ),
-        )
+        persistCredentials(credentials)
+        profile = StoredProfile(credentials.uid, name, avatar, language, null)
+        persistProfile()
+        publish()
     }
 
     fun saveCredentials(credentials: FirebaseCredentials) {
-        val current = mutableRecord.value ?: return
-        commit(current.copy(
-            idToken = credentials.idToken,
-            refreshToken = credentials.refreshToken,
-            expiresAtEpochMs = credentials.expiresAtEpochMs,
-            projectId = credentials.projectId,
-        ))
+        if (credentialsRecord == null) return
+        persistCredentials(credentials)
+        publish()
     }
 
     fun saveIdentity(identity: GuestIdentity) {
-        val current = mutableRecord.value ?: return
-        commit(current.copy(
-            profileName = identity.name,
-            profileAvatar = identity.avatar,
-            profileLanguage = identity.language,
+        if (credentialsRecord == null) return
+        profile = profile.copy(
             identity = StoredIdentity(identity.id, identity.name, identity.avatar, identity.language),
-        ))
+        )
+        persistProfile()
+        publish()
     }
 
     fun updateProfile(name: String, avatar: String, language: String) {
-        val current = mutableRecord.value ?: return
-        commit(current.copy(profileName = name, profileAvatar = avatar, profileLanguage = language))
+        if (credentialsRecord == null) return
+        profile = profile.copy(name = name, avatar = avatar, language = language)
+        persistProfile()
+        publish()
     }
 
     /** Never clear credentials on provider/network errors; only explicit reset may do so. */
     fun clear() {
-        settings.remove(RECORD_KEY)
-        mutableRecord.value = null
-        mutableSession.value = null
+        secureStorage.clear()
+        settings.remove(PROFILE_KEY)
+        settings.remove(LEGACY_RECORD_KEY)
+        credentialsRecord = null
+        profile = StoredProfile()
+        publish()
     }
 
-    private fun commit(record: PersistedGuestRecord) {
-        settings.putString(RECORD_KEY, json.encodeToString(record))
-        mutableRecord.value = record
-        mutableSession.value = record.toGuestSession()
+    private fun persistCredentials(credentials: FirebaseCredentials) {
+        // The secure write happens before updating memory so a failed keystore/keychain
+        // operation cannot make the session appear successfully persisted.
+        secureStorage.write(json.encodeToString(credentials))
+        credentialsRecord = credentials
     }
 
-    private fun readRecord(): PersistedGuestRecord? = settings.getStringOrNull(RECORD_KEY)
-        ?.let { value -> runCatching { json.decodeFromString<PersistedGuestRecord>(value) }.getOrNull() }
+    private fun persistProfile() {
+        settings.putString(PROFILE_KEY, json.encodeToString(profile))
+    }
+
+    private fun readCredentials(): FirebaseCredentials? {
+        // A platform-store failure is different from "no saved credentials". Let
+        // it surface so a transient Keychain/Keystore error cannot silently create
+        // a new Firebase UID and strand room ownership.
+        val serialized = secureStorage.read() ?: return null
+        return runCatching { json.decodeFromString<FirebaseCredentials>(serialized) }
+            .getOrElse {
+                secureStorage.clear()
+                null
+            }
+    }
+
+    private fun readProfile(): StoredProfile = runCatching {
+        settings.getStringOrNull(PROFILE_KEY)?.let { json.decodeFromString<StoredProfile>(it) }
+    }.getOrNull() ?: StoredProfile()
+
+    private fun toSession(): GuestSession? {
+        val credentials = credentialsRecord ?: return null
+        val identity = profile.identity?.takeIf { profile.uid == credentials.uid } ?: return null
+        return GuestSession(
+            GuestIdentity(identity.id, identity.name, identity.avatar, identity.language),
+            credentials.idToken,
+            credentials.refreshToken,
+        )
+    }
+
+    private fun publish() {
+        mutableSession.value = toSession()
+    }
 
     private companion object {
-        const val RECORD_KEY = "party.firebaseSession.v1"
+        const val PROFILE_KEY = "party.profile.v2"
+        const val LEGACY_RECORD_KEY = "party.firebaseSession.v1"
     }
 
     @Serializable
-    private data class PersistedGuestRecord(
-        val uid: String,
-        val idToken: String,
-        val refreshToken: String,
-        val expiresAtEpochMs: Long,
-        val projectId: String,
-        val profileName: String,
-        val profileAvatar: String,
-        val profileLanguage: String,
+    private data class StoredProfile(
+        val uid: String = "",
+        val name: String = "",
+        val avatar: String = "",
+        val language: String = "en",
         val identity: StoredIdentity? = null,
-    ) {
-        fun credentials() = FirebaseCredentials(uid, idToken, refreshToken, expiresAtEpochMs, projectId)
-        fun toGuestSession(): GuestSession? = identity?.let {
-            GuestSession(GuestIdentity(it.id, it.name, it.avatar, it.language), idToken, refreshToken)
-        }
-    }
+    )
 
     @Serializable
     private data class StoredIdentity(val id: String, val name: String, val avatar: String, val language: String)
 }
 
 /** Data-layer Firebase credential record; never crosses into domain or presentation. */
+@Serializable
 data class FirebaseCredentials(
     val uid: String,
     val idToken: String,

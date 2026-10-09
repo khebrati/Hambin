@@ -43,6 +43,10 @@ interface PartyDataBindings {
 
         @Provides
         @SingleIn(AppScope::class)
+        fun provideSecureCredentialStorage(): SecureCredentialStorage = createSecureCredentialStorage()
+
+        @Provides
+        @SingleIn(AppScope::class)
         fun provideBackendConfig(): BackendConfig {
             val overrides = platformBackendOverrides()
             return BackendConfig(

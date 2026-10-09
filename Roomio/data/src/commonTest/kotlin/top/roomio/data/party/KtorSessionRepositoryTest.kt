@@ -30,6 +30,26 @@ class KtorSessionRepositoryTest {
     private val config = FirebaseAuthConfig("demo-hambin", "local-test-key", "127.0.0.1:9099")
 
     @Test
+    fun tokenStoreKeepsSecretsOutOfPreferencesAndClearRemovesSecureValue() {
+        val settings = MapSettings()
+        val secure = MemorySecureCredentialStorage()
+        val tokens = TokenStore(settings, json, secure)
+        val credentials = FirebaseCredentials("uid-secret", "sensitive-id-token", "sensitive-refresh-token", 1234, "project")
+
+        tokens.saveCredentials(credentials, "Nika", "COMET", "en")
+
+        assertEquals(credentials, tokens.credentials())
+        assertTrue(settings.keys.none { key ->
+            val value = settings.getStringOrNull(key).orEmpty()
+            value.contains("sensitive-id-token") || value.contains("sensitive-refresh-token")
+        })
+        assertTrue(secure.read()?.contains("sensitive-refresh-token") == true)
+        tokens.clear()
+        assertNull(secure.read())
+        assertNull(tokens.credentials())
+    }
+
+    @Test
     fun authEmulatorUsesLocalKeyAndOfficialEndpointPaths() {
         assertEquals(
             "http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signUp?key=localkey",
@@ -74,7 +94,7 @@ class KtorSessionRepositoryTest {
     @Test
     fun firebaseCredentialsAreSavedBeforeBootstrapAndReusedAfterBackendOutage() = runTest {
         val settings = MapSettings()
-        val tokens = TokenStore(settings, json)
+        val tokens = TokenStore(settings, json, MemorySecureCredentialStorage())
         var signUps = 0
         var bootstraps = 0
         val http = http(MockEngine { request ->
@@ -111,7 +131,7 @@ class KtorSessionRepositoryTest {
         assertEquals("firebase-uid-1", tokens.credentials()?.uid)
         assertEquals(1, signUps, "a bootstrap outage must never create a replacement Firebase identity")
         assertEquals(2, bootstraps)
-        assertEquals(1, settings.keys.count { it == "party.firebaseSession.v1" })
+        assertEquals(0, settings.keys.count { it == "party.firebaseSession.v1" })
         http.close()
     }
 
@@ -170,7 +190,7 @@ class KtorSessionRepositoryTest {
         tokens = tokens,
     )
 
-    private fun tokenStore(expired: Boolean): TokenStore = TokenStore(MapSettings(), json).apply {
+    private fun tokenStore(expired: Boolean): TokenStore = TokenStore(MapSettings(), json, MemorySecureCredentialStorage()).apply {
         saveCredentials(
             FirebaseCredentials(
                 uid = "firebase-uid-1",

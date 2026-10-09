@@ -157,6 +157,8 @@ These phases add behavior missing from the unmodified fork. The implementation i
 
 **Verify:** two/four/eight Android peers, Android-to-browser harness, everyone receiving every speaker, speaking indicators with real and prerecorded speech, muted-state correctness, blocked UDP/TURN TCP/TLS, expired credentials, peer replacement, leave/rejoin, brief signaling outage, network change, background/notification actions, stream abort during voice, and CPU/battery/upload measurements.
 
+**Current execution scope:** the implementation pass is Android-focused. Android JVM tests, Android compilation/APK assembly, and emulator install/launch are the current gates. Two-device and larger voice E2E, real ICE/TURN/audio behavior, device-route/background/network-handover checks, hosted backend deployment, and iOS/desktop validation are deferred. The emulator launch is startup evidence only and does not close the real-voice acceptance gates. See [Phase 5 evidence](../backend/migration-tests/phase-5-evidence.md).
+
 **Guard:** no camera permission, public hardcoded relay credentials, server audio recording, user-facing Firebase login/registration, voice-induced local video pause, microphone enabled before opt-in, or hidden SFU fallback masquerading as mesh.
 
 **Exit gate:** real-device eight-person voice passes parity and recovery tests. A room with one failed peer must show the existing recoverable voice state and retry; do not call the whole room connected while silently omitting a participant.

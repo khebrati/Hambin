@@ -68,3 +68,30 @@ internal class AudioEnergyDelta {
         return kotlin.math.sqrt(energyDelta / durationDelta).coerceIn(0.0, 1.0)
     }
 }
+
+/** Fences SDP, ICE, and restart messages to one local/remote peer-connection pair. */
+internal class PeerGenerationFence(val localGeneration: Long) {
+    var remoteGeneration: Long? = null
+        private set
+
+    fun acceptOffer(senderGeneration: Long, targetGeneration: Long): Boolean {
+        if (senderGeneration <= 0L || (targetGeneration != 0L && targetGeneration != localGeneration)) return false
+        if (remoteGeneration != null && senderGeneration <= remoteGeneration!!) return false
+        remoteGeneration = senderGeneration
+        return true
+    }
+
+    fun acceptAnswer(senderGeneration: Long, targetGeneration: Long): Boolean {
+        if (senderGeneration <= 0L || targetGeneration != localGeneration) return false
+        if (remoteGeneration != null && senderGeneration != remoteGeneration) return false
+        remoteGeneration = senderGeneration
+        return true
+    }
+
+    fun acceptCandidate(senderGeneration: Long, targetGeneration: Long): Boolean =
+        senderGeneration > 0L && (targetGeneration == 0L || targetGeneration == localGeneration) &&
+            (remoteGeneration == null || senderGeneration == remoteGeneration)
+
+    fun acceptRestart(senderGeneration: Long, targetGeneration: Long): Boolean =
+        targetGeneration == localGeneration && remoteGeneration == senderGeneration
+}
