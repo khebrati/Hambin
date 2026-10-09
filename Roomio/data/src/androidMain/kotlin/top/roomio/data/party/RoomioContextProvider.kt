@@ -5,10 +5,13 @@ import android.content.ContentValues
 import android.database.Cursor
 import android.net.Uri
 
+/** Application context shared by Android data adapters initialized by the provider. */
+internal object AppContextHolder {
+    lateinit var appContext: android.content.Context
+}
+
 /**
- * Initializes [AppContextHolder] from the application context. A ContentProvider
- * is created automatically before any other app component, so the LiveKit voice
- * client always has an application context available without launcher wiring.
+ * Initializes [AppContextHolder] from the application context before any app component runs.
  */
 internal class RoomioContextProvider : ContentProvider() {
     override fun onCreate(): Boolean {

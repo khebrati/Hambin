@@ -17,7 +17,8 @@ import top.roomio.domain.party.StreamState
 import top.roomio.domain.party.VoiceClient
 import top.roomio.domain.party.VoiceEvent
 import top.roomio.domain.party.VoiceSession
-import top.roomio.domain.party.VoiceToken
+import top.roomio.domain.party.IceServer
+import top.roomio.domain.party.VoiceConfiguration
 
 internal object testSessionRepository : SessionRepository {
     private val identity = GuestIdentity("test", "Nika", "COMET", "en")
@@ -62,7 +63,10 @@ internal object testRoomRepository : RoomRepository {
     override suspend fun leave(roomId: String) = false
     override suspend fun startStream(roomId: String, url: String) = StreamInfo("session", 1, StreamState.ACTIVE, url)
     override suspend fun abortStream(roomId: String) = StreamInfo("session", 2, StreamState.ABORTED, "")
-    override suspend fun voiceToken(roomId: String) = VoiceToken("token", "wss://example")
+    override suspend fun voiceConfiguration(roomId: String, voiceSessionId: String?) = VoiceConfiguration(
+        "MESH", roomId, "membership", "session", "/hambin/voice/$roomId", "ticket",
+        listOf(IceServer(listOf("stun:example.invalid:3478"))), "",
+    )
 }
 
 internal object testRealtimeClient : RealtimeClient {
@@ -75,7 +79,7 @@ internal object testRealtimeClient : RealtimeClient {
 }
 
 internal object testVoiceClient : VoiceClient {
-    override suspend fun connect(token: VoiceToken): VoiceSession = object : VoiceSession {
+    override suspend fun connect(configuration: VoiceConfiguration): VoiceSession = object : VoiceSession {
         override val events: Flow<VoiceEvent> = emptyFlow()
         override fun setMicrophoneEnabled(enabled: Boolean) = Unit
         override suspend fun disconnect() = Unit

@@ -7,8 +7,8 @@ import kotlinx.coroutines.flow.Flow
  * is opt-in, starts muted, and is independent of room and playback state.
  */
 interface VoiceClient {
-    /** Connects to the voice room with a room-scoped [VoiceToken]. */
-    suspend fun connect(token: VoiceToken): VoiceSession
+    /** Connects to the voice room with an authenticated mesh descriptor. */
+    suspend fun connect(configuration: VoiceConfiguration): VoiceSession
 }
 
 /** A live voice connection. Disconnect it when leaving the room. */

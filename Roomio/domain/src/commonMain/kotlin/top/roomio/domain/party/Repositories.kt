@@ -54,7 +54,7 @@ interface RoomRepository {
 
     suspend fun abortStream(roomId: String): StreamInfo
 
-    suspend fun voiceToken(roomId: String): VoiceToken
+    suspend fun voiceConfiguration(roomId: String, voiceSessionId: String? = null): VoiceConfiguration
 }
 
 /** Opens authenticated room WebSockets using single-use tickets. */

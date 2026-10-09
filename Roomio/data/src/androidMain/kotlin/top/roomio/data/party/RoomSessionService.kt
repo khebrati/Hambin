@@ -18,7 +18,7 @@ import top.roomio.domain.party.SessionAction
 
 /**
  * Foreground service that keeps the room session alive while the app is in the
- * background: the realtime socket and the LiveKit voice call keep running, and a
+ * background: the realtime socket and the WebRTC voice mesh keep running, and a
  * persistent notification shows that the party is still active.
  *
  * It runs for as long as the user is inside a room and stops on leave. The

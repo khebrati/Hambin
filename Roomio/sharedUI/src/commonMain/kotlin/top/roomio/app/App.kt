@@ -35,7 +35,8 @@ import top.roomio.domain.party.StreamState
 import top.roomio.domain.party.VoiceClient
 import top.roomio.domain.party.VoiceEvent
 import top.roomio.domain.party.VoiceSession
-import top.roomio.domain.party.VoiceToken
+import top.roomio.domain.party.IceServer
+import top.roomio.domain.party.VoiceConfiguration
 import top.roomio.domain.profile.ProfileAvatarId
 import top.roomio.domain.profile.ProfileRepository
 import top.roomio.domain.profile.UserProfile
@@ -143,7 +144,12 @@ private object PreviewRoomRepository : RoomRepository {
     override suspend fun leave(roomId: String) = false
     override suspend fun startStream(roomId: String, url: String) = StreamInfo("preview", 1, StreamState.ACTIVE, url)
     override suspend fun abortStream(roomId: String) = StreamInfo("preview", 2, StreamState.ABORTED, "")
-    override suspend fun voiceToken(roomId: String) = VoiceToken("preview", "wss://preview")
+    override suspend fun voiceConfiguration(roomId: String, voiceSessionId: String?) = VoiceConfiguration(
+        mode = "MESH", roomId = roomId, membershipId = "preview-membership",
+        voiceSessionId = "preview-session", namespace = "/hambin/voice/$roomId",
+        ticket = "preview", iceServers = listOf(IceServer(listOf("stun:preview.invalid:3478"))),
+        iceExpiresAt = "",
+    )
 }
 
 private object PreviewRealtimeClient : RealtimeClient {
@@ -156,7 +162,7 @@ private object PreviewRealtimeClient : RealtimeClient {
 }
 
 private object PreviewVoiceClient : VoiceClient {
-    override suspend fun connect(token: VoiceToken): VoiceSession = object : VoiceSession {
+    override suspend fun connect(configuration: VoiceConfiguration): VoiceSession = object : VoiceSession {
         override val events: Flow<VoiceEvent> = flowOf(VoiceEvent.Connected)
         override fun setMicrophoneEnabled(enabled: Boolean) = Unit
         override suspend fun disconnect() = Unit

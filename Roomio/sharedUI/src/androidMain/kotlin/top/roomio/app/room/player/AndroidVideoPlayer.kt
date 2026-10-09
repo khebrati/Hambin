@@ -55,8 +55,8 @@ internal actual fun rememberPlatformVideoPlayer(
             .build()
         ExoPlayer.Builder(appContext, StereoAudioRenderersFactory(appContext))
             // Voice and shared video audio are concurrent room outputs. Video
-            // playback must not take focus away from LiveKit's communication
-            // audio session.
+            // playback must not take focus away from the room's voice audio
+            // session.
             .setAudioAttributes(mediaAudioAttributes, /* handleAudioFocus= */ false)
             .build()
     }
@@ -162,7 +162,7 @@ private const val POSITION_POLL_MS = 500L
 /**
  * Normalizes multichannel media to stereo before it reaches Android's output
  * device. Emulator speaker routes advertise surround layouts that the host
- * output cannot reliably render alongside LiveKit's communication stream.
+ * output cannot reliably render alongside the voice mesh audio stream.
  */
 private class StereoAudioRenderersFactory(context: android.content.Context) : DefaultRenderersFactory(context) {
     override fun buildAudioSink(

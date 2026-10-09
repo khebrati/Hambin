@@ -43,7 +43,7 @@ kotlin {
         androidMain.dependencies {
             implementation(libs.kotlinx.coroutines.android)
             implementation(libs.ktor.client.okhttp)
-            implementation(libs.livekit.android)
+            implementation(libs.stream.webrtc.android)
         }
 
         jvmMain.dependencies {

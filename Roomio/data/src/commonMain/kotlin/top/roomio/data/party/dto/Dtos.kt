@@ -3,6 +3,8 @@ package top.roomio.data.party.dto
 import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
+import top.roomio.domain.party.IceServer
+import top.roomio.domain.party.VoiceConfiguration
 
 @Serializable
 data class GuestSessionRequest(
@@ -138,9 +140,38 @@ data class SnapshotDto(
 )
 
 @Serializable
-data class VoiceTokenDto(
-    val token: String,
-    val url: String,
+data class VoiceConfigurationDto(
+    val mode: String,
+    val roomId: String,
+    val membershipId: String,
+    val voiceSessionId: String,
+    val namespace: String,
+    val ticket: String,
+    val iceServers: List<IceServerDto>,
+    val iceExpiresAt: String,
+)
+
+@Serializable
+data class VoiceConfigurationRequest(val voiceSessionId: String)
+
+@Serializable
+data class IceServerDto(
+    val urls: List<String>,
+    val username: String? = null,
+    val credential: String? = null,
+)
+
+fun IceServerDto.toDomain() = IceServer(urls, username, credential)
+
+fun VoiceConfigurationDto.toDomain() = VoiceConfiguration(
+    mode = mode,
+    roomId = roomId,
+    membershipId = membershipId,
+    voiceSessionId = voiceSessionId,
+    namespace = namespace,
+    ticket = ticket,
+    iceServers = iceServers.map(IceServerDto::toDomain),
+    iceExpiresAt = iceExpiresAt,
 )
 
 @Serializable

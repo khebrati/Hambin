@@ -66,8 +66,21 @@ data class RoomSnapshot(
     val stream: StreamInfo,
 )
 
-/** A room-scoped LiveKit join credential. */
-data class VoiceToken(
-    val token: String,
-    val url: String,
+/** Short-lived, room-scoped descriptor for one authenticated WebRTC mesh role. */
+data class VoiceConfiguration(
+    val mode: String,
+    val roomId: String,
+    val membershipId: String,
+    val voiceSessionId: String,
+    val namespace: String,
+    val ticket: String,
+    val iceServers: List<IceServer>,
+    val iceExpiresAt: String,
+)
+
+/** WebRTC ICE server credentials. TURN credentials are temporary secrets. */
+data class IceServer(
+    val urls: List<String>,
+    val username: String? = null,
+    val credential: String? = null,
 )

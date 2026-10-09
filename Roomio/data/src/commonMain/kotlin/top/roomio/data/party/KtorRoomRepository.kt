@@ -18,7 +18,8 @@ import top.roomio.data.party.dto.RoomPreviewDto
 import top.roomio.data.party.dto.SnapshotDto
 import top.roomio.data.party.dto.StartStreamRequest
 import top.roomio.data.party.dto.StreamResponseDto
-import top.roomio.data.party.dto.VoiceTokenDto
+import top.roomio.data.party.dto.VoiceConfigurationDto
+import top.roomio.data.party.dto.VoiceConfigurationRequest
 import top.roomio.data.party.dto.toDomain
 import top.roomio.domain.party.PARTY_CODE_NETWORK
 import top.roomio.domain.party.PartyException
@@ -28,7 +29,7 @@ import top.roomio.domain.party.RoomRepository
 import top.roomio.domain.party.RoomSnapshot
 import top.roomio.domain.party.SessionRepository
 import top.roomio.domain.party.StreamInfo
-import top.roomio.domain.party.VoiceToken
+import top.roomio.domain.party.VoiceConfiguration
 
 @SingleIn(AppScope::class)
 @Inject
@@ -73,10 +74,11 @@ class KtorRoomRepository(
             .bodyOrThrow<StreamResponseDto>().stream.toDomain()
     }
 
-    override suspend fun voiceToken(roomId: String): VoiceToken = authed {
-        val dto = http.post("${config.baseUrl}/v1/rooms/$roomId/voice/session-token")
-            .bodyOrThrow<VoiceTokenDto>()
-        VoiceToken(token = dto.token, url = dto.url)
+    override suspend fun voiceConfiguration(roomId: String, voiceSessionId: String?): VoiceConfiguration = authed {
+        val dto = http.post("${config.baseUrl}/v1/rooms/$roomId/voice/config") {
+            voiceSessionId?.let { contentType(ContentType.Application.Json); setBody(VoiceConfigurationRequest(it)) }
+        }.bodyOrThrow<VoiceConfigurationDto>()
+        dto.toDomain()
     }
 
     private suspend fun <T> authed(block: suspend () -> T): T = try {

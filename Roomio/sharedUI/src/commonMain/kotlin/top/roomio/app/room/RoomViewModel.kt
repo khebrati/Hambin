@@ -528,17 +528,16 @@ internal class RoomViewModel(
     }
 
     /**
-     * Keeps voice alive for as long as the user wants it. LiveKit reconnects on
-     * its own for transient drops, but an expired token or a failed reconnect
-     * surfaces here, where a fresh room-scoped token is fetched and the session
-     * is re-established with the current mic preference.
+     * Keeps voice alive for as long as the user wants it. The mesh is rebuilt
+     * after transient drops or expired credentials using a fresh authenticated
+     * configuration and the current microphone preference.
      */
     private suspend fun runVoiceLoop() {
         while (voiceWanted && currentCoroutineContext().isActive) {
             var session: VoiceSession? = null
             try {
-                val token = roomRepository.voiceToken(roomId)
-                val connected = voiceClient.connect(token)
+                val configuration = roomRepository.voiceConfiguration(roomId)
+                val connected = voiceClient.connect(configuration)
                 session = connected
                 voice = connected
                 connected.setMicrophoneEnabled(!mutableState.value.micMuted)
@@ -556,8 +555,7 @@ internal class RoomViewModel(
                 voice = null
                 // A dead session can leave a stale speaking set behind.
                 clearSpeakingMembers()
-                // Release the room before reconnecting; the loop owns the session
-                // and must not leak the previous LiveKit room.
+                // Release the previous peer mesh before reconnecting.
                 session?.let { dead ->
                     withContext(NonCancellable) { runCatching { dead.disconnect() } }
                 }

@@ -62,7 +62,13 @@ interface PartyDataBindings {
 
         @Provides
         @SingleIn(AppScope::class)
-        fun provideVoiceClient(): VoiceClient = createVoiceClient()
+        fun provideVoiceClient(
+            http: HttpClient,
+            config: BackendConfig,
+            json: Json,
+            sessions: SessionRepository,
+            tokens: TokenStore,
+        ): VoiceClient = createVoiceClient(http, config, json, sessions, tokens)
 
         @Provides
         @SingleIn(AppScope::class)

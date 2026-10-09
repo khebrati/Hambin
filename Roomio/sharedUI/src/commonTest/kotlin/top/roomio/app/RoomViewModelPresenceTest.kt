@@ -44,7 +44,8 @@ import top.roomio.domain.party.SyncStatus
 import top.roomio.domain.party.VoiceClient
 import top.roomio.domain.party.VoiceEvent
 import top.roomio.domain.party.VoiceSession
-import top.roomio.domain.party.VoiceToken
+import top.roomio.domain.party.IceServer
+import top.roomio.domain.party.VoiceConfiguration
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class RoomViewModelPresenceTest {
@@ -440,7 +441,10 @@ class RoomViewModelPresenceTest {
         override suspend fun leave(roomId: String) = false
         override suspend fun startStream(roomId: String, url: String) = StreamInfo("s", 1, StreamState.ACTIVE, url)
         override suspend fun abortStream(roomId: String) = StreamInfo("s", 2, StreamState.ABORTED, "")
-        override suspend fun voiceToken(roomId: String) = VoiceToken("t", "wss://x")
+        override suspend fun voiceConfiguration(roomId: String, voiceSessionId: String?) = VoiceConfiguration(
+            "MESH", roomId, "membership", "session", "/hambin/voice/$roomId", "ticket",
+            listOf(IceServer(listOf("stun:x.invalid:3478"))), "",
+        )
     }
 
     private fun emittingRealtimeClient(events: MutableSharedFlow<RealtimeEvent>): RealtimeClient = object : RealtimeClient {
@@ -456,7 +460,7 @@ class RoomViewModelPresenceTest {
     private class EmittingVoiceClient : VoiceClient {
         private val mutableEvents = MutableSharedFlow<VoiceEvent>(extraBufferCapacity = 8)
 
-        override suspend fun connect(token: VoiceToken): VoiceSession = object : VoiceSession {
+        override suspend fun connect(configuration: VoiceConfiguration): VoiceSession = object : VoiceSession {
             override val events: Flow<VoiceEvent> = mutableEvents
             override fun setMicrophoneEnabled(enabled: Boolean) = Unit
             override suspend fun disconnect() = Unit
@@ -510,7 +514,7 @@ class RoomViewModelPresenceTest {
         var connects = 0
         val micStates = mutableListOf<Boolean>()
 
-        override suspend fun connect(token: VoiceToken): VoiceSession {
+        override suspend fun connect(configuration: VoiceConfiguration): VoiceSession {
             connects++
             val index = connects
             return object : VoiceSession {
