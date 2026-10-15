@@ -45,24 +45,6 @@ export const previewStates: Record<string, PreviewState> = {
     streamStatus: 'playing',
     roomPreview: 'owner-absent',
   },
-  'sync-center': {
-    screen: 'party',
-    role: 'participant',
-    streamStatus: 'playing',
-    syncSurface: 'bring-to-me',
-  },
-  'sync-center-take': {
-    screen: 'party',
-    role: 'participant',
-    streamStatus: 'playing',
-    syncSurface: 'take-me-to-others',
-  },
-  'sync-incoming': {
-    screen: 'party',
-    role: 'participant',
-    streamStatus: 'playing',
-    syncSurface: 'incoming',
-  },
 };
 
 export function makePreviewRoom(
@@ -102,19 +84,10 @@ export function makePreviewParty(
       streamUrl: sampleVideoUrl,
       participants: [
         ...(ownerPresent
-          ? [
-              {
-                id: 'mira',
-                name: 'Mira',
-                avatarId: 'mint' as const,
-                isOwner: true,
-                isSpeaking: true,
-                positionSeconds: 1542,
-              },
-            ]
+          ? [{ id: 'mira', name: 'Mira', avatarId: 'mint' as const, isOwner: true, isSpeaking: true }]
           : []),
-        { id: 'ellis', name: 'Ellis', avatarId: 'sunny', isMuted: true, positionSeconds: 1480 },
-        { id: 'jo', name: 'Jo', avatarId: 'berry', positionSeconds: 1425 },
+        { id: 'ellis', name: 'Ellis', avatarId: 'sunny', isMuted: true },
+        { id: 'jo', name: 'Jo', avatarId: 'berry' },
         self,
       ],
     };
@@ -129,8 +102,8 @@ export function makePreviewParty(
     streamUrl: sampleVideoUrl,
     participants: [
       self,
-      { id: 'ellis', name: 'Ellis', avatarId: 'sunny', isSpeaking: true, positionSeconds: 1480 },
-      { id: 'jo', name: 'Jo', avatarId: 'berry', isMuted: true, positionSeconds: 1425 },
+      { id: 'ellis', name: 'Ellis', avatarId: 'sunny', isSpeaking: true },
+      { id: 'jo', name: 'Jo', avatarId: 'berry', isMuted: true },
     ],
   };
 }

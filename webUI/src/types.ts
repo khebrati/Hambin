@@ -11,9 +11,6 @@ export type StreamStatus =
   | 'buffering'
   | 'error';
 
-export type SyncDirection = 'bring-to-me' | 'take-me-to-others';
-export type SyncSurface = 'idle' | 'bring-to-me' | 'take-me-to-others' | 'incoming';
-
 export type AvatarId =
   | 'comet'
   | 'mint'
@@ -42,15 +39,6 @@ export interface Participant {
   isSelf?: boolean;
   isSpeaking?: boolean;
   isMuted?: boolean;
-  positionSeconds?: number;
-}
-
-export interface SyncRequest {
-  id: string;
-  requesterName: string;
-  requesterAvatarId: AvatarId;
-  targetSeconds: number;
-  direction: SyncDirection;
 }
 
 export interface Party {
@@ -80,5 +68,4 @@ export interface PreviewState {
   streamStatus?: StreamStatus;
   roomPreview?: 'available' | 'owner-absent' | 'full' | 'ended';
   identity?: Partial<Identity>;
-  syncSurface?: SyncSurface;
 }
