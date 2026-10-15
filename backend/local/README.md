@@ -54,10 +54,21 @@ export TURN_EXTERNAL_IP=127.0.0.1
 docker compose -p hambin-watchparty-local -f backend/compose.watchparty-local.yml --profile voice up -d --wait
 ```
 
-Set `TURN_SHARED_SECRET` in the backend process environment and configure `TURN_URLS` to the Coturn address, for example `turn:127.0.0.1:3478?transport=udp,turn:127.0.0.1:3478?transport=tcp`. The emulator must be able to reach the advertised relay address and mapped UDP relay ports; use its host-reachable address for both `TURN_EXTERNAL_IP` and `TURN_URLS` when testing from Android. TURN credentials returned to clients expire after ten minutes. The coturn profile is optional and is not started by the default database-only Compose command.
+Set `TURN_SHARED_SECRET` in the backend process environment and configure `TURN_URLS` to the Coturn address, for example `turn:127.0.0.1:3478?transport=udp,turn:127.0.0.1:3478?transport=tcp`. For physical-device testing, bind to the host's LAN address and advertise that same address:
+
+```sh
+export TURN_BIND_ADDRESS=192.168.1.34 # host LAN address; keep the bind on the trusted local network
+export TURN_EXTERNAL_IP=192.168.1.34
+export TURN_URLS='turn:192.168.1.34:3478?transport=udp,turn:192.168.1.34:3478?transport=tcp'
+docker compose -p hambin-watchparty-local -f backend/compose.watchparty-local.yml --profile voice up -d --wait
+```
+
+Allow TCP/UDP 3478 and UDP 49160-49200 from the test devices through the host firewall. The emulator must reach the advertised relay address and mapped UDP relay ports. TURN credentials returned to clients expire after ten minutes. The coturn profile is optional and is not started by the default database-only Compose command.
+
+For a physical device using USB debugging, forward backend and Auth Emulator TCP ports with `adb reverse tcp:8081 tcp:8081` and `adb reverse tcp:9099 tcp:9099`. Launch the debug activity with `roomio.backendUrl=http://127.0.0.1:8081`, `roomio.firebaseProjectId=demo-hambin`, and `roomio.authEmulatorHost=127.0.0.1:9099` intent extras. Emulator defaults remain `10.0.2.2`.
 
 For real Firebase testing, enable Anonymous Authentication and disable automatic anonymous-account cleanup. Store the Admin service-account JSON outside the repository, set `GOOGLE_APPLICATION_CREDENTIALS` to its absolute path, use `FIREBASE_PROJECT_ID=hambin-dab14`, and unset `FIREBASE_AUTH_EMULATOR_HOST`. Android `google-services.json` is client configuration, not the Admin credential. Do not commit private keys or token dumps. Real-project smoke testing remains required before release.
 
 Stop the isolated database with `docker compose -p hambin-watchparty-local -f backend/compose.watchparty-local.yml down`. Add `--volumes` only to deliberately reset migration test data. No old rooms/profiles are imported. Emulator users are transient; restarting it resets test authentication identities.
 
-The Phase 5 backend now provides mesh voice configuration, short-lived TURN REST credentials, a separately ticketed voice namespace, role leases, mute/roster updates, and scoped audio-only SDP/ICE signaling with per-peer generation fencing. Local verification passes `npm run typecheckServer`, `npm run test:backend`, and the full `npm run test:integration` suite (7/7 integration tests) against PostgreSQL and the Firebase Auth Emulator. Android JVM tests, Android compilation/APK assembly, and emulator install/launch pass. These checks do not prove gathered ICE candidates or real audio relay. Two-device voice E2E, relay reachability, and hosted deployment are deferred; see the [Phase 5 evidence](../migration-tests/phase-5-evidence.md). Room-service design and earlier operational evidence are in the [Phase 3 evidence](../migration-tests/phase-3-evidence.md). No hosted deployment is configured.
+The Phase 5 backend now provides mesh voice configuration, short-lived TURN REST credentials, a separately ticketed voice namespace, role leases, mute/roster updates, and scoped audio-only SDP/ICE signaling with per-peer generation fencing. Local verification passes `npm run typecheckServer`, `npm run test:backend`, and the full `npm run test:integration` suite (7/7 integration tests) against PostgreSQL and the Firebase Auth Emulator. Android JVM tests, Android compilation/APK assembly, and two-device Android E2E pass for room create/join/rejoin, shared MP4 playback, voice signaling/ICE connectivity, and cross-device mute updates. The E2E did not verify audible conversation or whether the selected ICE candidate pair used TURN. Hosted deployment remains deferred; see the [Phase 5 evidence](../migration-tests/phase-5-evidence.md). Room-service design and earlier operational evidence are in the [Phase 3 evidence](../migration-tests/phase-3-evidence.md). No hosted deployment is configured.

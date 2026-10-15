@@ -15,10 +15,11 @@ class AppActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (BuildConfig.DEBUG) {
-            // Emulator-only development targets. Release builds keep the production endpoints.
-            System.setProperty("roomio.backendUrl", "http://10.0.2.2:8081")
-            System.setProperty("roomio.firebaseProjectId", "demo-hambin")
-            System.setProperty("roomio.authEmulatorHost", "10.0.2.2:9099")
+            // Local emulator defaults; explicit extras also let a physical device use
+            // adb reverse or a host-LAN address without changing release configuration.
+            System.setProperty("roomio.backendUrl", intent.getStringExtra("roomio.backendUrl") ?: "http://10.0.2.2:8081")
+            System.setProperty("roomio.firebaseProjectId", intent.getStringExtra("roomio.firebaseProjectId") ?: "demo-hambin")
+            System.setProperty("roomio.authEmulatorHost", intent.getStringExtra("roomio.authEmulatorHost") ?: "10.0.2.2:9099")
         }
         enableEdgeToEdge()
         setContent { 

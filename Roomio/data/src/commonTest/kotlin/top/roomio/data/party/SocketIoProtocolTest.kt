@@ -6,6 +6,18 @@ import kotlin.test.assertFailsWith
 
 class SocketIoProtocolTest {
     @Test
+    fun encodesSocketIoPacketsWithOneEngineIoMessagePrefix() {
+        assertEquals(
+            "40/hambin/rooms/room-1,{\"ticket\":\"one-use\"}",
+            encodeNamespaceConnect("/hambin/rooms/room-1", "{\"ticket\":\"one-use\"}"),
+        )
+        assertEquals(
+            "42/hambin/rooms/room-1,7[\"sync.request\",{}]",
+            encodeNamespaceEvent("/hambin/rooms/room-1", 7, "[\"sync.request\",{}]"),
+        )
+    }
+
+    @Test
     fun parsesNamespacedConnectEventAndAckIds() {
         val connect = parseSocketIoPacket("0/hambin/rooms/room-1,{\"ticket\":\"one-use\"}")
         assertEquals(SOCKET_CONNECT, connect.type)

@@ -23,6 +23,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -63,9 +64,9 @@ internal class SocketIoConnection(
         }
         val auth = json.encodeToString(JsonObject.serializer(), JsonObject(mapOf(
             "ticket" to json.parseToJsonElement(json.encodeToString(ticket)),
-            "protocolVersion" to json.parseToJsonElement("2"),
+            "protocolVersion" to JsonPrimitive(2),
         )))
-        sendRaw("4${encodeNamespaceConnect(namespace, auth)}")
+        sendRaw(encodeNamespaceConnect(namespace, auth))
         withTimeout(NAMESPACE_CONNECT_TIMEOUT_MS) { client.connected.await() }
         return client
     }
@@ -84,7 +85,7 @@ internal class SocketIoConnection(
                 json.parseToJsonElement(json.encodeToString(name)),
                 payload,
             )))
-            socket.send(Frame.Text("4${encodeNamespaceEvent(namespace, id, event)}"))
+            socket.send(Frame.Text(encodeNamespaceEvent(namespace, id, event)))
             id
         }
         try {
@@ -100,7 +101,7 @@ internal class SocketIoConnection(
         val event = json.encodeToString(JsonArray.serializer(), JsonArray(listOf(
             json.parseToJsonElement(json.encodeToString(name)), payload,
         )))
-        sendRaw("4${"42$namespace,$event"}")
+        sendRaw("42$namespace,$event")
     }
 
     internal suspend fun unregister(namespace: String) {
