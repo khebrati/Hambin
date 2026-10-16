@@ -1,0 +1,85 @@
+name: hambin
+services:
+  postgres:
+    image: postgres@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+    environment:
+      POSTGRES_USER: hambin
+      POSTGRES_DB: hambin
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U hambin -d hambin]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    logging: &logging
+      driver: json-file
+      options: {max-size: 10m, max-file: '3'}
+  api:
+    image: hambin-api:${RELEASE_ID:?required}
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    environment:
+      NODE_ENV: production
+      HAMBIN_MODE: 'true'
+      HOST: 0.0.0.0
+      PORT: '8080'
+      DATABASE_URL: postgresql://hambin:${POSTGRES_PASSWORD}@postgres:5432/hambin
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:?required}
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/firebase-admin.json
+      TRUSTED_PROXIES: 172.30.55.254/32
+      TURN_URLS: turn:${TURN_DOMAIN}:3478?transport=udp,turn:${TURN_DOMAIN}:3478?transport=tcp,turns:${TURN_DOMAIN}:5349?transport=tcp
+      TURN_SHARED_SECRET: ${TURN_SHARED_SECRET:?required}
+    volumes:
+      - /opt/hambin/secrets/firebase-admin.json:/run/secrets/firebase-admin.json:ro
+    depends_on:
+      postgres: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:8080/readyz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    stop_grace_period: 20s
+    restart: unless-stopped
+    logging: *logging
+  caddy:
+    image: caddy@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN:?required}
+      TURN_DOMAIN: ${TURN_DOMAIN:?required}
+    ports: ['80:80', '443:443', '443:443/udp']
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./web:/srv:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      default: {ipv4_address: 172.30.55.254}
+    depends_on:
+      api: {condition: service_healthy}
+    restart: unless-stopped
+    logging: *logging
+  coturn:
+    image: coturn/coturn@sha256:71c3c990283385567f11794ee692e3a47b66fd9b0bb39e42afbe776e331dd888
+    network_mode: host
+    environment:
+      TURN_DOMAIN: ${TURN_DOMAIN}
+      TURN_SHARED_SECRET: ${TURN_SHARED_SECRET}
+      PUBLIC_IP: ${PUBLIC_IP:?required}
+    volumes:
+      - /opt/hambin/turn-tls:/tls:ro
+      - ./turn-entrypoint.sh:/turn-entrypoint.sh:ro
+    entrypoint: [/bin/sh, /turn-entrypoint.sh]
+    restart: unless-stopped
+    logging: *logging
+networks:
+  default:
+    ipam:
+      config: [{subnet: 172.30.55.0/24}]
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:

@@ -7,6 +7,10 @@ import type { JoinStatus } from '../types';
 export type ManagerMode = 'create' | 'join';
 
 interface PartyManagerScreenProps {
+  live?: boolean;
+  errorMessage?: string;
+  codeDraft?: string;
+  onCodeChange?: (value: string) => void;
   initialMode: ManagerMode;
   joinStatus: JoinStatus;
   theme: 'light' | 'dark';
@@ -26,9 +30,14 @@ export function PartyManagerScreen({
   onCreate,
   onPreview,
   onResetError,
+  live = false,
+  errorMessage,
+  codeDraft,
+  onCodeChange,
 }: PartyManagerScreenProps) {
   const [mode, setMode] = useState(initialMode);
-  const [code, setCode] = useState(joinStatus === 'error' ? 'NOVA-99' : '');
+  const [localCode, setCode] = useState(joinStatus === 'error' ? 'NOVA-99' : '');
+  const code = codeDraft ?? localCode;
 
   useEffect(() => setMode(initialMode), [initialMode]);
 
@@ -70,6 +79,7 @@ export function PartyManagerScreen({
           </button>
         </div>
 
+        {errorMessage && mode === 'create' && <p role="alert">{errorMessage}</p>}
         {mode === 'create' ? (
           <section className="manager-panel" aria-labelledby="create-title">
             <div className="manager-visual manager-visual--create" aria-hidden="true">
@@ -104,12 +114,13 @@ export function PartyManagerScreen({
               value={code}
               onChange={(value) => {
                 setCode(value.toUpperCase());
+                onCodeChange?.(value.toUpperCase());
                 if (joinStatus === 'error') onResetError();
               }}
-              placeholder="MOON-42"
+              placeholder={live ? "ABCD1234" : "MOON-42"}
               error={
                 joinStatus === 'error'
-                  ? "We couldn't find that party. Check the code and try again."
+                  ? errorMessage || "We couldn't find that party. Check the code and try again."
                   : undefined
               }
               disabled={joinStatus === 'loading'}
@@ -126,9 +137,9 @@ export function PartyManagerScreen({
                 Preview party
               </Button>
             )}
-            <p className="manager-code-hints">
+            {!live && <p className="manager-code-hints">
               Try <strong>MOON-42</strong>, <strong>ORBIT-08</strong>, <strong>FULL-10</strong>, or <strong>ENDED-3</strong>.
-            </p>
+            </p>}
           </section>
         )}
       </main>

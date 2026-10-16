@@ -51,7 +51,7 @@ export function ParticipantItem({ participant }: { participant: Participant }) {
       <div className="participant__copy">
         <strong>{participant.isSelf ? 'You' : participant.name}</strong>
         <span>
-          {participant.isOwner ? (
+          {participant.present === false ? 'Away' : participant.isOwner ? (
             <>
               <Star size={12} aria-hidden="true" /> Host
             </>

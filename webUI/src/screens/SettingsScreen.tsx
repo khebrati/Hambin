@@ -12,6 +12,7 @@ interface SettingsScreenProps {
   onToggleTheme: () => void;
   onBack: () => void;
   onSave: (identity: Identity) => void;
+  saving?: boolean;
 }
 
 export function SettingsScreen({
@@ -20,6 +21,7 @@ export function SettingsScreen({
   onToggleTheme,
   onBack,
   onSave,
+  saving = false,
 }: SettingsScreenProps) {
   const [draft, setDraft] = useState(identity);
   const trimmedName = draft.name.trim();
@@ -115,10 +117,10 @@ export function SettingsScreen({
         <div className="sticky-action">
           <Button
             fullWidth
-            disabled={!trimmedName}
+            disabled={!trimmedName || [...trimmedName].length > 48 || saving}
             onClick={() => onSave({ ...draft, name: trimmedName })}
           >
-            Save profile
+            {saving ? 'Saving…' : 'Save profile'}
           </Button>
         </div>
       </main>

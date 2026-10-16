@@ -1011,6 +1011,8 @@ strong {
 
 .sticky-action {
   position: fixed;
+  display: flex;
+  justify-content: center;
   z-index: 10;
   left: 0;
   right: 0;

@@ -29,6 +29,8 @@ import {
   LoadingIndicator,
   TextField,
 } from '../components/Material';
+import { VideoPlayer } from '../components/VideoPlayer';
+import type { VoiceState } from '../data/voice';
 import { sampleVideoUrl } from '../data/fakeRepository';
 import type { Party, StreamStatus } from '../types';
 
@@ -57,7 +59,20 @@ function formatTime(value: number) {
     : `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
+export interface LivePartyControls {
+  connected: boolean;
+  leaving: boolean;
+  voice: VoiceState;
+  onToggleVoice: () => Promise<void>;
+  onDisconnectVoice: () => void;
+  onResumeVoice: () => void;
+  onSync: () => Promise<void>;
+  syncing: boolean;
+  syncTarget?: { requestId: string; positionMs: number };
+  onReport: (positionMs: number, playing: boolean) => void;
+}
 interface PartyScreenProps {
+  live?: LivePartyControls;
   party: Party;
   streamStatus: StreamStatus;
   theme: 'light' | 'dark';
@@ -81,6 +96,7 @@ export function PartyScreen({
   onAbort,
   onLeave,
   onNotify,
+  live,
 }: PartyScreenProps) {
   const [urlDraft, setUrlDraft] = useState(
     streamStatus === 'error' ? 'not-a-complete-link' : '',
@@ -99,32 +115,35 @@ export function PartyScreen({
   >('idle');
 
   const activeUrl = party.streamUrl || sampleVideoUrl;
-  const hasPlayer = ['playing', 'paused', 'buffering'].includes(streamStatus);
+  const hasPlayer = live ? !!party.streamUrl : ['playing', 'paused', 'buffering'].includes(streamStatus);
+  const partyCode = party.code || party.id;
+  const voiceMuted = live ? live.voice.muted : micMuted;
+  const voiceLabel = live?.voice.status === 'off' || live?.voice.status === 'error' ? 'Join voice (muted)' : live?.voice.status === 'connecting' ? 'Connecting voice' : voiceMuted ? 'Unmute microphone' : 'Mute microphone';
   const isOwner = party.role === 'owner' && party.ownerPresent;
   const inviteLink = useMemo(() => {
     const url = new URL(window.location.href);
     url.search = '';
-    url.searchParams.set('invite', party.id);
+    url.searchParams.set('invite', party.code || party.id);
     return url.toString();
-  }, [party.id]);
+  }, [party.id, party.code]);
 
   useEffect(() => {
-    if (streamStatus !== 'playing') return;
+    if (live || streamStatus !== 'playing') return;
     const timer = window.setInterval(
       () => setPosition((current) => Math.min(current + 1, TOTAL_SECONDS)),
       1000,
     );
     return () => window.clearInterval(timer);
-  }, [streamStatus]);
+  }, [streamStatus, live]);
 
   const participants = useMemo(
     () =>
       party.participants.map((participant) =>
-        participant.isSelf
+        !live && participant.isSelf
           ? { ...participant, isMuted: micMuted, isSpeaking: !micMuted && participant.isSpeaking }
           : participant,
       ),
-    [micMuted, party.participants],
+    [micMuted, party.participants, live],
   );
 
   const copyUrl = async () => {
@@ -144,6 +163,7 @@ export function PartyScreen({
     try {
       pasted = await navigator.clipboard.readText();
     } catch {
+      if (live) { onNotify('Paste is unavailable. Enter the video URL manually.'); return; }
       pasted = sampleVideoUrl;
     }
     setUrlDraft(pasted || sampleVideoUrl);
@@ -179,7 +199,7 @@ export function PartyScreen({
     <div className="screen party-screen screen-enter">
       <AppBar
         title={party.title}
-        subtitle={`${party.id} · ${isOwner ? 'Owner' : party.ownerPresent ? 'Guest' : 'Owner away'}`}
+        subtitle={`${partyCode} · ${isOwner ? 'Owner' : party.ownerPresent ? 'Guest' : 'Owner away'}`}
         theme={theme}
         onToggleTheme={onToggleTheme}
         actions={
@@ -230,6 +250,8 @@ export function PartyScreen({
               ownerPresent={party.ownerPresent}
               ownerName={party.ownerName}
             />
+          ) : live ? (
+            <VideoPlayer url={party.streamUrl} sessionId={party.streamSessionId || ''} onReport={live.onReport} onNotify={onNotify} onState={onSetStreamStatus} syncTarget={live.syncTarget} />
           ) : (
             <CinemaPlayer
               status={streamStatus}
@@ -257,9 +279,10 @@ export function PartyScreen({
               <Button
                 variant="tonal"
                 icon={<RefreshCw size={19} aria-hidden="true" />}
-                onClick={syncPlayback}
+                onClick={live ? () => void live.onSync() : syncPlayback}
+                disabled={live ? !live.connected || live.syncing : false}
               >
-                Sync to room
+                {live?.syncing ? 'Syncing…' : 'Sync to room'}
               </Button>
             </div>
           ) : null}
@@ -277,17 +300,20 @@ export function PartyScreen({
           <section className="voice-panel" aria-labelledby="voice-heading">
             <div>
               <span className="eyebrow">Voice room</span>
-              <h2 id="voice-heading">{micMuted ? 'Your mic is muted' : 'Your mic is on'}</h2>
+              <h2 id="voice-heading">{live?.voice.status === 'off' ? 'Voice is optional' : live?.voice.status === 'error' ? 'Voice needs retry' : live?.voice.status === 'connecting' ? 'Connecting voice…' : voiceMuted ? 'Your mic is muted' : 'Your mic is on'}</h2>
             </div>
             <IconButton
-              icon={micMuted ? MicOff : Mic}
-              label={micMuted ? 'Unmute microphone' : 'Mute microphone'}
-              variant={micMuted ? 'standard' : 'tonal'}
-              selected={!micMuted}
-              onClick={() => setMicMuted((current) => !current)}
+              icon={voiceMuted ? MicOff : Mic}
+              label={voiceLabel}
+              variant={voiceMuted ? 'standard' : 'tonal'}
+              selected={!voiceMuted}
+              onClick={() => live ? void live.onToggleVoice() : setMicMuted((current) => !current)}
+              disabled={live ? !live.connected || live.voice.status === 'connecting' : false}
             />
           </section>
 
+          {live?.voice.error?.includes('playback was blocked') && <Button onClick={live.onResumeVoice}>Resume voice audio</Button>}
+          {live && live.voice.status !== 'off' && <Button variant="text" onClick={live.onDisconnectVoice}>Disconnect voice</Button>}
           <Button
             variant="outlined"
             icon={<UserPlus size={18} aria-hidden="true" />}
@@ -341,7 +367,7 @@ export function PartyScreen({
         <section className="share-option" aria-labelledby="party-code-label">
           <label className="read-only-field">
             <span id="party-code-label">Party code</span>
-            <input value={party.id} readOnly />
+            <input value={partyCode} readOnly />
           </label>
           <Button
             variant="tonal"
@@ -352,14 +378,14 @@ export function PartyScreen({
                 <Clipboard size={18} aria-hidden="true" />
               )
             }
-            onClick={() => void copyInvite(party.id, 'code')}
+            onClick={() => void copyInvite(partyCode, 'code')}
           >
             {inviteCopyState === 'code' ? 'Code copied' : 'Copy code'}
           </Button>
         </section>
         <section className="share-option" aria-labelledby="invite-link-label">
           <label className="read-only-field">
-            <span id="invite-link-label">Prototype invite link</span>
+            <span id="invite-link-label">Invite link</span>
             <input value={inviteLink} readOnly />
           </label>
           <Button
@@ -419,15 +445,15 @@ export function PartyScreen({
             <Button variant="text" onClick={() => setLeaveOpen(false)}>
               Stay
             </Button>
-            <Button variant="danger" onClick={onLeave}>
-              Leave party
+            <Button variant="danger" onClick={onLeave} disabled={live?.leaving}>
+              {live?.leaving ? 'Leaving…' : 'Leave party'}
             </Button>
           </>
         }
       >
         <p>
           {isOwner
-            ? 'Your playback will stop. The room stays open without an owner until you rejoin.'
+            ? 'Your playback will stop. If others remain, the room stays open until you rejoin.'
             : 'Your playback will stop and you will return home.'}
         </p>
       </Dialog>

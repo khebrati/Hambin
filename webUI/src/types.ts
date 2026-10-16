@@ -39,10 +39,13 @@ export interface Participant {
   isSelf?: boolean;
   isSpeaking?: boolean;
   isMuted?: boolean;
+  present?: boolean;
 }
 
 export interface Party {
   id: string;
+  code?: string;
+  streamSessionId?: string;
   title: string;
   role: PartyRole;
   ownerName: string;

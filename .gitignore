@@ -48,3 +48,7 @@ DerivedData/
 # Windows metadata
 Thumbs.db
 Desktop.ini
+
+# Browser test artifacts
+webUI/test-results/
+webUI/playwright-report/

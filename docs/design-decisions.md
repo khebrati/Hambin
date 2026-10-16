@@ -128,7 +128,7 @@
 
 ## DD-017: Directional Sync with Consent (webUI prototype exploration)
 
-- **Status:** Proposed for review — three prototype variations implemented in `webUI/` for comparison
+- **Status:** Archived/deferred by stakeholder request on 2026-10-15; preserved on `archive/web-directional-sync`
 - **Decision:** Replace the single "Sync to room" action with a directional sync flow. Tapping sync offers two intents:
   - **Bring everyone to me:** sends a consent request to the other participants showing who is asking and the target time ("Mira wants to move to 25:42 — do you agree?"), with a "turn off sync requests from others" option that is also configurable as a room setting.
   - **Take me to others:** opens a chooser where the requester sees each participant's current playback time (and how far ahead or behind they are) and picks one person to follow, then moves to that person's time.
@@ -184,5 +184,23 @@
 - **Authentication consequence:** Anonymous sign-in is automatic with no new registration/login UI. Firebase UID maps uniquely to an internal UUID; PostgreSQL retains profile/ownership data. Replace custom JWT/refresh issuance with Firebase token verification and direct client refresh, disable anonymous-account automatic cleanup, and preserve identity during provider outages. Client changes include bootstrap and credential/namespace reauthentication; domain/presentation stay provider-neutral.
 - **Experience constraint:** Preserve guest identity/ownership, party codes/invitations, preview/confirmation, ownerless continuity, local player controls, requester-only explicit sync without rewind, opt-in muted voice, speaking indicators, background/notification behavior, clean leave, and local subtitles/audio tracks. Do not adopt the fork's shared play/pause/seek behavior or add camera/text/virtual-browser features.
 - **Migration consequence:** Reuse unchanged fork capabilities first in an isolated harness, then implement product gaps and client adapters. The project is not live; old rooms, profiles, settings, and credentials are disposable, and testers may uninstall/reinstall. Switch directly to a fresh database/new app after parity tests; no legacy adapters, old-data/preference import, mixed voice modes, or drainage period is required. New profile/settings and identity functionality still work normally. Retire Go/LiveKit from the active project once the replacement passes verification.
-- **Prior decisions:** This supersedes the final Go/LiveKit technology choice in DD-014/DD-015 once migration completes, while retaining their accepted product behavior. DD-016 and DD-018 through DD-021 remain in force. DD-017 remains an unaccepted `webUI` fixture exploration; the browser prototype is not replaced or silently connected to production by this migration.
+- **Prior decisions:** This supersedes the final Go/LiveKit technology choice in DD-014/DD-015 once migration completes, while retaining their accepted product behavior. DD-016 and DD-018 through DD-021 remain in force. DD-017 remains an unaccepted archived exploration. DD-023 subsequently authorizes local browser/backend integration.
 - **Plan:** [Migration phases and rollout](watchparty-backend-migration-plan.md) and [behavior/interface acceptance specification](watchparty-migration-compatibility.md).
+
+
+## DD-023: Browser Integration with the Migrated Backend
+
+- **Status:** Approved by the stakeholder on 2026-10-15; local implementation.
+- **Decision:** Archive the browser-only directional sync exploration and restore the single requester-only Sync action. Connect the browser client to the migrated Firebase/WatchParty backend, including profiles, room lifecycle, real local playback, forward-only sync, and audio-only peer mesh voice. This supersedes earlier webUI-only restrictions against networking and the requirement to retain active DD-017 variations.
+- **Preservation:** `archive/web-directional-sync` retains the original preview. Rollback `22c34ed` restores only the frontend delta from `e4f7071`; published Android/backend history remains intact.
+- **Boundary:** Use the existing shared `/v1`, ticketed Socket.IO, and voice contracts. Normal entry uses live services; explicit fixture preview routes remain isolated with no backend/Auth activity. Browser dependencies remain within `webUI`.
+- **Platform adaptation:** Browser codecs, microphone/autoplay permissions, HTTPS, cross-origin media policies, and WebVTT/HLS track support apply. Android foreground services and platform-specific track formats are not browser requirements. Established video stays local across room reconnects; unexpected tab closure uses lease expiry rather than a guaranteed background leave request.
+- **Rollout:** Validate against the local Auth Emulator/PostgreSQL/Coturn stack first. Hosted deployment and physical browser-to-Android audio acceptance remain separate gates. See [browser integration evidence](web-browser-backend-integration-evidence.md) for measured checks and limitations.
+
+
+## DD-024: Same-Origin Hosted Browser and API
+
+- **Status:** Approved by the stakeholder on 2026-10-15.
+- **Decision:** Deploy the integrated browser build and migrated Node API together on VPS `46.249.98.175`. Caddy serves the frontend and routes `/v1` and `/socket.io` to the internal API on the same origin. Use `watchparty.audiosense.ir` temporarily and `turn.watchparty.audiosense.ir` for authenticated voice relay; keep both DNS-only. This supersedes the earlier temporary `watchparty.me`/`watchparty.top` hostname proposals and the local-only deployment scope.
+- **Configuration:** Domain names belong in protected deployment configuration. A later switch to `watchparty.top` changes ingress and TURN configuration. Because browser storage is origin-scoped, moving domains does not automatically preserve the browser's anonymous identity; retain the old origin or plan an explicit transition.
+- **Boundary:** Deploy the existing browser integration and pinned WatchParty fork; no production Auth Emulator, legacy Go/LiveKit cutover, Git publication, or capacity claim is implied. Admin credentials stay outside Git and images. See [deployment operations](../backend/deploy/README.md).

@@ -5,6 +5,8 @@ import { Avatar } from '../components/Avatar';
 import { Button, IconButton } from '../components/Material';
 
 interface HomeScreenProps {
+  live?: boolean;
+  busy?: boolean;
   identity: Identity;
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
@@ -17,6 +19,8 @@ interface HomeScreenProps {
 
 export function HomeScreen({
   identity,
+  live = false,
+  busy = false,
   theme,
   onToggleTheme,
   onSettings,
@@ -61,6 +65,7 @@ export function HomeScreen({
               variant="filled"
               icon={<Plus size={20} aria-hidden="true" />}
               onClick={onCreate}
+              disabled={busy}
               fullWidth
             >
               Create a party
@@ -69,6 +74,7 @@ export function HomeScreen({
               variant="tonal"
               icon={<Ticket size={20} aria-hidden="true" />}
               onClick={onJoin}
+              disabled={busy}
               fullWidth
             >
               Join with code
@@ -76,7 +82,7 @@ export function HomeScreen({
           </div>
         </section>
 
-        <section
+        {(!live || returnableParty) && <section
           className={`home-room-preview ${returnableParty ? 'home-room-preview--returnable' : ''}`}
           aria-label={returnableParty ? 'Your ownerless room' : 'Recent room'}
         >
@@ -92,7 +98,7 @@ export function HomeScreen({
             <strong>{returnableParty?.title || "Mira's late show"}</strong>
             <span>
               {returnableParty
-                ? `${returnableParty.participants.length} friends · No owner`
+                ? live ? 'Return with your original owner permissions' : `${returnableParty.participants.length} friends · No owner`
                 : '4 friends'}
             </span>
           </div>
@@ -101,8 +107,9 @@ export function HomeScreen({
             label={returnableParty ? 'Rejoin as owner' : 'Open party manager'}
             variant={returnableParty ? 'tonal' : 'standard'}
             onClick={returnableParty ? onRejoinOwnedParty : onJoin}
+            disabled={busy}
           />
-        </section>
+        </section>}
       </main>
     </div>
   );

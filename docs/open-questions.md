@@ -72,8 +72,8 @@ Resolved questions are preserved with their answers for traceability.
     - Answer: The room remains active without an owner until that same owner rejoins. Other users retain local playback but cannot start, replace, or abort the shared video. Ownership does not transfer.
     - Design decision affected: Add a persistent owner-absent room state, keep owner-only controls unavailable, and restore them only when the original owner returns.
 
-12. [Open] Directional sync semantics, and the conflict with the resolved "no visible position differences" answer.
-    - The new `webUI` sync exploration (DD-017) shows each participant's playback time and offers "Bring everyone to me" / "Take me to others". This conflicts with the resolved answer to Important question 7, which said not to design visible ahead/behind indicators or participant timelines.
+12. [Deferred/archived 2026-10-15, DD-023] Directional sync semantics, and the conflict with the resolved "no visible position differences" answer.
+    - The archived `webUI` sync exploration (DD-017) shows each participant's playback time and offers "Bring everyone to me" / "Take me to others". This conflicts with the resolved answer to Important question 7, which said not to design visible ahead/behind indicators or participant timelines.
     - Open sub-questions: Does "Bring everyone to me" need unanimous agreement, a majority, or move immediately with per-user opt-out? Can the room owner force a sync? Is "turn off sync requests from others" global, per-room, or per-sender, and does it persist across sessions? Should "Take me to others" allow following someone who is behind the requester? Which of the three variations (A · Sheet, B · Inline, C · Center) should be adopted?
     - Design decision affected: The accepted variation and consent rules must be settled before the "Synchronization rules" in `requirements.md` are updated and before the native client implements matching behavior.
 
@@ -111,5 +111,12 @@ Resolved questions are preserved with their answers for traceability.
 - Voice-chat details are not yet defined beyond "voice only."
 - Initial owner assignment is still inferred from party creation, but the owner-absent and returning-owner lifecycle is defined.
 - Desktop and iOS playback engines are not yet implemented; the Android player (DD-013) is the approved reference seam for extending them.
-- Synchronization is a local placeholder until a cross-device sync contract exists. Directional sync (DD-017) is an unaccepted `webUI` exploration whose request-consent rules and chosen variation are still open.
+- Synchronization is a local placeholder until a cross-device sync contract exists. Directional sync (DD-017) is an archived exploration; its request-consent rules and chosen variation are deferred under DD-023. The connected browser uses the accepted private, requester-only forward sync contract.
 - The Android background room session (DD-018) keeps an existing process alive but does not own the LiveKit voice call, so voice cannot be restored after process death. Whether the call should move into the foreground service is unresolved.
+
+
+## Hosted deployment follow-ups (2026-10-15)
+
+- Before replacing `watchparty.audiosense.ir` with `watchparty.top`, decide how returning browser owners retain access to their origin-scoped anonymous credentials. Keep the original origin accessible or approve an explicit identity-transition design; changing DNS alone does not transfer browser storage.
+- Select an offsite destination and retention policy for VPS database backups. Daily local dumps and a scratch restore are verified; same-host backups do not cover VM loss.
+- Hosted four/eight-peer mesh, physical browser/Android audio, restrictive-network fallback, and sustained load remain acceptance gates; see [deployment evidence](vps-deployment-evidence.md).

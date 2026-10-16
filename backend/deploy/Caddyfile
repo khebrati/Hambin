@@ -1,0 +1,24 @@
+{$SITE_DOMAIN} {
+    encode zstd gzip
+    header {
+        X-Content-Type-Options nosniff
+        Referrer-Policy strict-origin-when-cross-origin
+        Permissions-Policy "camera=(), microphone=(self)"
+    }
+    @backend path /v1 /v1/* /socket.io /socket.io/* /healthz /readyz
+    handle @backend {
+        reverse_proxy api:8080
+    }
+    handle {
+        root * /srv
+        @assets path /assets/*
+        header @assets Cache-Control "public, max-age=31536000, immutable"
+        @entry path / /index.html
+        header @entry Cache-Control "no-cache"
+        try_files {path} /index.html
+        file_server
+    }
+}
+{$TURN_DOMAIN} {
+    respond "Hambin TURN relay" 200
+}
