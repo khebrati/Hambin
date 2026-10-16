@@ -1,3 +1,4 @@
+import java.util.Properties
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -5,6 +6,31 @@ plugins {
     alias(libs.plugins.android.kmp.library)
     alias(libs.plugins.kotlinx.serialization)
     alias(libs.plugins.metro)
+}
+
+// Keep Firebase client configuration out of tracked source. Generated output stays under build/.
+val localFirebaseProperties = Properties().apply {
+    val localFile = rootProject.file("local.properties")
+    if (localFile.exists()) localFile.inputStream().use { load(it) }
+}
+val firebaseApiKey = providers.gradleProperty("roomio.firebaseApiKey")
+    .orElse(providers.environmentVariable("ROOMIO_FIREBASE_API_KEY"))
+    .orElse(localFirebaseProperties.getProperty("firebase.apiKey", ""))
+val generatedFirebaseDirectory = layout.buildDirectory.dir("generated/firebase/commonMain")
+val generateFirebaseConfig = tasks.register("generateFirebaseConfig") {
+    val configuredKey = firebaseApiKey
+    val outputDirectory = generatedFirebaseDirectory
+    inputs.property("firebaseApiKey", configuredKey)
+    outputs.dir(outputDirectory)
+    doLast {
+        val key = configuredKey.get()
+        require(key.all { it.isLetterOrDigit() || it == '-' || it == '_' }) {
+            "Firebase API key contains unsupported characters"
+        }
+        val output = outputDirectory.get().file("top/roomio/data/party/BuildFirebaseConfig.kt").asFile
+        output.parentFile.mkdirs()
+        output.writeText("package top.roomio.data.party\n\ninternal object BuildFirebaseConfig {\n    const val apiKey = \"$key\"\n}\n")
+    }
 }
 
 kotlin {
@@ -26,6 +52,7 @@ kotlin {
     iosSimulatorArm64()
 
     sourceSets {
+        commonMain { kotlin.srcDir(generateFirebaseConfig) }
         commonMain.dependencies {
             implementation(project(":domain"))
             implementation(libs.kermit)
