@@ -7,29 +7,30 @@ class FakeSocket {
   connected = false
   events = new Map<string, (...args: any[]) => void>()
   sent: { event: string; payload: any }[] = []
+  acknowledger?: (event: string, payload: any, ack: (...args: any[]) => void) => void
   on(event: string, handler: (...args: any[]) => void) { this.events.set(event, handler); return this }
   connect() { this.connected = true; this.events.get('connect')?.(); return this }
   disconnect() { this.connected = false; return this }
   removeAllListeners() { this.events.clear(); return this }
   timeout() { return this }
-  emit(event: string, payload: any, ack: (...args: any[]) => void) { this.sent.push({ event, payload }); ack(null, { ok: true }); return this }
+  emit(event: string, payload: any, ack: (...args: any[]) => void) { this.sent.push({ event, payload }); if (this.acknowledger) this.acknowledger(event, payload, ack); else ack(null, event === 'auth.refresh' ? { expiresAt: new Date(Date.now() + 600000).toISOString() } : { ok: true }); return this }
   deliver(event: string, payload: unknown) { this.events.get(event)?.(payload) }
 }
 const descriptor = { mode: 'MESH', roomId: 'room', membershipId: 'a', voiceSessionId: 'g1', namespace: '/hambin/voice/room', ticket: 'secret', iceServers: [], iceExpiresAt: new Date(Date.now() + 600000).toISOString() }
 const flush = async () => { for (let i = 0; i < 15; i++) await Promise.resolve() }
 const clients: MeshVoice[] = []
-function setup() {
+function setup(selfId = 'a', generation = 'g1') {
   const track = { enabled: true, stop: vi.fn() }
   const stream = { getAudioTracks: () => [track], getTracks: () => [track] }
   vi.stubGlobal('navigator', { mediaDevices: { getUserMedia: vi.fn().mockResolvedValue(stream) } })
   vi.stubGlobal('window', { location: { origin: 'https://example.test' } })
-  const request = vi.fn().mockResolvedValue(descriptor)
+  const request = vi.fn().mockResolvedValue({ ...descriptor, membershipId: selfId, voiceSessionId: generation })
   const states: VoiceState[] = []
   const client = new MeshVoice({ roomId: 'room', request, token: async () => 'id-token', onState: state => states.push(state) })
   clients.push(client)
   return { client, request, track, states }
 }
-afterEach(() => { clients.splice(0).forEach(client => client.disconnect()); sockets.length = 0; vi.unstubAllGlobals(); vi.useRealTimers() })
+afterEach(() => { FakePeer.autoConnect = false; clients.splice(0).forEach(client => client.disconnect()); sockets.length = 0; vi.unstubAllGlobals(); vi.useRealTimers() })
 
 describe('Android-compatible peer epochs', () => {
   it('fences stale answers, candidates and restarts after replacement', () => {
@@ -67,9 +68,9 @@ describe('voice capture lifecycle', () => {
     sockets[0].deliver('voice.roster', { members: [{ membershipId: 'a', voiceSessionId: 'g1', muted: true }] })
     await joining
     expect(states.at(-1)?.status).toBe('connected')
-    await client.refreshAuth('new-id-token')
+    await client.refreshAuth('new-access-token')
     expect(request).toHaveBeenCalledTimes(1)
-    expect(sockets[0].sent).toContainEqual({ event: 'auth.refresh', payload: { idToken: 'new-id-token' } })
+    expect(sockets[0].sent).toContainEqual({ event: 'auth.refresh', payload: { accessToken: 'new-access-token' } })
     await client.setMuted(false); expect(track.enabled).toBe(true)
     await client.setMuted(true); expect(track.enabled).toBe(false)
     client.disconnect()
@@ -83,8 +84,9 @@ describe('voice capture lifecycle', () => {
     vi.mocked(navigator.mediaDevices.getUserMedia).mockImplementation(() => new Promise(done => { resolve = done }))
     const joining = client.join()
     client.disconnect()
-    resolve({ getAudioTracks: () => [track], getTracks: () => [track] } as unknown as MediaStream)
     await joining
+    resolve({ getAudioTracks: () => [track], getTracks: () => [track] } as unknown as MediaStream)
+    await flush()
     expect(track.stop).toHaveBeenCalledTimes(1)
     expect(sockets).toHaveLength(0)
   })
@@ -103,4 +105,394 @@ describe('voice capture lifecycle', () => {
     expect(states.at(-1)?.status).toBe('error')
     expect(sockets).toHaveLength(0)
   })
+})
+
+class FakePeer {
+  static peers: FakePeer[] = []
+  static autoConnect = false
+  connectionState = 'new'
+  localDescription?: RTCSessionDescriptionInit
+  ondatachannel?: (...args: any[]) => void
+  ontrack?: (...args: any[]) => void
+  onicecandidate?: (...args: any[]) => void
+  onconnectionstatechange?: (...args: any[]) => void
+  close = vi.fn(() => { this.connectionState = 'closed' })
+  setRemoteDescription = vi.fn(async (description?: RTCSessionDescriptionInit) => { if (FakePeer.autoConnect && description?.type === 'answer') this.connect() })
+  addIceCandidate = vi.fn(async () => {})
+  constructor() { FakePeer.peers.push(this) }
+  addTrack() {}
+  createOffer = async () => ({ type: 'offer' as const, sdp: 'v=0\r\nm=audio 9 RTP/AVP 111\r\n' })
+  createAnswer = async () => ({ type: 'answer' as const, sdp: 'v=0\r\nm=audio 9 RTP/AVP 111\r\n' })
+  async setLocalDescription(value: RTCSessionDescriptionInit) { this.localDescription = value; this.onicecandidate?.({ candidate: { toJSON: () => ({ candidate: 'candidate:1' }) } }); if (FakePeer.autoConnect && value.type === 'answer') this.connect() }
+  setConfiguration() {}
+  getStats = async () => new Map()
+  connect() { this.connectionState = 'connected'; this.onconnectionstatechange?.() }
+}
+async function joinedPeer(selfId = 'a') {
+  FakePeer.peers = []
+  vi.stubGlobal('RTCPeerConnection', FakePeer)
+  vi.stubGlobal('Audio', class { autoplay = false; muted = true; srcObject = null; play = async () => {}; pause() {} })
+  const context = setup(selfId)
+  const joining = context.client.join(); await flush()
+  sockets[0].deliver('voice.roster', { members: [{ membershipId: selfId, voiceSessionId: 'g1', muted: true }, { membershipId: selfId === 'a' ? 'b' : 'a', voiceSessionId: 'g2', muted: true }] })
+  await joining; await flush()
+  return context
+}
+describe('v4 recovery and authorization', () => {
+  it('uses explicit join and refresh without replacing its ticket or media', async () => {
+    vi.useFakeTimers()
+    const { client, request } = setup()
+    const joining = client.join(); await flush()
+    sockets[0].deliver('voice.roster', { members: [{ membershipId: 'a', voiceSessionId: 'g1', muted: true }] }); await joining
+    expect(request).toHaveBeenNthCalledWith(1, '/v1/rooms/room/voice/config', { operation: 'join' })
+    await vi.advanceTimersByTimeAsync(300000)
+    expect(request).toHaveBeenLastCalledWith('/v1/rooms/room/voice/config', { operation: 'refresh', voiceSessionId: 'g1' })
+  })
+  it('keeps capture disabled for rejected unmute acknowledgements', async () => {
+    const { client, track } = setup()
+    const joining = client.join(); await flush()
+    sockets[0].deliver('voice.roster', { members: [{ membershipId: 'a', voiceSessionId: 'g1', muted: true }] }); await joining
+    sockets[0].acknowledger = (_, __, ack) => ack(null, { code: 'FORBIDDEN' })
+    await expect(client.setMuted(false)).rejects.toThrow('FORBIDDEN')
+    expect(track.enabled).toBe(false)
+  })
+  it('does not enable capture from a delayed unmute after a later mute intent', async () => {
+    const { client, track } = setup()
+    const joining = client.join(); await flush()
+    sockets[0].deliver('voice.roster', { members: [{ membershipId: 'a', voiceSessionId: 'g1', muted: true }] }); await joining; await flush()
+    let acknowledge!: () => void
+    sockets[0].acknowledger = (_, __, ack) => { acknowledge = () => ack(null, { ok: true }) }
+    const unmute = client.setMuted(false); await flush()
+    const mute = client.setMuted(true)
+    expect(track.enabled).toBe(false)
+    acknowledge(); await unmute; await flush()
+    expect(track.enabled).toBe(false)
+    acknowledge(); await mute
+    expect(track.enabled).toBe(false)
+  })
+  it('orders SDP before ICE and retries a lost ACK with the same negotiation ID', async () => {
+    vi.useFakeTimers()
+    const { client } = await joinedPeer()
+    await vi.advanceTimersByTimeAsync(100)
+    const sent = sockets[0].sent.filter(item => item.event === 'signal')
+    expect(JSON.parse(sent[0].payload.msg).sdp.type).toBe('offer')
+    expect(JSON.parse(sent[1].payload.msg).ice.candidate).toBe('candidate:1')
+    let attempts = 0
+    sockets[0].acknowledger = (event, _, ack) => event === 'signal' && ++attempts === 1 ? ack(new Error('ACK timeout')) : ack(null, { ok: true })
+    FakePeer.peers[0].onicecandidate?.({ candidate: { toJSON: () => ({ candidate: 'candidate:2' }) } })
+    await vi.advanceTimersByTimeAsync(1000)
+    const retried = sockets[0].sent.filter(item => item.event === 'signal').slice(-2)
+    expect(retried[0].payload.msg).toBe(retried[1].payload.msg)
+    expect(JSON.parse(retried[0].payload.msg).negotiationId).toMatch(/^web:/)
+    client.disconnect()
+  })
+  it('preserves a connected link when another link exhausts retries', async () => {
+    vi.useFakeTimers()
+    const { client, states } = await joinedPeer()
+    FakePeer.peers[0].connect()
+    sockets[0].deliver('voice.roster', { members: [{ membershipId: 'a', voiceSessionId: 'g1', muted: true }, { membershipId: 'b', voiceSessionId: 'g2', muted: true }, { membershipId: 'c', voiceSessionId: 'g3', muted: true }] })
+    await flush()
+    await vi.advanceTimersByTimeAsync(45000)
+    expect(FakePeer.peers[0].close).not.toHaveBeenCalled()
+    expect(states.at(-1)?.status).toBe('degraded')
+    expect(states.at(-1)?.members.c.connection).toBe('unavailable')
+    const count = FakePeer.peers.length
+    client.retryConnections(); await vi.advanceTimersByTimeAsync(1000)
+    expect(FakePeer.peers.length).toBeGreaterThan(count)
+    expect(FakePeer.peers[0].close).not.toHaveBeenCalled()
+  })
+  it('resumes the generation after socket loss and retains its established peer', async () => {
+    vi.useFakeTimers()
+    const { client, request } = await joinedPeer()
+    FakePeer.peers[0].connect()
+    sockets[0].connected = false; sockets[0].deliver('disconnect', 'transport close')
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(request).toHaveBeenLastCalledWith('/v1/rooms/room/voice/config', { operation: 'resume', voiceSessionId: 'g1' })
+    sockets[1].deliver('voice.roster', { members: [{ membershipId: 'a', voiceSessionId: 'g1', muted: true }, { membershipId: 'b', voiceSessionId: 'g2', muted: true }] }); await flush()
+    expect(FakePeer.peers[0].close).not.toHaveBeenCalled()
+    client.disconnect()
+  })
+})
+
+
+describe('bounded and reusable startup', () => {
+  it('settles startup at thirty seconds even when microphone permission never resolves', async () => {
+    vi.useFakeTimers()
+    const { client, states, track } = setup()
+    let resolve!: (stream: MediaStream) => void
+    vi.mocked(navigator.mediaDevices.getUserMedia).mockImplementation(() => new Promise(done => { resolve = done }))
+    const joining = client.join()
+    await vi.advanceTimersByTimeAsync(30000)
+    await joining
+    expect(states.at(-1)?.status).toBe('error')
+    resolve({ getAudioTracks: () => [track], getTracks: () => [track] } as unknown as MediaStream)
+    await flush()
+    expect(track.stop).toHaveBeenCalledTimes(1)
+    expect(sockets).toHaveLength(0)
+  })
+  it('starts a new owner queue after leave interrupts a pending peer retry', async () => {
+    vi.useFakeTimers()
+    const { client, states } = await joinedPeer()
+    await vi.advanceTimersByTimeAsync(10000)
+    client.disconnect()
+    const joining = client.join(); await flush()
+    sockets[1].deliver('voice.roster', { members: [{ membershipId: 'a', voiceSessionId: 'g1', muted: true }] })
+    await joining
+    expect(states.at(-1)?.status).toBe('connected')
+  })
+})
+
+describe('stale asynchronous recovery', () => {
+  it('ignores an old auth acknowledgement after a new call has started', async () => {
+    const { client, states } = setup()
+    let joining = client.join(); await flush()
+    sockets[0].deliver('voice.roster', { members: [{ membershipId: 'a', voiceSessionId: 'g1', muted: true }] }); await joining
+    let rejectOld!: () => void
+    sockets[0].acknowledger = (event, __, ack) => { if (event === 'auth.refresh') rejectOld = () => ack(new Error('Lost acknowledgement')); else ack(null, { ok: true }) }
+    const refreshing = client.refreshAuth('old')
+    client.disconnect(); joining = client.join(); await flush()
+    sockets[1].deliver('voice.roster', { members: [{ membershipId: 'a', voiceSessionId: 'g1', muted: true }] }); await joining
+    rejectOld(); await refreshing
+    expect(states.at(-1)?.status).toBe('connected')
+    await client.setMuted(false)
+    expect(states.at(-1)?.muted).toBe(false)
+  })
+  it('does not issue stale resume requests when token refresh finishes after leave', async () => {
+    vi.useFakeTimers()
+    const { client, request } = setup()
+    let tokenDone!: (value: string) => void
+    ;(client as any).options.token = () => new Promise(resolve => { tokenDone = resolve })
+    let joining = client.join(); await flush()
+    sockets[0].deliver('voice.roster', { members: [{ membershipId: 'a', voiceSessionId: 'g1', muted: true }] }); await joining
+    sockets[0].connected = false; sockets[0].deliver('disconnect', 'transport close')
+    await vi.advanceTimersByTimeAsync(1000)
+    client.disconnect(); joining = client.join(); await flush()
+    sockets[1].deliver('voice.roster', { members: [{ membershipId: 'a', voiceSessionId: 'g1', muted: true }] }); await joining
+    tokenDone('refreshed'); await flush()
+    expect(request).toHaveBeenCalledTimes(2)
+  })
+  it('settles mute authorization independently of remote autoplay readiness', async () => {
+    const { client, track } = await joinedPeer()
+    const peer = [...(client as any).peers.values()][0]
+    peer.audio.srcObject = {}; peer.audio.play = () => new Promise(() => {})
+    await client.setMuted(false)
+    expect(track.enabled).toBe(true)
+    client.disconnect()
+  })
+})
+
+
+describe('authenticated roster readiness and explicit opt-out', () => {
+  it('replays mute only after the first authenticated roster and only once per socket', async () => {
+    const { client } = setup()
+    const joining = client.join(); await flush()
+    expect(sockets[0].sent.filter(item => item.event === 'voice.mute')).toHaveLength(0)
+    const roster = { members: [{ membershipId: 'a', voiceSessionId: 'g1', muted: true }] }
+    sockets[0].deliver('voice.roster', roster); await joining; await flush()
+    expect(sockets[0].sent.filter(item => item.event === 'voice.mute')).toHaveLength(1)
+    sockets[0].deliver('voice.roster', roster); await flush()
+    expect(sockets[0].sent.filter(item => item.event === 'voice.mute')).toHaveLength(1)
+  })
+  it('retires only the old socket when its leave acknowledgement arrives after rejoin', async () => {
+    vi.useFakeTimers()
+    const { client, track } = setup()
+    let joining = client.join(); await flush()
+    const roster = { members: [{ membershipId: 'a', voiceSessionId: 'g1', muted: true }] }
+    sockets[0].deliver('voice.roster', roster); await joining; await flush()
+    let finishLeave!: () => void
+    sockets[0].acknowledger = (event, _, ack) => { if (event === 'voice.leave') finishLeave = () => ack(null, { ok: true }); else ack(null, { ok: true }) }
+    client.disconnect()
+    expect(track.stop).toHaveBeenCalledTimes(1)
+    expect(sockets[0].sent).toContainEqual({ event: 'voice.leave', payload: {} })
+    joining = client.join(); await flush()
+    sockets[1].deliver('voice.roster', roster); await joining
+    finishLeave()
+    expect(sockets[0].connected).toBe(false)
+    expect(sockets[1].connected).toBe(true)
+  })
+})
+
+
+describe('nonfatal signaling loss preserves the active call', () => {
+  it('rejects offline unmute without converting a retained healthy link into a fresh-join error', async () => {
+    const { client, states, track } = await joinedPeer()
+    FakePeer.peers[0].connect()
+    sockets[0].connected = false; sockets[0].deliver('disconnect', 'transport close')
+    await expect(client.setMuted(false)).rejects.toThrow('offline')
+    expect(track.enabled).toBe(false)
+    expect(states.at(-1)?.status).toBe('reconnecting')
+    expect(FakePeer.peers[0].close).not.toHaveBeenCalled()
+  })
+})
+
+
+describe('manual recovery with a single designated offerer', () => {
+  it('lets the higher member request the first offer after both automatic retry budgets are exhausted', async () => {
+    vi.useFakeTimers()
+    const { client } = await joinedPeer('b')
+    const peer = [...(client as any).peers.values()][0]
+    expect(peer.fence.remote).toBeUndefined()
+    peer.retries = 3; peer.exhausted = true; peer.pc.connectionState = 'failed'
+    client.retryConnections(); await vi.advanceTimersByTimeAsync(200)
+    const signals = sockets[0].sent.filter(item => item.event === 'signal').map(item => JSON.parse(item.payload.msg))
+    expect(signals).toHaveLength(1)
+    expect(signals[0]).toMatchObject({ requestOffer: true, peerGeneration: 2, targetPeerGeneration: 0, generation: 'g1', targetGeneration: 'g2' })
+    expect(signals[0].sdp).toBeUndefined()
+    expect(FakePeer.peers[0].close).toHaveBeenCalledTimes(1)
+    expect(FakePeer.peers).toHaveLength(2)
+  })
+  it('resets only the failed offerer link and ignores duplicated or stale requests across peer replacement', async () => {
+    vi.useFakeTimers()
+    const { client } = await joinedPeer()
+    await vi.advanceTimersByTimeAsync(200)
+    const original = [...(client as any).peers.values()][0]
+    original.retries = 3; original.exhausted = true; original.pc.connectionState = 'failed'
+    const request = { negotiationId: 'user-request-2', generation: 'g2', targetGeneration: 'g1', peerGeneration: 2, targetPeerGeneration: 0, requestOffer: true }
+    sockets[0].deliver('signal', { from: 'b', msg: JSON.stringify(request) }); await vi.advanceTimersByTimeAsync(200)
+    expect(FakePeer.peers).toHaveLength(2)
+    const replacement = [...(client as any).peers.values()][0]
+    expect(replacement.retries).toBe(0)
+    sockets[0].deliver('signal', { from: 'b', msg: JSON.stringify(request) })
+    sockets[0].deliver('signal', { from: 'b', msg: JSON.stringify({ ...request, negotiationId: 'same-epoch-new-id' }) }); await vi.advanceTimersByTimeAsync(200)
+    expect(FakePeer.peers).toHaveLength(2)
+    replacement.pc.connect(); replacement.fence.remote = 3
+    sockets[0].deliver('signal', { from: 'b', msg: JSON.stringify({ ...request, negotiationId: 'healthy-link-request', peerGeneration: 3 }) }); await vi.advanceTimersByTimeAsync(200)
+    expect(FakePeer.peers).toHaveLength(2)
+    expect(replacement.pc.close).not.toHaveBeenCalled()
+    replacement.pc.connectionState = 'failed'
+    sockets[0].deliver('signal', { from: 'b', msg: JSON.stringify({ ...request, negotiationId: 'stale-after-healthy', peerGeneration: 3 }) }); await vi.advanceTimersByTimeAsync(200)
+    expect(FakePeer.peers).toHaveLength(2)
+    sockets[0].deliver('signal', { from: 'b', msg: JSON.stringify({ ...request, negotiationId: 'next-user-request', peerGeneration: 4 }) }); await vi.advanceTimersByTimeAsync(200)
+    expect(FakePeer.peers).toHaveLength(3)
+  })
+})
+
+
+it('recovers both exhausted mesh owners through a user request and exactly one designated offer', async () => {
+  vi.useFakeTimers(); FakePeer.peers = []; FakePeer.autoConnect = true
+  vi.stubGlobal('RTCPeerConnection', FakePeer)
+  vi.stubGlobal('Audio', class { autoplay = false; muted = true; srcObject = null; play = async () => {}; pause() {} })
+  const lower = setup('a', 'ga'); const higher = setup('b', 'gb')
+  const joins = [lower.client.join(), higher.client.join()]; await flush()
+  const roster = { members: [{ membershipId: 'a', voiceSessionId: 'ga', muted: true }, { membershipId: 'b', voiceSessionId: 'gb', muted: true }] }
+  sockets[0].deliver('voice.roster', roster); sockets[1].deliver('voice.roster', roster)
+  await Promise.all(joins); await vi.advanceTimersByTimeAsync(200)
+  for (const client of [lower.client, higher.client]) {
+    const peer = [...(client as any).peers.values()][0] as any
+    peer.retries = 3; peer.exhausted = true; peer.pc.connectionState = 'failed'
+    expect(peer.fence.remote).toBeUndefined()
+  }
+  for (let index = 0; index < 2; index++) sockets[index].acknowledger = (event, payload, ack) => {
+    ack(null, { ok: true })
+    if (event === 'signal') sockets[1 - index].deliver('signal', { from: index === 0 ? 'a' : 'b', msg: payload.msg })
+  }
+  const previousOffers = sockets[0].sent.filter(item => item.event === 'signal' && JSON.parse(item.payload.msg).sdp?.type === 'offer').length
+  higher.client.retryConnections(); await vi.advanceTimersByTimeAsync(1000)
+  expect(lower.states.at(-1)?.status).toBe('connected')
+  expect(higher.states.at(-1)?.status).toBe('connected')
+  const control = sockets[1].sent.find(item => item.event === 'signal' && JSON.parse(item.payload.msg).requestOffer)
+  expect(control).toBeDefined()
+  expect(sockets[0].sent.filter(item => item.event === 'signal' && JSON.parse(item.payload.msg).sdp?.type === 'offer')).toHaveLength(previousOffers + 1)
+  sockets[0].deliver('signal', { from: 'b', msg: control!.payload.msg }); await vi.advanceTimersByTimeAsync(200)
+  expect(sockets[0].sent.filter(item => item.event === 'signal' && JSON.parse(item.payload.msg).sdp?.type === 'offer')).toHaveLength(previousOffers + 1)
+  FakePeer.autoConnect = false
+})
+
+it('replaces an apparently connected addressed peer when a newer remote epoch proves remote disposal', async () => {
+  vi.useFakeTimers()
+  const { client } = await joinedPeer()
+  await vi.advanceTimersByTimeAsync(200)
+  const peer = [...(client as any).peers.values()][0] as any
+  peer.fence.remote = 1; peer.pc.connect()
+  sockets[0].deliver('voice.roster', { members: [{ membershipId: 'a', voiceSessionId: 'g1', muted: true }, { membershipId: 'b', voiceSessionId: 'g2', muted: true }, { membershipId: 'c', voiceSessionId: 'g3', muted: true }] }); await vi.advanceTimersByTimeAsync(200)
+  const healthy = (client as any).peers.get('c'); healthy.pc.connect()
+  sockets[0].deliver('signal', { from: 'b', msg: JSON.stringify({ negotiationId: 'asymmetric-recovery', generation: 'g2', targetGeneration: 'g1', peerGeneration: 2, targetPeerGeneration: 0, requestOffer: true }) }); await vi.advanceTimersByTimeAsync(200)
+  expect(peer.pc.close).toHaveBeenCalledTimes(1)
+  expect(healthy.pc.close).not.toHaveBeenCalled()
+  expect((client as any).peers.get('b')).not.toBe(peer)
+})
+
+
+it('publishes recovery after successful auth and clears an old auth pause only on a fresh authenticated socket roster', async () => {
+  vi.useFakeTimers()
+  const { client, states } = await joinedPeer()
+  FakePeer.peers[0].connect()
+  sockets[0].acknowledger = (event, _, ack) => ack(null, event === 'auth.refresh' ? { code: 'AUTH_UNAVAILABLE' } : { ok: true })
+  await expect(client.refreshAuth('first')).rejects.toThrow('AUTH_UNAVAILABLE')
+  expect(states.at(-1)?.status).toBe('degraded')
+  sockets[0].acknowledger = (event, _, ack) => ack(null, event === 'auth.refresh' ? { expiresAt: new Date(Date.now() + 600000).toISOString() } : { ok: true })
+  await client.refreshAuth('second')
+  expect(states.at(-1)?.status).toBe('connected')
+  sockets[0].acknowledger = (event, _, ack) => ack(null, event === 'auth.refresh' ? { code: 'AUTH_UNAVAILABLE' } : { ok: true })
+  await expect(client.refreshAuth('third')).rejects.toThrow('AUTH_UNAVAILABLE')
+  sockets[0].connected = false; sockets[0].deliver('disconnect', 'transport close')
+  await vi.advanceTimersByTimeAsync(1000)
+  sockets[1].deliver('voice.roster', { members: [{ membershipId: 'a', voiceSessionId: 'g1', muted: true }, { membershipId: 'b', voiceSessionId: 'g2', muted: true }] }); await flush()
+  expect(states.at(-1)?.status).toBe('connected')
+  expect(FakePeer.peers[0].close).not.toHaveBeenCalled()
+})
+
+
+it('keeps capture disabled through unmute-mute-unmute until the latest command acknowledgement', async () => {
+  const { client, track } = setup()
+  const joining = client.join(); await flush()
+  sockets[0].deliver('voice.roster', { members: [{ membershipId: 'a', voiceSessionId: 'g1', muted: true }] }); await joining; await flush()
+  const acknowledgements: (() => void)[] = []
+  sockets[0].acknowledger = (event, _, ack) => { if (event === 'voice.mute') acknowledgements.push(() => ack(null, { ok: true })); else ack(null, { ok: true }) }
+  const firstUnmute = client.setMuted(false); await flush()
+  const mute = client.setMuted(true)
+  const latestUnmute = client.setMuted(false)
+  expect(track.enabled).toBe(false)
+  acknowledgements[0](); await firstUnmute; await flush()
+  expect(track.enabled).toBe(false)
+  acknowledgements[1](); await mute; await flush()
+  expect(track.enabled).toBe(false)
+  acknowledgements[2](); await latestUnmute
+  expect(track.enabled).toBe(true)
+})
+
+
+it('does not enable capture when signaling disconnects after ACK resolution but before continuation', async () => {
+  const { client, track } = setup()
+  const joining = client.join(); await flush()
+  sockets[0].deliver('voice.roster', { members: [{ membershipId: 'a', voiceSessionId: 'g1', muted: true }] }); await joining; await flush()
+  sockets[0].acknowledger = (event, _, ack) => { ack(null, { ok: true }); if (event === 'voice.mute') { sockets[0].connected = false; sockets[0].deliver('disconnect', 'transport close') } }
+  await expect(client.setMuted(false)).rejects.toThrow('authorization changed')
+  expect(track.enabled).toBe(false)
+})
+
+it('does not enable capture when authorization pauses in the ACK continuation gap', async () => {
+  const { client, track } = setup()
+  const joining = client.join(); await flush()
+  sockets[0].deliver('voice.roster', { members: [{ membershipId: 'a', voiceSessionId: 'g1', muted: true }] }); await joining; await flush()
+  sockets[0].acknowledger = (event, _, ack) => { ack(null, { ok: true }); if (event === 'voice.mute') (client as any).authPaused = true }
+  await expect(client.setMuted(false)).rejects.toThrow('authorization changed')
+  expect(track.enabled).toBe(false)
+})
+
+
+it('ignores credential HTTP results from before a same-run fresh voice generation and continues renewing the replacement', async () => {
+  vi.useFakeTimers()
+  const { client, request, states } = setup()
+  const joining = client.join(); await flush()
+  sockets[0].deliver('voice.roster', { members: [{ membershipId: 'a', voiceSessionId: 'g1', muted: true }] }); await joining; await flush()
+  let resolveOld!: (value: unknown) => void
+  let oldPending = true
+  request.mockImplementation(async (_path: string, body: any) => {
+    if (body.operation === 'resume') throw Object.assign(new Error('expired'), { code: 'VOICE_SESSION_EXPIRED' })
+    if (body.operation === 'refresh' && oldPending) return new Promise(resolve => { resolveOld = resolve })
+    return { ...descriptor, voiceSessionId: 'g2', ticket: 'replacement-ticket' }
+  })
+  const refreshing = (client as any).refreshCredentials((client as any).run)
+  await flush()
+  sockets[0].connected = false; sockets[0].deliver('disconnect', 'transport close')
+  await vi.advanceTimersByTimeAsync(1000)
+  sockets[1].deliver('voice.roster', { members: [{ membershipId: 'a', voiceSessionId: 'g2', muted: true }] }); await flush()
+  oldPending = false; resolveOld({ ...descriptor, ticket: undefined })
+  await refreshing
+  expect(states.at(-1)?.status).toBe('connected')
+  expect((client as any).descriptor.voiceSessionId).toBe('g2')
+  expect((client as any).descriptor.ticket).toBe('replacement-ticket')
+  await vi.advanceTimersByTimeAsync(30000)
+  expect(request).toHaveBeenLastCalledWith('/v1/rooms/room/voice/config', { operation: 'refresh', voiceSessionId: 'g2' })
 })

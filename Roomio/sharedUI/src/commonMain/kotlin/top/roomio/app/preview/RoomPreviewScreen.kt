@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MeetingRoom
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -57,6 +58,9 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import org.jetbrains.compose.resources.stringResource
 import roomio.sharedui.generated.resources.Res
+import roomio.sharedui.generated.resources.invite_preview_loading
+import roomio.sharedui.generated.resources.invite_preview_unavailable
+import roomio.sharedui.generated.resources.invite_preview_retry
 import roomio.sharedui.generated.resources.back
 import roomio.sharedui.generated.resources.check_party_before_joining
 import roomio.sharedui.generated.resources.ended
@@ -184,14 +188,40 @@ internal fun RoomPreviewScreen(
                 .padding(top = 24.dp, bottom = 56.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            PreviewCard(
-                model = state.model,
-                onBack = { onAction(RoomPreviewAction.BackClicked) },
-                onJoin = { onAction(RoomPreviewAction.JoinClicked) },
-                modifier = Modifier
-                    .widthIn(max = 672.dp)
-                    .fillMaxWidth(),
-            )
+            when {
+                state.isLoading -> {
+                    CircularProgressIndicator()
+                    Text(
+                        stringResource(Res.string.invite_preview_loading),
+                        modifier = Modifier.padding(24.dp),
+                    )
+                }
+                state.errorMessage != null -> {
+                    PreviewNotice(
+                        title = stringResource(Res.string.joining_unavailable),
+                        body = stringResource(
+                            if (state.isOffline) Res.string.offline_message
+                            else Res.string.invite_preview_unavailable,
+                        ),
+                        unavailable = true,
+                    )
+                    Button(
+                        onClick = { onAction(RoomPreviewAction.RetryClicked) },
+                        modifier = Modifier.padding(top = 16.dp).heightIn(min = 48.dp),
+                    ) { Text(stringResource(Res.string.invite_preview_retry)) }
+                    TextButton(onClick = { onAction(RoomPreviewAction.BackClicked) }) {
+                        Text(stringResource(Res.string.not_now))
+                    }
+                }
+                else -> PreviewCard(
+                    model = state.model,
+                    onBack = { onAction(RoomPreviewAction.BackClicked) },
+                    onJoin = { onAction(RoomPreviewAction.JoinClicked) },
+                    modifier = Modifier
+                        .widthIn(max = 672.dp)
+                        .fillMaxWidth(),
+                )
+            }
         }
     }
 }
@@ -587,7 +617,7 @@ private fun PreviewCinemaScene(modifier: Modifier = Modifier) {
 private fun AvailablePreview() {
     AppTheme(onThemeChanged = {}) {
         RoomPreviewScreen(
-            state = RoomPreviewUiState(requireNotNull(roomPreviewForCode("MOON-42"))),
+            state = RoomPreviewUiState(requireNotNull(roomPreviewForCode("MOON-42")), isLoading = false),
             onAction = {},
         )
     }
@@ -598,7 +628,7 @@ private fun AvailablePreview() {
 private fun OwnerAwayCompactPreview() {
     RoomioTheme(darkTheme = true) {
         RoomPreviewScreen(
-            state = RoomPreviewUiState(requireNotNull(roomPreviewForCode("ORBIT-08"))),
+            state = RoomPreviewUiState(requireNotNull(roomPreviewForCode("ORBIT-08")), isLoading = false),
             onAction = {},
         )
     }
@@ -609,8 +639,23 @@ private fun OwnerAwayCompactPreview() {
 private fun UnavailableLargeTextPreview() {
     AppTheme(onThemeChanged = {}) {
         RoomPreviewScreen(
-            state = RoomPreviewUiState(requireNotNull(roomPreviewForCode("FULL-10"))),
+            state = RoomPreviewUiState(requireNotNull(roomPreviewForCode("FULL-10")), isLoading = false),
             onAction = {},
         )
     }
+}
+
+@Preview(widthDp = 360, heightDp = 760)
+@Composable
+private fun InviteLoadingPreview() = RoomioTheme(darkTheme = false) {
+    RoomPreviewScreen(state = RoomPreviewUiState(), onAction = {})
+}
+
+@Preview(widthDp = 360, heightDp = 760, fontScale = 1.5f)
+@Composable
+private fun InviteOfflinePreview() = RoomioTheme(darkTheme = true) {
+    RoomPreviewScreen(
+        state = RoomPreviewUiState(isLoading = false, errorMessage = "NETWORK", isOffline = true),
+        onAction = {},
+    )
 }

@@ -12,6 +12,8 @@ import android.content.pm.ServiceInfo
 import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.IBinder
+import android.os.Binder
+import top.roomio.domain.party.RoomSession
 import top.roomio.data.R
 import top.roomio.domain.party.RoomSessionExtras
 import top.roomio.domain.party.SessionAction
@@ -23,7 +25,7 @@ import top.roomio.domain.party.SessionAction
  *
  * It runs for as long as the user is inside a room and stops on leave. The
  * notification returns the user to the room on tap and exposes microphone and
- * leave actions handled through [RoomSessionBus].
+ * leave actions handled through its bound interface.
  */
 class RoomSessionService : Service() {
 
@@ -33,57 +35,72 @@ class RoomSessionService : Service() {
     private var micMuted: Boolean = true
     private var foregroundStarted: Boolean = false
 
-    override fun onBind(intent: Intent?): IBinder? = null
+    private var commandHandler: ((SessionAction) -> Unit)? = null
+    private var startupFailure: Throwable? = null
+    private val localBinder = SessionBinder()
+
+    /** Same-process local Binder, as documented by Android bound-services guidance. */
+    inner class SessionBinder : Binder() {
+        fun register(handler: ((SessionAction) -> Unit)?) { commandHandler = handler }
+        fun update(room: RoomSession) {
+            roomId = room.roomId
+            asOwner = room.asOwner
+            voiceActive = room.voiceActive
+            micMuted = room.micMuted
+            startForegroundCompat()
+            startupFailure = null
+        }
+        fun confirmMicrophone(room: RoomSession) {
+            // startForeground itself enforces while-in-use/background restrictions.
+            // https://developer.android.com/develop/background-work/services/fgs/restrictions-bg-start
+            check(hasMicrophonePermission()) { "Microphone permission required" }
+            update(room.copy(voiceActive = true))
+            check(foregroundStarted && voiceActive) { "Microphone service not active" }
+        }
+    }
+
+    override fun onBind(intent: Intent?): IBinder = localBinder
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_STOP -> {
-                stopSession()
-                return START_NOT_STICKY
-            }
+            ACTION_STOP -> stopSession()
             ACTION_TOGGLE_MIC -> {
-                toggleMicrophone()
-                return START_STICKY
+                // Display follows acknowledged capture state returned by the coordinator.
+                commandHandler?.invoke(if (micMuted) SessionAction.UnmuteVoice else SessionAction.MuteVoice)
             }
-            ACTION_LEAVE -> {
-                // The room owns leaving: it disconnects voice and tells the
-                // backend, then the service goes away.
-                RoomSessionBus.send(SessionAction.Leave)
-                stopSession()
-                return START_NOT_STICKY
+            ACTION_LEAVE -> commandHandler?.invoke(SessionAction.Leave) ?: stopSession()
+            ACTION_START -> {
+                val id = intent.getStringExtra(EXTRA_ROOM_ID)
+                if (id == null) { stopSession(); return START_NOT_STICKY }
+                try {
+                    localBinder.update(RoomSession(id,
+                        intent.getBooleanExtra(EXTRA_ROOM_AS_OWNER, false),
+                        intent.getBooleanExtra(EXTRA_VOICE_ACTIVE, false),
+                        intent.getBooleanExtra(EXTRA_MIC_MUTED, true)))
+                } catch (error: Throwable) {
+                    startupFailure = error
+                    voiceActive = false
+                    micMuted = true
+                    commandHandler?.invoke(SessionAction.MicrophoneServiceLost)
+                    if (!foregroundStarted) stopSelf()
+                }
             }
-            else -> {
-                roomId = intent?.getStringExtra(EXTRA_ROOM_ID)
-                asOwner = intent?.getBooleanExtra(EXTRA_ROOM_AS_OWNER, false) ?: false
-                voiceActive = intent?.getBooleanExtra(EXTRA_VOICE_ACTIVE, false) ?: false
-                micMuted = intent?.getBooleanExtra(EXTRA_MIC_MUTED, true) ?: true
-                startForegroundCompat()
-            }
+            else -> stopSession()
         }
-        // Restart if the process is killed while the user is still in the room.
-        return START_STICKY
+        // Never restore microphone capture or room context after process death.
+        return START_NOT_STICKY
     }
 
     override fun onDestroy() {
+        commandHandler?.invoke(SessionAction.MicrophoneServiceLost)
+        commandHandler = null
         stopForegroundCompat()
         super.onDestroy()
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        // The user dismissed the app from recents: treat it as leaving the room
-        // so other participants stop seeing this device. The in-process session
-        // releases the membership before stopping the service; when it is gone,
-        // stop the service directly.
-        if (!RoomSessionBus.requestLeaveFromTaskRemoval()) {
-            stopSession()
-        }
+        commandHandler?.invoke(SessionAction.Leave) ?: stopSession()
         super.onTaskRemoved(rootIntent)
-    }
-
-    private fun toggleMicrophone() {
-        micMuted = !micMuted
-        RoomSessionBus.send(if (micMuted) SessionAction.MuteVoice else SessionAction.UnmuteVoice)
-        if (foregroundStarted) notifyForeground()
     }
 
     private fun startForegroundCompat() {
@@ -91,17 +108,10 @@ class RoomSessionService : Service() {
         ensureChannel(manager)
         val notification = buildNotification()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val started = runCatching {
-                startForeground(NOTIFICATION_ID, notification, foregroundServiceType())
-            }.isSuccess
-            // The platform can refuse a microphone service started from the
-            // background; a data-sync session still keeps the room connected.
-            if (!started) {
-                startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
-            }
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
-        }
+            if (voiceActive) check(hasMicrophonePermission()) { "Microphone permission required" }
+            // No data-sync fallback may claim microphone protection on failure.
+            startForeground(NOTIFICATION_ID, notification, foregroundServiceType())
+        } else startForeground(NOTIFICATION_ID, notification)
         foregroundStarted = true
     }
 

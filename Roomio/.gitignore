@@ -16,3 +16,6 @@ Pods/
 *.gpg
 *yarn.lock
 keystore.properties
+
+# Private deployment access
+/.local-server/

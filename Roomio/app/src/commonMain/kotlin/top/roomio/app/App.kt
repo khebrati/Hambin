@@ -13,6 +13,7 @@ import top.roomio.domain.party.RoomRepository
 import top.roomio.domain.party.SessionKeeper
 import top.roomio.domain.party.SessionRepository
 import top.roomio.domain.party.VoiceClient
+import top.roomio.domain.party.VoiceCoordinator
 import top.roomio.domain.profile.ProfileRepository
 
 @DependencyGraph(
@@ -25,6 +26,7 @@ internal interface RoomioAppGraph {
     val roomRepository: RoomRepository
     val realtimeClient: RealtimeClient
     val voiceClient: VoiceClient
+    val voiceCoordinator: VoiceCoordinator
     val sessionKeeper: SessionKeeper
 }
 
@@ -38,7 +40,7 @@ fun App(
         sessionRepository = graph.sessionRepository,
         roomRepository = graph.roomRepository,
         realtimeClient = graph.realtimeClient,
-        voiceClient = graph.voiceClient,
+        voiceCoordinator = graph.voiceCoordinator,
         sessionKeeper = graph.sessionKeeper,
         onThemeChanged = onThemeChanged,
     )

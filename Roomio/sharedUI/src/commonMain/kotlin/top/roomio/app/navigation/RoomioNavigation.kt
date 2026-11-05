@@ -114,7 +114,10 @@ internal fun RoomioNavigation(
     val roomLaunchRequests = rememberRoomLaunchRequests()
     LaunchedEffect(roomLaunchRequests) {
         roomLaunchRequests.collect { request ->
-            navigate(RoomRoute(roomId = request.roomId, asOwner = request.asOwner))
+            when (request) {
+                is RoomLaunchRequest.Room -> navigate(RoomRoute(request.roomId, request.asOwner))
+                is RoomLaunchRequest.Invite -> navigate(RoomPreviewRoute(request.code))
+            }
         }
     }
 

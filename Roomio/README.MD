@@ -18,16 +18,28 @@ To run the application on iPhone device/simulator:
  - Or use [Kotlin Multiplatform Mobile plugin](https://plugins.jetbrains.com/plugin/14936-kotlin-multiplatform-mobile) for Android Studio  
 
 
-### Firebase client configuration
+### Backend configuration
 
-Supply the Firebase API key before building any client, using one of these sources
-(in priority order): the `roomio.firebaseApiKey` Gradle property, the
-`ROOMIO_FIREBASE_API_KEY` environment variable, or `firebase.apiKey` in the ignored
-`Roomio/local.properties` file. For Android, copy the `current_key` for the matching
-application ID from your local `androidApp/google-services.json` into that property.
-Do not commit either local configuration file or put a real key in tracked Gradle properties.
+Guest sessions and product APIs use `https://watchparty.top`. No external authentication
+configuration is required. Debug Android builds and desktop builds can override the
+origin through `roomio.backendUrl`; Android accepts that extra only in debug builds.
+Credentials belong to that exact backend origin and are kept in the platform secure store.
 
-The data module generates shared Kotlin configuration under its ignored `build/`
-directory. Rebuild after changing the key. Without a key, compilation and emulator
-authentication remain available, but production authentication fails explicitly
-with configuration instructions. Tests supply synthetic keys and need no live credentials.
+### Android invite links
+
+Room invites use `https://watchparty.top/?invite=CODE`. Android handles cold and warm
+`ACTION_VIEW` launches and shows the room preview; entry requires tapping Join.
+Loading, offline/error retry, full, and ended states use the same preview flow.
+
+Publish `webUI/public/.well-known/assetlinks.json` with the website before expecting
+automatic Android App Links routing. It trusts the existing release certificate
+only, not debug keys. Verify the public endpoint returns JSON over HTTPS without a
+redirect, then run `adb shell pm verify-app-links --re-verify top.roomio.app.androidApp`
+and `adb shell pm get-app-links top.roomio.app.androidApp` on a release installation.
+If Play App Signing is introduced, add its application signing certificate fingerprint.
+To test handler delivery without domain verification, use:
+
+```sh
+adb shell am start -W -a android.intent.action.VIEW \
+  -d 'https://watchparty.top/?invite=ABCD2345' -p top.roomio.app.androidApp
+```

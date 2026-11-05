@@ -23,6 +23,8 @@ internal data class PartyManagerUiState(
     val code: String = "",
     val isLoading: Boolean = false,
     val hasCodeError: Boolean = false,
+    val canResetIdentity: Boolean = false,
+    val showResetConfirmation: Boolean = false,
 ) {
     val normalizedCode: String
         get() = code.trim().uppercase()
@@ -37,6 +39,9 @@ internal sealed interface PartyManagerAction {
     data object BackClicked : PartyManagerAction
     data object CreateClicked : PartyManagerAction
     data object PreviewClicked : PartyManagerAction
+    data object ResetRequested : PartyManagerAction
+    data object ResetCancelled : PartyManagerAction
+    data object ResetConfirmed : PartyManagerAction
     data object PreviewRejected : PartyManagerAction
 }
 
@@ -44,6 +49,7 @@ internal sealed interface PartyManagerEffect {
     data class Created(val roomId: String) : PartyManagerEffect
     data class PreviewReady(val code: String) : PartyManagerEffect
     data class Error(val connectivity: Boolean) : PartyManagerEffect
+    data object IdentityReset : PartyManagerEffect
 }
 
 @AssistedInject
@@ -86,6 +92,9 @@ internal class PartyManagerViewModel(
             PartyManagerAction.PreviewRejected -> mutableState.update { it.copy(hasCodeError = true) }
             PartyManagerAction.CreateClicked -> createRoom()
             PartyManagerAction.PreviewClicked -> previewRoom()
+            PartyManagerAction.ResetRequested -> mutableState.update { it.copy(showResetConfirmation = true) }
+            PartyManagerAction.ResetCancelled -> mutableState.update { it.copy(showResetConfirmation = false) }
+            PartyManagerAction.ResetConfirmed -> resetIdentity()
             PartyManagerAction.BackClicked -> Unit
         }
     }
@@ -105,7 +114,7 @@ internal class PartyManagerViewModel(
                 mutableEffects.tryEmit(PartyManagerEffect.Created(room.id))
             } catch (error: PartyException) {
                 log.w("create failed: ${error.code} ${error.message}")
-                mutableState.update { it.copy(isLoading = false) }
+                mutableState.update { it.copy(isLoading = false, canResetIdentity = error.code in RESET_CODES) }
                 mutableEffects.tryEmit(PartyManagerEffect.Error(error.isConnectivity()))
             }
         }
@@ -123,7 +132,10 @@ internal class PartyManagerViewModel(
             } catch (error: PartyException) {
                 log.w("preview failed: ${error.code} ${error.message}")
                 mutableState.update { it.copy(isLoading = false) }
-                if (error.isConnectivity()) {
+                if (error.code in RESET_CODES) {
+                    mutableState.update { it.copy(canResetIdentity = true) }
+                    mutableEffects.tryEmit(PartyManagerEffect.Error(connectivity = false))
+                } else if (error.isConnectivity()) {
                     mutableEffects.tryEmit(PartyManagerEffect.Error(connectivity = true))
                 } else {
                     mutableState.update { it.copy(hasCodeError = true) }
@@ -132,5 +144,23 @@ internal class PartyManagerViewModel(
         }
     }
 
+    private fun resetIdentity() {
+        if (mutableState.value.isLoading) return
+        mutableState.update { it.copy(isLoading = true, showResetConfirmation = false) }
+        viewModelScope.launch {
+            try {
+                sessionRepository.reset()
+                mutableState.update { it.copy(isLoading = false, canResetIdentity = false, hasCodeError = false) }
+                mutableEffects.tryEmit(PartyManagerEffect.IdentityReset)
+            } catch (error: PartyException) {
+                mutableState.update { it.copy(isLoading = false) }
+                mutableEffects.tryEmit(PartyManagerEffect.Error(error.isConnectivity()))
+            }
+        }
+    }
+
+    private companion object {
+        val RESET_CODES = setOf("INVALID_TOKEN", "SESSION_EXPIRED", "SESSION_REVOKED", "UNAUTHENTICATED")
+    }
     private val log = Logger.withTag("PartyManagerVM")
 }

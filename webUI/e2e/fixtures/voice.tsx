@@ -1,0 +1,10 @@
+import { createRoot } from 'react-dom/client';
+import { PartyScreen } from '../../src/screens/PartyScreen';
+import '../../src/styles.css';
+const query = new URLSearchParams(location.search);
+const theme = query.get('theme') === 'dark' ? 'dark' : 'light';
+document.documentElement.dataset.theme = theme;
+document.documentElement.dir = query.get('dir') || 'ltr';
+if (query.get('large')) document.documentElement.style.fontSize = '24px';
+const noop = async () => {};
+createRoot(document.getElementById('root')!).render(<PartyScreen party={{ id: 'VOICE-31', title: 'Friday night screening', role: 'owner', ownerName: 'Nika', ownerPresent: true, participants: [{ id: 'self', name: 'Nika', avatarId: 'mint', isSelf: true, isOwner: true, isMuted: true }, { id: 'mira', name: 'Mira', avatarId: 'sunny', isMuted: false }, { id: 'jo', name: 'Jo', avatarId: 'berry', isMuted: true }], streamUrl: '' }} streamStatus="empty" theme={theme} aborting={false} onToggleTheme={() => {}} onStartStream={() => {}} onSetStreamStatus={() => {}} onAbort={noop} onLeave={() => {}} onNotify={() => {}} live={{ connected: true, leaving: false, voice: { status: 'degraded', muted: true, members: { self: { muted: true, speaking: false, connection: 'connected' }, mira: { muted: false, speaking: false, connection: 'reconnecting' }, jo: { muted: true, speaking: false, connection: 'unavailable' } } }, onToggleVoice: noop, onDisconnectVoice: () => {}, onRetryVoice: () => { document.documentElement.dataset.retried = 'true'; }, onResumeVoice: () => {}, onSync: noop, syncing: false, onReport: () => {} }} />);

@@ -4,7 +4,7 @@
 
 Hambin is a multi-technology watch-party product repository. Product requirements and accepted experience decisions are shared, while each top-level client or service owns its technology-specific implementation.
 
-The repository currently contains a native client and a browser client. The backend boundary is reserved but intentionally empty until an explicit service contract and implementation scope are approved.
+The repository contains native and browser clients and an approved Node/PostgreSQL backend with private Coturn voice relay. Shared contracts and accepted decisions define the service boundary.
 
 ## Repository structure
 
@@ -12,7 +12,7 @@ The repository currently contains a native client and a browser client. The back
 - `docs/` contains shared product analysis and decisions, including the product brief, requirements analysis, user flows, screen inventory, design principles, accepted decisions, assumptions, open questions, glossary, and technical proposals.
 - `webUI/` is the React, TypeScript, and Vite browser client. It also serves as the fastest interactive product and design prototype.
 - `Roomio/` is the native Kotlin Multiplatform client for Android, iOS, and desktop. Follow `Roomio/AGENTS.md` for its Clean Architecture, Metro dependency-injection, Compose, and platform rules.
-- `backend/` is reserved for a future backend service. Do not add backend code, databases, authentication infrastructure, deployment configuration, or select a backend technology until the backend requirements and API contract are explicitly defined.
+- `backend/watchparty/` owns the active Node/PostgreSQL service and backend-owned automatic guest authentication. `backend/deploy/` owns the Caddy/API/PostgreSQL/Coturn deployment. Shared HTTP/realtime contracts remain under `backend/openapi/`, `backend/asyncapi/`, and `docs/`; retired Go/LiveKit sources are historical and are not deployment entry points.
 
 Do not move shared product requirements into a client folder. Do not place one client's source code, build configuration, or technology-specific architecture inside another client.
 

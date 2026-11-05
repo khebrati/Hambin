@@ -1,6 +1,8 @@
 # Migration to the Hambin WatchParty fork
 
-**Status:** Implementation plan. The migration direction is accepted; the phases below have not been implemented.
+> Historical implementation plan for DD-022. Its Firebase authentication instructions are superseded by DD-028. Use the [current behavior/interface contract](watchparty-migration-compatibility.md) and [active deployment instructions](../backend/deploy/README.md) for backend-owned guest sessions.
+
+**Status:** Historical original implementation plan. The Node/mesh migration was subsequently implemented and deployed; phase evidence is retained separately. DD-028 now replaces its Firebase authentication design.
 
 **Working branch:** `docs/watchparty-backend-migration`.
 

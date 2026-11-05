@@ -24,17 +24,13 @@ services:
       dockerfile: Dockerfile
     environment:
       NODE_ENV: production
-      HAMBIN_MODE: 'true'
       HOST: 0.0.0.0
       PORT: '8080'
       DATABASE_URL: postgresql://hambin:${POSTGRES_PASSWORD}@postgres:5432/hambin
-      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:?required}
-      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/firebase-admin.json
+      AUTH_ALLOWED_ORIGINS: https://${SITE_DOMAIN:?required}
       TRUSTED_PROXIES: 172.30.55.254/32
-      TURN_URLS: turn:${TURN_DOMAIN}:3478?transport=udp,turn:${TURN_DOMAIN}:3478?transport=tcp,turns:${TURN_DOMAIN}:5349?transport=tcp
+      TURN_URLS: turn:${TURN_DOMAIN}:3478?transport=udp,turn:${TURN_DOMAIN}:3478?transport=tcp,turns:${TURN_DOMAIN}:5349?transport=tcp,turns:${TURN_DOMAIN}:443?transport=tcp
       TURN_SHARED_SECRET: ${TURN_SHARED_SECRET:?required}
-    volumes:
-      - /opt/hambin/secrets/firebase-admin.json:/run/secrets/firebase-admin.json:ro
     depends_on:
       postgres: {condition: service_healthy}
     healthcheck:
@@ -50,7 +46,7 @@ services:
     environment:
       SITE_DOMAIN: ${SITE_DOMAIN:?required}
       TURN_DOMAIN: ${TURN_DOMAIN:?required}
-    ports: ['80:80', '443:443', '443:443/udp']
+    ports: ['80:80', '127.0.0.1:8443:443', '443:443/udp']
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./web:/srv:ro
@@ -62,13 +58,35 @@ services:
       api: {condition: service_healthy}
     restart: unless-stopped
     logging: *logging
+  tls-router:
+    ulimits:
+      nofile: {soft: 65536, hard: 65536}
+    user: "0:0" # Bind privileged host443, then drop privileges in haproxy.cfg.
+    image: haproxy@sha256:5893840576071e6217cd52ebdcc14f454c6f7a631056fa6f4e0f40d3cac4215b
+    network_mode: host
+    environment:
+      TURN_DOMAIN: ${TURN_DOMAIN:?required}
+    volumes:
+      - ./haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    depends_on:
+      caddy: {condition: service_started}
+    restart: unless-stopped
+    logging: *logging
   coturn:
+    ulimits:
+      nofile: {soft: 65536, hard: 65536}
     image: coturn/coturn@sha256:71c3c990283385567f11794ee692e3a47b66fd9b0bb39e42afbe776e331dd888
     network_mode: host
     environment:
       TURN_DOMAIN: ${TURN_DOMAIN}
       TURN_SHARED_SECRET: ${TURN_SHARED_SECRET}
       PUBLIC_IP: ${PUBLIC_IP:?required}
+      TURN_MIN_PORT: ${TURN_MIN_PORT:-49160}
+      TURN_MAX_PORT: ${TURN_MAX_PORT:-65535}
+      TURN_USER_QUOTA: ${TURN_USER_QUOTA:-128}
+      TURN_TOTAL_QUOTA: ${TURN_TOTAL_QUOTA:-16000}
+      TURN_MAX_BPS: ${TURN_MAX_BPS:-256000}
+      TURN_BPS_CAPACITY: ${TURN_BPS_CAPACITY:-512000000}
     volumes:
       - /opt/hambin/turn-tls:/tls:ro
       - ./turn-entrypoint.sh:/turn-entrypoint.sh:ro
@@ -78,7 +96,7 @@ services:
 networks:
   default:
     ipam:
-      config: [{subnet: 172.30.55.0/24}]
+      config: [{subnet: 172.30.55.0/24, gateway: 172.30.55.1}]
 volumes:
   postgres_data:
   caddy_data:

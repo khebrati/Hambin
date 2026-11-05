@@ -4,10 +4,11 @@ test -s /tls/fullchain.pem
 test -s /tls/privkey.pem
 exec turnserver --no-cli --fingerprint --use-auth-secret \
   --static-auth-secret="$TURN_SHARED_SECRET" --realm="$TURN_DOMAIN" \
-  --external-ip="$PUBLIC_IP" --relay-ip="$PUBLIC_IP" --listening-ip="$PUBLIC_IP" --listening-port=3478 \
+  --external-ip="$PUBLIC_IP" --relay-ip="$PUBLIC_IP" --listening-ip=0.0.0.0 --listening-port=3478 \
   --tls-listening-port=5349 --cert=/tls/fullchain.pem --pkey=/tls/privkey.pem \
-  --min-port=49160 --max-port=49200 --no-multicast-peers --no-tlsv1 --no-tlsv1_1 \
-  --user-quota=24 --total-quota=400 --max-bps=128000 --bps-capacity=51200000 \
+  --min-port="${TURN_MIN_PORT:-49160}" --max-port="${TURN_MAX_PORT:-65535}" --no-multicast-peers --no-tlsv1 --no-tlsv1_1 \
+  --user-quota="${TURN_USER_QUOTA:-128}" --total-quota="${TURN_TOTAL_QUOTA:-16000}" \
+  --max-bps="${TURN_MAX_BPS:-256000}" --bps-capacity="${TURN_BPS_CAPACITY:-512000000}" \
   --denied-peer-ip=0.0.0.0-0.255.255.255 \
   --denied-peer-ip=10.0.0.0-10.255.255.255 \
   --denied-peer-ip=100.64.0.0-100.127.255.255 \

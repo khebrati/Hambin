@@ -40,8 +40,8 @@ class VoiceConfigurationDtoTest {
     @Test
     fun credentialRefreshSendsTheExistingVoiceGeneration() {
         assertEquals(
-            """{"voiceSessionId":"generation-1"}""",
-            json.encodeToString(VoiceConfigurationRequest("generation-1")),
+            """{"voiceSessionId":"generation-1","operation":"refresh"}""",
+            json.encodeToString(VoiceConfigurationRequest("generation-1", "refresh")),
         )
     }
 }

@@ -16,6 +16,9 @@ interface SessionKeeper {
      */
     fun start(room: RoomSession)
 
+    /** Confirms platform microphone protection before capture is initialized. */
+    suspend fun ensureMicrophone(room: RoomSession) { start(room) }
+
     /** Stops the background session once the user leaves the room. */
     fun stop()
 
@@ -56,6 +59,9 @@ object RoomSessionExtras {
 
 /** A user intent raised by the platform's background session surface. */
 sealed interface SessionAction {
+    /** Platform microphone foreground protection was lost; capture must stop. */
+    data object MicrophoneServiceLost : SessionAction
+
     /** The user asked to turn the local microphone on from the notification. */
     data object UnmuteVoice : SessionAction
 

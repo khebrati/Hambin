@@ -59,7 +59,7 @@ class RoomViewModelPresenceTest {
         Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
         try {
             val repository = snapshotRepository(RoomSnapshot(room, emptyList(), emptyStream()))
-            val viewModel = RoomViewModel("room", asOwner = true, testSessionRepository, repository, testRealtimeClient, testVoiceClient, testSessionKeeper)
+            val viewModel = testRoomViewModel("room", asOwner = true, testSessionRepository, repository, testRealtimeClient, testVoiceClient, testSessionKeeper)
 
             assertTrue(viewModel.state.value.model.ownerPresent)
             assertTrue(viewModel.state.value.isOwner)
@@ -73,7 +73,7 @@ class RoomViewModelPresenceTest {
         Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
         try {
             val repository = snapshotRepository(RoomSnapshot(room, listOf(owner.copy(present = false), guest), emptyStream()))
-            val viewModel = RoomViewModel("room", asOwner = false, testSessionRepository, repository, testRealtimeClient, testVoiceClient, testSessionKeeper)
+            val viewModel = testRoomViewModel("room", asOwner = false, testSessionRepository, repository, testRealtimeClient, testVoiceClient, testSessionKeeper)
 
             assertFalse(viewModel.state.value.model.ownerPresent)
             assertFalse(viewModel.state.value.isOwner)
@@ -89,7 +89,7 @@ class RoomViewModelPresenceTest {
             val stream = StreamInfo("same-session", 4, StreamState.ACTIVE, "https://example/video.mp4")
             val snapshot = RoomSnapshot(room, listOf(owner, guest), stream)
             val events = MutableSharedFlow<RealtimeEvent>()
-            val viewModel = RoomViewModel(
+            val viewModel = testRoomViewModel(
                 "room", asOwner = false, testSessionRepository, snapshotRepository(snapshot),
                 emittingRealtimeClient(events), testVoiceClient, testSessionKeeper,
             )
@@ -124,7 +124,7 @@ class RoomViewModelPresenceTest {
         try {
             val events = MutableSharedFlow<RealtimeEvent>()
             val repository = snapshotRepository(RoomSnapshot(room, listOf(owner, guest), emptyStream()))
-            val viewModel = RoomViewModel("room", asOwner = false, testSessionRepository, repository, emittingRealtimeClient(events), testVoiceClient, testSessionKeeper)
+            val viewModel = testRoomViewModel("room", asOwner = false, testSessionRepository, repository, emittingRealtimeClient(events), testVoiceClient, testSessionKeeper)
 
             assertTrue(viewModel.state.value.model.ownerPresent)
 
@@ -151,7 +151,7 @@ class RoomViewModelPresenceTest {
         try {
             val events = MutableSharedFlow<RealtimeEvent>()
             val repository = snapshotRepository(RoomSnapshot(room, listOf(owner, guest), emptyStream()))
-            val viewModel = RoomViewModel("room", asOwner = false, testSessionRepository, repository, emittingRealtimeClient(events), testVoiceClient, testSessionKeeper)
+            val viewModel = testRoomViewModel("room", asOwner = false, testSessionRepository, repository, emittingRealtimeClient(events), testVoiceClient, testSessionKeeper)
 
             assertTrue(viewModel.state.value.model.participants.any { it.isHost })
 
@@ -173,7 +173,7 @@ class RoomViewModelPresenceTest {
         try {
             val keeper = RecordingSessionKeeper()
             val repository = snapshotRepository(RoomSnapshot(room, listOf(owner, guest), emptyStream()))
-            val viewModel = RoomViewModel("room", asOwner = false, testSessionRepository, repository, testRealtimeClient, testVoiceClient, keeper)
+            val viewModel = testRoomViewModel("room", asOwner = false, testSessionRepository, repository, testRealtimeClient, testVoiceClient, keeper)
             val store = ViewModelStore()
             store.put("room", viewModel)
 
@@ -181,7 +181,7 @@ class RoomViewModelPresenceTest {
             store.clear()
             testScheduler.runCurrent()
 
-            assertEquals(1, keeper.stopAndLeaves)
+            assertEquals(1, keeper.stops)
         } finally {
             Dispatchers.resetMain()
         }
@@ -193,7 +193,7 @@ class RoomViewModelPresenceTest {
         try {
             val voice = RecordingVoiceClient()
             val repository = snapshotRepository(RoomSnapshot(room, listOf(owner, guest), emptyStream()))
-            val viewModel = RoomViewModel("room", asOwner = true, testSessionRepository, repository, testRealtimeClient, voice, testSessionKeeper)
+            val viewModel = testRoomViewModel("room", asOwner = true, testSessionRepository, repository, testRealtimeClient, voice, testSessionKeeper)
 
             viewModel.onAction(RoomAction.JoinVoiceClicked)
             testScheduler.runCurrent()
@@ -220,7 +220,7 @@ class RoomViewModelPresenceTest {
             val keeper = RecordingSessionKeeper()
             val voice = RecordingVoiceClient()
             val repository = snapshotRepository(RoomSnapshot(room, listOf(owner, guest), emptyStream()))
-            val viewModel = RoomViewModel("room", asOwner = true, testSessionRepository, repository, testRealtimeClient, voice, keeper)
+            val viewModel = testRoomViewModel("room", asOwner = true, testSessionRepository, repository, testRealtimeClient, voice, keeper)
             testScheduler.runCurrent()
 
             // Entering the room starts the background session without voice.
@@ -245,7 +245,7 @@ class RoomViewModelPresenceTest {
             val keeper = RecordingSessionKeeper()
             val voice = RecordingVoiceClient()
             val repository = snapshotRepository(RoomSnapshot(room, listOf(owner, guest), emptyStream()))
-            val viewModel = RoomViewModel("room", asOwner = true, testSessionRepository, repository, testRealtimeClient, voice, keeper)
+            val viewModel = testRoomViewModel("room", asOwner = true, testSessionRepository, repository, testRealtimeClient, voice, keeper)
 
             viewModel.onAction(RoomAction.JoinVoiceClicked)
             testScheduler.runCurrent()
@@ -276,7 +276,7 @@ class RoomViewModelPresenceTest {
             val keeper = RecordingSessionKeeper()
             val voice = RecordingVoiceClient()
             val repository = snapshotRepository(RoomSnapshot(room, listOf(owner, guest), emptyStream()))
-            val viewModel = RoomViewModel("room", asOwner = true, testSessionRepository, repository, testRealtimeClient, voice, keeper)
+            val viewModel = testRoomViewModel("room", asOwner = true, testSessionRepository, repository, testRealtimeClient, voice, keeper)
             val effects = mutableListOf<RoomEffect>()
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
                 viewModel.effects.collect { effects += it }
@@ -291,7 +291,7 @@ class RoomViewModelPresenceTest {
             testScheduler.runCurrent()
 
             assertEquals(VoiceConnectionState.IDLE, viewModel.state.value.voiceState)
-            assertEquals(1, keeper.stopAndLeaves)
+            assertEquals(1, keeper.stops)
             assertTrue(effects.contains(RoomEffect.Left))
         } finally {
             Dispatchers.resetMain()
@@ -306,7 +306,7 @@ class RoomViewModelPresenceTest {
             val repository = snapshotRepository(
                 RoomSnapshot(room, listOf(owner, guest), StreamInfo("s", 1, StreamState.ACTIVE, "https://example/video")),
             )
-            val viewModel = RoomViewModel("room", asOwner = false, testSessionRepository, repository, client, testVoiceClient, testSessionKeeper)
+            val viewModel = testRoomViewModel("room", asOwner = false, testSessionRepository, repository, client, testVoiceClient, testSessionKeeper)
             val effects = mutableListOf<RoomEffect>()
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
                 viewModel.effects.collect { effects += it }
@@ -339,7 +339,7 @@ class RoomViewModelPresenceTest {
         Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
         try {
             val repository = snapshotRepository(RoomSnapshot(room, listOf(owner, guest), emptyStream()))
-            val viewModel = RoomViewModel("room", asOwner = false, testSessionRepository, repository, testRealtimeClient, testVoiceClient, testSessionKeeper)
+            val viewModel = testRoomViewModel("room", asOwner = false, testSessionRepository, repository, testRealtimeClient, testVoiceClient, testSessionKeeper)
             val effects = mutableListOf<RoomEffect>()
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
                 viewModel.effects.collect { effects += it }
@@ -362,7 +362,7 @@ class RoomViewModelPresenceTest {
             val repository = snapshotRepository(
                 RoomSnapshot(room, listOf(owner, guest), StreamInfo("s1", 1, StreamState.ACTIVE, "https://example/video")),
             )
-            val viewModel = RoomViewModel("room", asOwner = false, testSessionRepository, repository, emittingRealtimeClient(events), testVoiceClient, testSessionKeeper)
+            val viewModel = testRoomViewModel("room", asOwner = false, testSessionRepository, repository, emittingRealtimeClient(events), testVoiceClient, testSessionKeeper)
 
             events.emit(RealtimeEvent.StreamAborted("s1", 2))
             testScheduler.runCurrent()
@@ -388,7 +388,7 @@ class RoomViewModelPresenceTest {
         try {
             val voice = EmittingVoiceClient()
             val repository = snapshotRepository(RoomSnapshot(room, listOf(owner, guest), emptyStream()))
-            val viewModel = RoomViewModel("room", asOwner = true, testSessionRepository, repository, testRealtimeClient, voice, testSessionKeeper)
+            val viewModel = testRoomViewModel("room", asOwner = true, testSessionRepository, repository, testRealtimeClient, voice, testSessionKeeper)
 
             viewModel.onAction(RoomAction.JoinVoiceClicked)
             testScheduler.runCurrent()
@@ -414,7 +414,7 @@ class RoomViewModelPresenceTest {
         try {
             val voice = EmittingVoiceClient()
             val repository = snapshotRepository(RoomSnapshot(room, listOf(owner, guest), emptyStream()))
-            val viewModel = RoomViewModel("room", asOwner = true, testSessionRepository, repository, testRealtimeClient, voice, testSessionKeeper)
+            val viewModel = testRoomViewModel("room", asOwner = true, testSessionRepository, repository, testRealtimeClient, voice, testSessionKeeper)
 
             viewModel.onAction(RoomAction.JoinVoiceClicked)
             testScheduler.runCurrent()
@@ -511,6 +511,7 @@ class RoomViewModelPresenceTest {
     }
 
     private class RecordingVoiceClient : VoiceClient {
+        private val events = MutableSharedFlow<VoiceEvent>(extraBufferCapacity = 8)
         var connects = 0
         val micStates = mutableListOf<Boolean>()
 
@@ -521,10 +522,11 @@ class RoomViewModelPresenceTest {
                 // The first session ends immediately (a dropped call); later
                 // sessions stay open so the reconnect loop does not spin.
                 override val events: Flow<VoiceEvent> =
-                    if (index == 1) emptyFlow() else flow { awaitCancellation() }
+                    if (index == 1) emptyFlow() else this@RecordingVoiceClient.events
 
                 override fun setMicrophoneEnabled(enabled: Boolean) {
                     micStates += enabled
+                    this@RecordingVoiceClient.events.tryEmit(VoiceEvent.MicrophoneChanged(enabled))
                 }
 
                 override suspend fun disconnect() = Unit

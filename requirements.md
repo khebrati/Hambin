@@ -32,5 +32,7 @@ Confirmed additions:
 4. Android viewers can select soft subtitle tracks provided by a video URL or choose a local subtitle file for their own playback. Hardcoded subtitles remain part of the video image. Subtitle selection is local to each viewer and does not change other participants’ playback.
 5. Android viewers can switch between audio tracks provided by a video URL, or restore automatic track selection. Audio-track selection is local to each viewer and does not change other participants’ playback.
 
-
-
+Confirmed guest identity requirements (2026-10-23):
+1. Users receive an automatic durable guest identity from our own backend, without registration or login screens. All authentication, credential refresh, verification, and revocation are owned by our backend; neither client requires Firebase or Google authentication services.
+2. A saved guest identity restores the same profile and room ownership after refresh or restart. Temporary connection or service failures retain the saved identity and offer retry; they must not create a replacement guest. Permanently unusable credentials have an explicit, confirmed identity-reset recovery action.
+3. The Firebase-removal release starts with fresh backend guest identities. Existing identities and room ownership are not migrated; local non-secret preferences remain.

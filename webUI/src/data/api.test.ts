@@ -1,9 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, request } from './api';
+import { ApiError, errorMessage, request } from './api';
 const auth = vi.hoisted(() => ({ token: vi.fn() }));
 vi.mock('./auth', () => ({ token: auth.token }));
 afterEach(() => { vi.unstubAllGlobals(); vi.resetAllMocks(); });
 describe('authenticated HTTP boundary', () => {
+  it('explains recovery for an expired durable guest session', () => {
+    expect(errorMessage(new ApiError('SESSION_EXPIRED', 401))).toContain('Reset your guest identity');
+  });
   it('renews an expired token once and preserves the mutation idempotency key', async () => {
     auth.token.mockResolvedValueOnce('old-token').mockResolvedValueOnce('fresh-token');
     const fetch = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({code:'SESSION_EXPIRED'}),{status:401})).mockResolvedValueOnce(new Response(JSON.stringify({room:{id:'room'}}),{status:201}));

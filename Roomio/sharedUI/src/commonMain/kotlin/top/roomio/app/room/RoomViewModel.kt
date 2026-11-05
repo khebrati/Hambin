@@ -8,7 +8,6 @@ import dev.zacsweers.metro.AssistedFactory
 import dev.zacsweers.metro.AssistedInject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -18,7 +17,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlin.random.Random
 import top.roomio.app.room.player.VideoPlayerState
 import top.roomio.app.room.player.VideoPlayerStatus
@@ -32,21 +30,19 @@ import top.roomio.domain.party.RealtimeSession
 import top.roomio.domain.party.RoomRepository
 import top.roomio.domain.party.RoomSession
 import top.roomio.domain.party.RoomSnapshot
-import top.roomio.domain.party.SessionAction
-import top.roomio.domain.party.SessionKeeper
 import top.roomio.domain.party.SessionRepository
 import top.roomio.domain.party.StreamState
 import top.roomio.domain.party.SyncStatus
-import top.roomio.domain.party.VoiceClient
-import top.roomio.domain.party.VoiceEvent
-import top.roomio.domain.party.VoiceSession
+import top.roomio.domain.party.VoiceCoordinator
+import top.roomio.domain.party.VoiceSessionState
+import top.roomio.domain.party.VoicePeerStatus
 import top.roomio.domain.party.isConnectivity
 
 internal enum class InviteCopyTarget { CODE, LINK }
 
 internal enum class InviteCopyState { IDLE, CODE, LINK, ERROR }
 
-internal enum class VoiceConnectionState { IDLE, CONNECTING, CONNECTED, FAILED }
+internal enum class VoiceConnectionState { IDLE, CONNECTING, CONNECTED, DEGRADED, RECONNECTING, FAILED }
 
 internal data class RoomUiState(
     val model: RoomScreenModel,
@@ -64,6 +60,8 @@ internal data class RoomUiState(
     val volume: Float = 0.72f,
     val micMuted: Boolean = false,
     val voiceState: VoiceConnectionState = VoiceConnectionState.IDLE,
+    val voicePeers: Map<String, VoicePeerStatus> = emptyMap(),
+    val voiceFailureCode: String? = null,
     val fullscreenMode: Boolean = false,
     val inviteOpen: Boolean = false,
     val inviteCopyState: InviteCopyState = InviteCopyState.IDLE,
@@ -98,6 +96,7 @@ internal sealed interface RoomAction {
     data object ToggleFullscreenClicked : RoomAction
     data object ToggleMicClicked : RoomAction
     data object JoinVoiceClicked : RoomAction
+    data object RetryVoiceConnections : RoomAction
     data object SyncClicked : RoomAction
     data object InviteClicked : RoomAction
     data object InviteDismissed : RoomAction
@@ -129,8 +128,7 @@ internal class RoomViewModel(
     private val sessionRepository: SessionRepository,
     private val roomRepository: RoomRepository,
     private val realtimeClient: RealtimeClient,
-    private val voiceClient: VoiceClient,
-    private val sessionKeeper: SessionKeeper,
+    private val voiceCoordinator: VoiceCoordinator,
 ) : ViewModel() {
 
     private val mutableState = MutableStateFlow(RoomUiState(emptyRoomModel()))
@@ -140,8 +138,6 @@ internal class RoomViewModel(
     val effects = mutableEffects.asSharedFlow()
 
     private var realtime: RealtimeSession? = null
-    private var voice: VoiceSession? = null
-    private var voiceWanted = false
     private var identityId: String? = null
     private var streamSessionId: String? = null
     private var streamRevision = -1L
@@ -155,8 +151,30 @@ internal class RoomViewModel(
     init {
         viewModelScope.launch { connect() }
         viewModelScope.launch { reportLoop() }
-        // Notification actions (unmute / leave) arrive through the session keeper.
-        viewModelScope.launch { sessionKeeper.actions.collect { action -> handleSessionAction(action) } }
+        viewModelScope.launch {
+            voiceCoordinator.state.collect { voice ->
+                if (voice.roomId == roomId || voice.roomId == null) {
+                    speakingMembershipIds = voice.speakers
+                    mutableState.update { it.copy(
+                        voiceState = when (voice.state) {
+                            VoiceSessionState.OFF -> VoiceConnectionState.IDLE
+                            VoiceSessionState.JOINING -> VoiceConnectionState.CONNECTING
+                            VoiceSessionState.CONNECTED -> VoiceConnectionState.CONNECTED
+                            VoiceSessionState.DEGRADED -> VoiceConnectionState.DEGRADED
+                            VoiceSessionState.RECONNECTING -> VoiceConnectionState.RECONNECTING
+                            VoiceSessionState.FAILED -> VoiceConnectionState.FAILED
+                        },
+                        micMuted = !voice.microphoneEnabled,
+                        voicePeers = voice.peers,
+                        voiceFailureCode = voice.failureCode,
+                    ) }
+                    refreshParticipants()
+                }
+            }
+        }
+        viewModelScope.launch { voiceCoordinator.leaveRequests.collect { id ->
+            if (id == roomId) { clearSpeakingMembers(); mutableEffects.tryEmit(RoomEffect.Left) }
+        } }
     }
 
     @AssistedFactory
@@ -218,7 +236,8 @@ internal class RoomViewModel(
             RoomAction.ToggleVolumeClicked -> mutableState.update { it.copy(volume = if (it.volume == 0f) 0.72f else 0f) }
             RoomAction.ToggleFullscreenClicked -> mutableState.update { it.copy(fullscreenMode = !it.fullscreenMode) }
             RoomAction.ToggleMicClicked -> toggleMic()
-            RoomAction.JoinVoiceClicked -> joinVoice()
+            RoomAction.JoinVoiceClicked -> voiceCoordinator.join(roomId)
+            RoomAction.RetryVoiceConnections -> voiceCoordinator.retryFailedConnections(roomId)
             RoomAction.SyncClicked -> requestSync()
             RoomAction.InviteClicked -> mutableState.update { it.copy(inviteOpen = true, inviteCopyState = InviteCopyState.IDLE) }
             RoomAction.InviteDismissed -> mutableState.update { it.copy(inviteOpen = false) }
@@ -240,12 +259,7 @@ internal class RoomViewModel(
         val session = realtime
         realtime = null
         viewModelScope.launch { runCatching { session?.close() } }
-        disconnectVoice()
-        // The room UI is gone, which means this device left the room (the room
-        // session keeps the connection alive while the app is merely
-        // backgrounded). Report the departure before stopping the service so
-        // other participants stop seeing this member.
-        sessionKeeper.stopAndLeave()
+        voiceCoordinator.leave(roomId)
     }
 
     private suspend fun connect() {
@@ -255,7 +269,7 @@ internal class RoomViewModel(
         try {
             applySnapshot(roomRepository.snapshot(roomId))
             // Keep the session alive in the background once the room is joined.
-            sessionKeeper.start(RoomSession(roomId, asOwner, voiceActive = false, micMuted = true))
+            voiceCoordinator.enter(RoomSession(roomId, asOwner, voiceActive = false, micMuted = true))
         } catch (cancellation: CancellationException) {
             throw cancellation
         } catch (error: Throwable) {
@@ -450,6 +464,7 @@ internal class RoomViewModel(
         isHost = isOwner,
         isPresent = present,
         isSpeaking = membershipId in this@RoomViewModel.speakingMembershipIds,
+        voiceStatus = mutableState.value.voicePeers[membershipId],
     )
 
     private fun startStream() {
@@ -485,140 +500,22 @@ internal class RoomViewModel(
 
     private fun leave() {
         mutableState.update { it.copy(leaveOpen = false, fullscreenMode = false) }
-        disconnectVoice()
-        // The Android session keeper owns the authenticated leave request. Do
-        // not stop it first: onCleared() runs after navigation and must not lose
-        // the room context before stopAndLeave can release this membership.
-        sessionKeeper.stopAndLeave()
-        // Navigation observes this effect, so leaving from the notification
-        // returns the app to the home screen like the in-room leave button.
+        voiceCoordinator.leave(roomId)
         mutableEffects.tryEmit(RoomEffect.Left)
-        viewModelScope.launch { runCatching { roomRepository.leave(roomId) } }
-    }
-
-    private fun handleSessionAction(action: SessionAction) {
-        when (action) {
-            SessionAction.UnmuteVoice -> setMicrophoneEnabled(enabled = true)
-            SessionAction.MuteVoice -> setMicrophoneEnabled(enabled = false)
-            SessionAction.Leave -> leave()
-        }
-    }
-
-    /**
-     * Applies a microphone request coming from outside the screen, such as the
-     * notification, and mirrors the new state back into the foreground service.
-     */
-    private fun setMicrophoneEnabled(enabled: Boolean) {
-        val session = voice
-        if (session == null) {
-            log.w("session action ignored: voice not connected room=$roomId")
-            return
-        }
-        mutableState.update { it.copy(micMuted = !enabled) }
-        session.setMicrophoneEnabled(enabled)
-        sessionKeeper.start(RoomSession(roomId, asOwner, voiceActive = true, micMuted = !enabled))
-    }
-
-    private fun joinVoice() {
-        if (voiceWanted) return
-        voiceWanted = true
-        // Voice is opt-in and starts muted.
-        mutableState.update { it.copy(voiceState = VoiceConnectionState.CONNECTING, micMuted = true) }
-        viewModelScope.launch { runVoiceLoop() }
-    }
-
-    /**
-     * Keeps voice alive for as long as the user wants it. The mesh is rebuilt
-     * after transient drops or expired credentials using a fresh authenticated
-     * configuration and the current microphone preference.
-     */
-    private suspend fun runVoiceLoop() {
-        while (voiceWanted && currentCoroutineContext().isActive) {
-            var session: VoiceSession? = null
-            try {
-                val configuration = roomRepository.voiceConfiguration(roomId)
-                val connected = voiceClient.connect(configuration)
-                session = connected
-                voice = connected
-                connected.setMicrophoneEnabled(!mutableState.value.micMuted)
-                mutableState.update { it.copy(voiceState = VoiceConnectionState.CONNECTED) }
-                // A microphone-capable foreground service keeps voice alive off-screen.
-                sessionKeeper.start(RoomSession(roomId, asOwner, voiceActive = true, micMuted = mutableState.value.micMuted))
-                log.i("voice connected room=$roomId")
-                connected.events.collect { event -> handleVoiceEvent(event) }
-                log.w("voice event flow ended room=$roomId")
-            } catch (cancellation: CancellationException) {
-                throw cancellation
-            } catch (error: Throwable) {
-                log.e("voice session failed room=$roomId: ${error.message ?: error::class.simpleName}")
-            } finally {
-                voice = null
-                // A dead session can leave a stale speaking set behind.
-                clearSpeakingMembers()
-                // Release the previous peer mesh before reconnecting.
-                session?.let { dead ->
-                    withContext(NonCancellable) { runCatching { dead.disconnect() } }
-                }
-            }
-            if (voiceWanted) {
-                sessionKeeper.start(RoomSession(roomId, asOwner, voiceActive = false, micMuted = true))
-                mutableState.update { it.copy(voiceState = VoiceConnectionState.CONNECTING) }
-                log.w("voice reconnecting room=$roomId in ${VOICE_RECONNECT_DELAY_MS}ms")
-                delay(VOICE_RECONNECT_DELAY_MS)
-            }
-        }
-        mutableState.update { it.copy(voiceState = VoiceConnectionState.IDLE, micMuted = true) }
-        log.i("voice loop ended room=$roomId")
     }
 
     private fun toggleMic() {
-        val session = voice
-        if (session == null) {
-            mutableState.update { it.copy(micMuted = !it.micMuted) }
+        if (mutableState.value.voiceState == VoiceConnectionState.IDLE) {
+            mutableState.update { it.copy(micMuted = true) }
             return
         }
-        val next = !mutableState.value.micMuted
-        mutableState.update { it.copy(micMuted = next) }
-        session.setMicrophoneEnabled(!next)
-        sessionKeeper.start(RoomSession(roomId, asOwner, voiceActive = true, micMuted = next))
+        voiceCoordinator.toggleMicrophone(roomId)
     }
 
-    private fun handleVoiceEvent(event: VoiceEvent) {
-        when (event) {
-            VoiceEvent.Connected -> mutableState.update { it.copy(voiceState = VoiceConnectionState.CONNECTED) }
-            // The loop owns reconnection; clearing speakers prevents a stale
-            // "speaking" indicator from surviving the drop.
-            VoiceEvent.Disconnected -> {
-                log.w("voice disconnected room=$roomId")
-                clearSpeakingMembers()
-            }
-            is VoiceEvent.Failed -> {
-                log.w("voice failed room=$roomId: ${event.reason}")
-                clearSpeakingMembers()
-            }
-            is VoiceEvent.SpeakersChanged -> {
-                speakingMembershipIds = event.speakingMembershipIds
-                refreshParticipants()
-            }
-        }
-    }
-
-    /** Drops the speaking indicator when voice ends, so it never stays stuck. */
     private fun clearSpeakingMembers() {
         if (speakingMembershipIds.isEmpty()) return
         speakingMembershipIds = emptySet()
         refreshParticipants()
-    }
-
-    private fun disconnectVoice() {
-        voiceWanted = false
-        val session = voice
-        voice = null
-        clearSpeakingMembers()
-        mutableState.update { it.copy(voiceState = VoiceConnectionState.IDLE, micMuted = true) }
-        if (session != null) {
-            viewModelScope.launch { runCatching { session.disconnect() } }
-        }
     }
 
     private fun requestSync() {

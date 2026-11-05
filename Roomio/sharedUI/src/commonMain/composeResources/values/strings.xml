@@ -1,4 +1,7 @@
 <resources>
+    <string name="invite_preview_loading">Checking your party…</string>
+    <string name="invite_preview_unavailable">This party could not be loaded. It may have ended, or the invite code may be incorrect. Try again or ask for a new invite.</string>
+    <string name="invite_preview_retry">Try again</string>
     <string name="cyclone">Cyclone</string>
     <string name="open_github">Open github</string>
     <string name="run">Run</string>
@@ -186,4 +189,15 @@
     <string name="room_preview">Room preview</string>
     <string name="stream">Stream</string>
     <string name="waiting_to_start">Waiting to start</string>
+    <string name="reset_guest_identity">Reset guest identity</string>
+    <string name="reset_guest_identity_description">This creates a new guest identity. You will lose ownership of rooms created with the previous identity. Your name and preferences are kept.</string>
+    <string name="guest_identity_reset">Guest identity reset. Try creating or joining the party again.</string>
+    <string name="voice_degraded">Some voice connections need attention</string>
+    <string name="voice_reconnecting">Reconnecting voice signaling</string>
+    <string name="voice_retry_connections">Retry voice connections</string>
+    <string name="voice_peer_connecting">Connecting voice</string>
+    <string name="voice_peer_reconnecting">Reconnecting voice</string>
+    <string name="voice_peer_unavailable">Voice unavailable</string>
+    <string name="voice_service_failed">Microphone service could not start. Keep the app open and retry joining voice.</string>
+    <string name="voice_audio_device_failed">Audio device interrupted. Check your headset or microphone and retry voice connections.</string>
 </resources>

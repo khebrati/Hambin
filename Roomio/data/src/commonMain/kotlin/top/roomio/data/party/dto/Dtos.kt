@@ -69,7 +69,9 @@ data class IdentityDto(
 data class SessionDto(
     val identity: IdentityDto,
     val accessToken: String,
+    val accessExpiresAt: String,
     val refreshToken: String,
+    val refreshExpiresAt: String,
 )
 
 @Serializable
@@ -146,13 +148,13 @@ data class VoiceConfigurationDto(
     val membershipId: String,
     val voiceSessionId: String,
     val namespace: String,
-    val ticket: String,
+    val ticket: String = "",
     val iceServers: List<IceServerDto>,
     val iceExpiresAt: String,
 )
 
 @Serializable
-data class VoiceConfigurationRequest(val voiceSessionId: String)
+data class VoiceConfigurationRequest(val voiceSessionId: String, val operation: String)
 
 @Serializable
 data class IceServerDto(
@@ -184,7 +186,7 @@ data class RealtimeTicketDto(
 @Serializable
 data class ErrorDto(
     val code: String,
-    val message: String,
+    val message: String = "",
 )
 
 @Serializable

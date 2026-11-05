@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button, LoadingIndicator, Snackbar } from './components/Material';
 import { errorMessage, request, ApiError, MutationRequests } from './data/api';
-import { token, watchToken } from './data/auth';
+import { canResetIdentity, ensureSession, resetIdentity, token, watchToken } from './data/auth';
 import { identityModel, partyModel, previewModel, profileBody, type Admission, type IdentityDto, type PreviewDto, type Snapshot, type StreamDto } from './data/contracts';
 import { RoomConnection } from './data/realtime';
 import { MeshVoice, type VoiceState } from './data/voice';
@@ -25,6 +25,8 @@ export default function LiveApp() {
   const [identityId, setIdentityId] = useState('');
   const [ready, setReady] = useState(false);
   const [initialError, setInitialError] = useState('');
+  const [resetAllowed, setResetAllowed] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [screen, setScreen] = useState<Screen>('home');
   const [managerMode, setManagerMode] = useState<ManagerMode>('create');
@@ -70,7 +72,8 @@ export default function LiveApp() {
   useEffect(() => {
     let active = true;
     setInitialError('');
-    void request<{identity: IdentityDto}>('/v1/identities/bootstrap', profileBody(defaultIdentity)).then(async value => {
+    setResetAllowed(false);
+    void ensureSession(profileBody(defaultIdentity)).then(async value => {
       if (!active) return;
       setIdentity(identityModel(value.identity)); setIdentityId(value.identity.id); setReady(true);
       const savedCode = localStorage.getItem(savedCodeKey);
@@ -84,7 +87,7 @@ export default function LiveApp() {
       const invite = new URLSearchParams(location.search).get('invite');
       if (active && !invite && sessionStorage.getItem(activeCodeKey)) { await enterRoom(`/v1/rooms/${encodeURIComponent(sessionStorage.getItem(activeCodeKey)!)}/join`); }
       if (active && invite) { setManagerMode('join'); setScreen('party-manager'); await loadPreview(invite); }
-    }).catch(error => { if (active) setInitialError(errorMessage(error)); });
+    }).catch(error => { if (active) { setInitialError(errorMessage(error)); setResetAllowed(canResetIdentity(error)); } });
     return () => { active = false; };
   }, [attempt]);
 
@@ -105,9 +108,12 @@ export default function LiveApp() {
       voice.current?.disconnect(); voice.current = null; setVoiceState(voiceOff); sessionStorage.removeItem(activeCodeKey); setRoomId(''); setSnapshot(null); setScreen('home'); setReturnableParty(null); localStorage.removeItem(savedCodeKey); notify('This room session has ended.');
     } });
     realtime.current = session;
-    const unsubscribe = watchToken(idToken => {
-      void session.refreshAuth(idToken).catch(e => notify(errorMessage(e)));
-      void voice.current?.refreshAuth(idToken).catch(e => notify(errorMessage(e)));
+    const unsubscribe = watchToken(accessToken => {
+      void session.refreshAuth(accessToken).catch(e => notify(errorMessage(e)));
+      void voice.current?.refreshAuth(accessToken).catch(e => notify(errorMessage(e)));
+    }, error => {
+      notify(errorMessage(error));
+      if (canResetIdentity(error)) { setReady(false); setInitialError(errorMessage(error)); setResetAllowed(true); session.close(); voice.current?.disconnect(); }
     });
     session.start();
     return () => { active = false; unsubscribe(); session.close(); voice.current?.disconnect(); voice.current = null; realtime.current = null; };
@@ -180,16 +186,29 @@ export default function LiveApp() {
     catch (error) { notify(errorMessage(error)); }
     finally { setSyncing(false); }
   };
+  const resetGuest = async () => {
+    if (resetting || !window.confirm('Reset your guest identity? You will lose ownership of your existing parties.')) return;
+    setResetting(true);
+    try {
+      await resetIdentity();
+      realtime.current?.close(); voice.current?.disconnect();
+      realtime.current = null; voice.current = null;
+      setRoomId(''); setSnapshot(null); setReturnableParty(null); setVoiceState(voiceOff);
+      setIdentity(defaultIdentity); setIdentityId(''); setScreen('home'); setReady(false);
+      setAttempt(value => value + 1);
+    } catch (error) { setInitialError(errorMessage(error)); }
+    finally { setResetting(false); }
+  };
   const toggleTheme = () => setTheme(v => v === 'light' ? 'dark' : 'light');
   const party = snapshot ? partyModel(snapshot, identityId) : null;
   if (party) party.participants = party.participants.map(p => ({ ...p, isMuted: voiceState.members[p.id]?.muted ?? true, isSpeaking: voiceState.members[p.id]?.speaking ?? false }));
   return <div className="app-shell">
-    {!ready ? <main className="form-page" aria-live="polite">{initialError ? <><p role="alert">{initialError}</p><Button onClick={() => setAttempt(v => v + 1)}>Retry connection</Button></> : <LoadingIndicator label="Restoring your profile" />}</main> : <>
+    {!ready ? <main className="form-page" aria-live="polite">{initialError ? <><p role="alert">{initialError}</p><Button disabled={resetting} onClick={() => setAttempt(v => v + 1)}>Retry connection</Button>{resetAllowed && <Button disabled={resetting} onClick={() => void resetGuest()}>{resetting ? 'Resetting identity…' : 'Reset guest identity'}</Button>}</> : <LoadingIndicator label="Restoring your profile" />}</main> : <>
       {screen === 'home' && <HomeScreen live busy={joinStatus === 'loading'} identity={identity} theme={theme} onToggleTheme={toggleTheme} onSettings={() => setScreen('settings')} onCreate={() => {setManagerMode('create');setJoinStatus('idle');setJoinError('');setScreen('party-manager');}} onJoin={() => {setManagerMode('join');setJoinStatus('idle');setJoinError('');setScreen('party-manager');}} returnableParty={returnableParty} onRejoinOwnedParty={() => returnableParty && void enterRoom(`/v1/rooms/${returnableParty.code || returnableParty.id}/join`)} />}
       {screen === 'settings' && <SettingsScreen identity={identity} theme={theme} onToggleTheme={toggleTheme} onBack={() => setScreen('home')} onSave={saveProfile} saving={saving} />}
       {screen === 'party-manager' && <PartyManagerScreen initialMode={managerMode} joinStatus={joinStatus} errorMessage={joinError} codeDraft={codeDraft} onCodeChange={setCodeDraft} theme={theme} onToggleTheme={toggleTheme} onBack={() => setScreen('home')} onCreate={() => void enterRoom('/v1/rooms')} onPreview={loadPreview} onResetError={() => {setJoinStatus('idle');setJoinError('');}} live />}
       {screen === 'room-preview' && roomPreview && <><RoomPreviewScreen preview={roomPreview} joinStatus={joinStatus} theme={theme} onToggleTheme={toggleTheme} onBack={() => {setScreen('party-manager');setManagerMode('join');setJoinStatus('idle');}} onJoin={() => void enterRoom(`/v1/rooms/${roomPreview.id}/join`)} />{joinError && <p role="alert" className="room-notice">{joinError}</p>}</>}
-      {screen === 'party' && party && <><div className="connection-status" role="status">{connected ? 'Connected' : 'Reconnecting to room…'}{voiceState.error ? ` · ${voiceState.error}` : ''}</div><PartyScreen key={roomId} party={party} streamStatus={streamStatus} theme={theme} aborting={aborting} onToggleTheme={toggleTheme} onStartStream={startStream} onSetStreamStatus={setStreamStatus} onAbort={abortStream} onLeave={leave} onNotify={notify} live={{ connected, leaving, voice: voiceState, onToggleVoice: toggleVoice, onResumeVoice: () => { void voice.current?.resumeAudio().catch(e => notify(e.message)); }, onDisconnectVoice: () => {voice.current?.disconnect();voice.current=null;setVoiceState(voiceOff);}, onSync: sync, syncing, syncTarget, onReport: (positionMs, playing) => { playback.current = {positionMs,playing}; realtime.current?.report(positionMs, playing); } }} /></>}
+      {screen === 'party' && party && <><div className="connection-status" role="status">{connected ? 'Connected' : 'Reconnecting to room…'}{voiceState.error ? ` · ${voiceState.error}` : ''}</div><PartyScreen key={roomId} party={party} streamStatus={streamStatus} theme={theme} aborting={aborting} onToggleTheme={toggleTheme} onStartStream={startStream} onSetStreamStatus={setStreamStatus} onAbort={abortStream} onLeave={leave} onNotify={notify} live={{ connected, leaving, voice: voiceState, onToggleVoice: toggleVoice, onRetryVoice: () => voice.current?.retryConnections(), onResumeVoice: () => { void voice.current?.resumeAudio().catch(e => notify(e.message)); }, onDisconnectVoice: () => {voice.current?.disconnect();voice.current=null;setVoiceState(voiceOff);}, onSync: sync, syncing, syncTarget, onReport: (positionMs, playing) => { playback.current = {positionMs,playing}; realtime.current?.report(positionMs, playing); } }} /></>}
     </>}
     <Snackbar message={snackbar} onDismiss={() => setSnackbar('')} />
   </div>;

@@ -98,8 +98,8 @@ Resolved questions are preserved with their answers for traceability.
 5. Should the app show video title, thumbnail, duration, or loading metadata?
    - Affects the populated player state and pre-play preview.
 
-6. What voice-chat control model should be used: open mic, mute/unmute, push-to-talk, or listen-only until enabled?
-   - Affects party screen control density, permission prompts, accessibility labels, and speaking indicators.
+6. [Resolved, DD-031] What voice-chat control model should be used?
+   - Explicit opt-in starts muted; acknowledged unmute enables capture, immediate mute disables capture, and unavailable links have a peer-only retry action.
 
 7. What should the screen show immediately after the owner aborts a stream?
    - Affects whether the player becomes an aborted state, an empty URL-entry state, or a transition state.
@@ -108,15 +108,39 @@ Resolved questions are preserved with their answers for traceability.
 
 - Production runtime is still unspecified, even though the design target is cross-platform mobile.
 - RTL is currently excluded from designs, but repository guidance still asks for RTL support.
-- Voice-chat details are not yet defined beyond "voice only."
+- [Resolved, DD-031] Voice is explicit muted opt-in with independent per-peer recovery; physical audio and deployment/load acceptance remain open.
 - Initial owner assignment is still inferred from party creation, but the owner-absent and returning-owner lifecycle is defined.
 - Desktop and iOS playback engines are not yet implemented; the Android player (DD-013) is the approved reference seam for extending them.
 - Synchronization is a local placeholder until a cross-device sync contract exists. Directional sync (DD-017) is an archived exploration; its request-consent rules and chosen variation are deferred under DD-023. The connected browser uses the accepted private, requester-only forward sync contract.
-- The Android background room session (DD-018) keeps an existing process alive but does not own the LiveKit voice call, so voice cannot be restored after process death. Whether the call should move into the foreground service is unresolved.
+- [Resolved, DD-031] An application-scoped coordinator owns the Android voice lifetime and notification commands through a bound foreground microphone service. Process death never automatically restores capture.
 
 
 ## Hosted deployment follow-ups (2026-10-15)
 
-- Before replacing `watchparty.audiosense.ir` with `watchparty.top`, decide how returning browser owners retain access to their origin-scoped anonymous credentials. Keep the original origin accessible or approve an explicit identity-transition design; changing DNS alone does not transfer browser storage.
+- [Resolved 2026-10-16, DD-025] Make `watchparty.top` primary and keep `watchparty.audiosense.ir` as a live alias for returning browser owners. Browser storage remains origin-scoped and does not transfer; retain the alias while identities stored there are needed.
 - Select an offsite destination and retention policy for VPS database backups. Daily local dumps and a scratch restore are verified; same-host backups do not cover VM loss.
 - Hosted four/eight-peer mesh, physical browser/Android audio, restrictive-network fallback, and sustained load remain acceptance gates; see [deployment evidence](vps-deployment-evidence.md).
+
+## Browser playback limitation (2026-10-23)
+
+- Firefox versions before 158 may scan an entire AAC-in-MKV source before exposing metadata; reproduced on Firefox 153 with the reported link. Mozilla [bug 2000420](https://bugzilla.mozilla.org/show_bug.cgi?id=2000420) is fixed for Firefox 158. Direct native playback cannot bypass that scan from page JavaScript. Keep the direct-client boundary and expose useful slow-loading guidance; do not claim the website update fixes affected browser versions. See [investigation](video-playback-investigation-20261023.md).
+
+
+## Guest authentication replacement (2026-10-23)
+
+- [Resolved, DD-028] Replace Firebase completely with backend-owned automatic guest sessions; no registered-account UI is added.
+- [Resolved, DD-028] Existing Firebase identities and room ownership do not migrate. Updated clients create fresh backend guest identities and retain non-secret preferences.
+- [Resolved] Delivery includes backend/browser deployment and browser verification. Android builds and tests are required; the stakeholder will verify the actual device.
+- The external Firebase project is retained; deleting it is outside this change. Historical evidence remains marked historical.
+
+## Browser media parity (2026-10-30)
+
+- [Resolved, DD-029] Use Android's media control UI and local subtitle/audio selection behavior in the browser, including local subtitle imports in the Android-supported file extensions.
+- Browser APIs and codecs may not expose embedded MP4/MKV audio/subtitle tracks that Android can select. DD-029 accepts this direct-playback platform limitation; universal embedded-track support would require a separate architecture decision.
+- Imported SSA/ASS and TTML content is adapted to WebVTT text and timing. Advanced styling, animation, drawing, and placement parity with Media3 is outside the accepted browser rendering guarantee.
+
+## Mesh voice release gates (2026-11-05)
+
+- [Resolved, DD-031] Retain Node/PostgreSQL/private Coturn peer mesh and preserve healthy links during individual peer failure.
+- Physical two/four/eight-person mixed Android/browser audio, headset/Bluetooth and network-switch/background acceptance remain unverified.
+- Production TURN TLS443 DNS/certificates/firewall activation, the two-hour eight-person soak, and 100 simultaneous eight-person rooms require measured acceptance before a stability/capacity claim. See [voice stability acceptance](voice-stability-acceptance.md).

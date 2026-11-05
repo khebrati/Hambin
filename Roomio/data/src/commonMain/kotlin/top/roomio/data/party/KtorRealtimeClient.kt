@@ -187,7 +187,7 @@ private class KtorRealtimeSession(
                 sessions.refresh()
                 val fresh = tokens.credentials() ?: return
                 val ack = namespaceMutex.withLock {
-                    namespace.emit("auth.refresh", buildJsonObject { put("idToken", JsonPrimitive(fresh.idToken)) })
+                    namespace.emit("auth.refresh", buildJsonObject { put("accessToken", JsonPrimitive(fresh.accessToken)) })
                 }
                 val obj = ack as? JsonObject
                 val code = obj?.get("code")?.jsonPrimitive?.contentOrNull

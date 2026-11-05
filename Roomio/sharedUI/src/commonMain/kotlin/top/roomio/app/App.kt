@@ -33,6 +33,10 @@ import top.roomio.domain.party.SessionRepository
 import top.roomio.domain.party.StreamInfo
 import top.roomio.domain.party.StreamState
 import top.roomio.domain.party.VoiceClient
+import top.roomio.domain.party.VoiceCoordinator
+import top.roomio.domain.party.CoordinatedVoiceState
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emptyFlow
 import top.roomio.domain.party.VoiceEvent
 import top.roomio.domain.party.VoiceSession
 import top.roomio.domain.party.IceServer
@@ -56,7 +60,7 @@ internal interface PresentationGraph {
             @Provides sessionRepository: SessionRepository,
             @Provides roomRepository: RoomRepository,
             @Provides realtimeClient: RealtimeClient,
-            @Provides voiceClient: VoiceClient,
+            @Provides voiceCoordinator: VoiceCoordinator,
             @Provides sessionKeeper: SessionKeeper,
         ): PresentationGraph
     }
@@ -69,7 +73,7 @@ private fun AppPreview() = RoomioUi(
     sessionRepository = PreviewSessionRepository,
     roomRepository = PreviewRoomRepository,
     realtimeClient = PreviewRealtimeClient,
-    voiceClient = PreviewVoiceClient,
+    voiceCoordinator = PreviewVoiceCoordinator,
     sessionKeeper = PreviewSessionKeeper,
 )
 
@@ -79,17 +83,17 @@ fun RoomioUi(
     sessionRepository: SessionRepository = PreviewSessionRepository,
     roomRepository: RoomRepository = PreviewRoomRepository,
     realtimeClient: RealtimeClient = PreviewRealtimeClient,
-    voiceClient: VoiceClient = PreviewVoiceClient,
+    voiceCoordinator: VoiceCoordinator = PreviewVoiceCoordinator,
     sessionKeeper: SessionKeeper = PreviewSessionKeeper,
     onThemeChanged: @Composable (isDark: Boolean) -> Unit = {},
 ) {
-    val presentationGraph = remember(profileRepository, sessionRepository, roomRepository, realtimeClient, voiceClient, sessionKeeper) {
+    val presentationGraph = remember(profileRepository, sessionRepository, roomRepository, realtimeClient, voiceCoordinator, sessionKeeper) {
         createGraphFactory<PresentationGraph.Factory>().create(
             profileRepository,
             sessionRepository,
             roomRepository,
             realtimeClient,
-            voiceClient,
+            voiceCoordinator,
             sessionKeeper,
         )
     }
@@ -119,6 +123,7 @@ private object PreviewSessionRepository : SessionRepository {
 
     override suspend fun ensureSession(name: String, avatar: String, language: String) = session
     override suspend fun currentSession() = session
+    override suspend fun reset() = Unit
     override suspend fun refresh() = session
     override suspend fun updateProfile(name: String, avatar: String, language: String) = session.identity
 }
@@ -177,3 +182,14 @@ private object PreviewSessionKeeper : SessionKeeper {
 private val previewMembers = listOf(
     Member("m1", "preview", "Mira", "MINT", isOwner = true, present = true),
 )
+
+private object PreviewVoiceCoordinator : VoiceCoordinator {
+    override val state = MutableStateFlow(CoordinatedVoiceState())
+    override val leaveRequests = emptyFlow<String>()
+    override fun enter(room: RoomSession) = Unit
+    override fun join(roomId: String) = Unit
+    override fun microphone(roomId: String, enabled: Boolean) = Unit
+    override fun toggleMicrophone(roomId: String) = Unit
+    override fun retryFailedConnections(roomId: String) = Unit
+    override fun leave(roomId: String) = Unit
+}

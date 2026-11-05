@@ -66,6 +66,7 @@ export interface LivePartyControls {
   onToggleVoice: () => Promise<void>;
   onDisconnectVoice: () => void;
   onResumeVoice: () => void;
+  onRetryVoice: () => void;
   onSync: () => Promise<void>;
   syncing: boolean;
   syncTarget?: { requestId: string; positionMs: number };
@@ -251,7 +252,7 @@ export function PartyScreen({
               ownerName={party.ownerName}
             />
           ) : live ? (
-            <VideoPlayer url={party.streamUrl} sessionId={party.streamSessionId || ''} onReport={live.onReport} onNotify={onNotify} onState={onSetStreamStatus} syncTarget={live.syncTarget} />
+            <VideoPlayer url={party.streamUrl} sessionId={party.streamSessionId || ''} onReport={live.onReport} onNotify={onNotify} onState={onSetStreamStatus} syncTarget={live.syncTarget} onSync={() => void live.onSync()} syncDisabled={!live.connected || live.syncing} onToggleMic={() => void live.onToggleVoice()} micMuted={voiceMuted} micLabel={voiceLabel} micDisabled={!live.connected || live.voice.status === 'connecting'} />
           ) : (
             <CinemaPlayer
               status={streamStatus}
@@ -300,7 +301,7 @@ export function PartyScreen({
           <section className="voice-panel" aria-labelledby="voice-heading">
             <div>
               <span className="eyebrow">Voice room</span>
-              <h2 id="voice-heading">{live?.voice.status === 'off' ? 'Voice is optional' : live?.voice.status === 'error' ? 'Voice needs retry' : live?.voice.status === 'connecting' ? 'Connecting voice…' : voiceMuted ? 'Your mic is muted' : 'Your mic is on'}</h2>
+              <h2 id="voice-heading">{live?.voice.status === 'off' ? 'Voice is optional' : live?.voice.status === 'error' ? 'Voice needs retry' : live?.voice.status === 'reconnecting' ? 'Reconnecting voice…' : live?.voice.status === 'degraded' ? 'Some voice links need attention' : live?.voice.status === 'connecting' ? 'Connecting voice…' : voiceMuted ? 'Your mic is muted' : 'Your mic is on'}</h2>
             </div>
             <IconButton
               icon={voiceMuted ? MicOff : Mic}
@@ -312,6 +313,7 @@ export function PartyScreen({
             />
           </section>
 
+          {live && ['degraded', 'reconnecting'].includes(live.voice.status) && <><Button onClick={live.onRetryVoice}>Retry voice connections</Button><ul aria-label="Voice connections">{party.participants.map(member => { const link = live.voice.members[member.id]; return link?.connection && <li key={member.id}>{member.name}: {link.connection}</li>; })}</ul></>}
           {live?.voice.error?.includes('playback was blocked') && <Button onClick={live.onResumeVoice}>Resume voice audio</Button>}
           {live && live.voice.status !== 'off' && <Button variant="text" onClick={live.onDisconnectVoice}>Disconnect voice</Button>}
           <Button

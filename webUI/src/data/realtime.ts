@@ -23,7 +23,7 @@ export class RoomConnection {
     try {
       const admission = await request<{ ticket: string; namespace: string }>(`/v1/rooms/${this.options.roomId}/realtime-ticket`, {});
       if (this.closed || generation !== this.generation) return;
-      const socket = io(`${backendUrl || location.origin}${admission.namespace}`, { path: '/socket.io/', transports: ['websocket'], auth: { ticket: admission.ticket, protocolVersion: 2 }, reconnection: false, forceNew: true, autoConnect: false, timeout: 10000 });
+      const socket = io(`${backendUrl || location.origin}${admission.namespace}`, { path: '/socket.io/', transports: ['websocket'], auth: { ticket: admission.ticket, protocolVersion: 3 }, reconnection: false, forceNew: true, autoConnect: false, timeout: 10000 });
       this.socket = socket;
       socket.on('snapshot', (value: Snapshot) => {
         if (generation !== this.generation || this.closed) return;
@@ -112,11 +112,11 @@ export class RoomConnection {
     if (this.closed || this.syncRequest !== requestId || this.snapshot?.stream.sessionId !== sessionId || this.snapshot.stream.state !== 'ACTIVE') return;
     return result;
   }
-  async refreshAuth(idToken: string) {
+  async refreshAuth(accessToken: string) {
     const socket = this.socket;
     if (!socket?.connected) return;
     this.authReady = false;
-    await new Promise<void>((resolve, reject) => socket.timeout(10000).emit('auth.refresh', { idToken }, (error: Error | null, result: { code?: string }) => {
+    await new Promise<void>((resolve, reject) => socket.timeout(10000).emit('auth.refresh', { accessToken }, (error: Error | null, result: { code?: string }) => {
       if (error || result?.code) { this.schedule(); reject(error || new ApiError(result.code!)); } else { this.authReady = true; resolve(); }
     }));
   }

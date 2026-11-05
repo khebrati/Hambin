@@ -63,10 +63,11 @@ eight-peer capacity, extended load/soak, or restrictive-network fallback is clai
 Backups are on the same VPS; an offsite destination/retention policy remains open.
 There is no previous hosted Node release for an initial rollback rehearsal.
 
-## Changing domains later
+## Domain transition
 
-The stakeholder plans to move to `watchparty.top`; ingress/TURN domain names are
-configuration, and frontend API paths are relative. Browser identity storage is
-origin-scoped: existing anonymous browser identities will not automatically move.
-Plan that transition before retiring the temporary hostname. See
-[deployment operations](../backend/deploy/README.md).
+This evidence records the initial deployment on `watchparty.audiosense.ir` as of
+2026-10-15. DD-025 later approved `watchparty.top` as the primary site/API and
+`turn.watchparty.top` for TURN, while retaining the original site hostname as a
+legacy alias for origin-scoped browser identities. See [deployment operations](../backend/deploy/README.md)
+for DNS and rollout steps; this historical verification does not claim the new
+hostnames have been deployed or tested.

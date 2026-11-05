@@ -19,11 +19,21 @@ interface VoiceSession {
     /** Enables or disables the local microphone. */
     fun setMicrophoneEnabled(enabled: Boolean)
 
+    /** Retries only unavailable links while preserving healthy audio. */
+    fun retryFailedConnections() = Unit
+
     /** Leaves the voice room. */
     suspend fun disconnect()
 }
 
+enum class VoiceSessionState { JOINING, CONNECTED, DEGRADED, RECONNECTING, FAILED, OFF }
+enum class VoicePeerStatus { CONNECTING, CONNECTED, RECONNECTING, UNAVAILABLE }
+
 sealed interface VoiceEvent {
+    data class StatusChanged(val state: VoiceSessionState, val peers: Map<String, VoicePeerStatus>) : VoiceEvent
+    data class AudioDeviceFailure(val capture: Boolean) : VoiceEvent
+    data class MicrophoneChanged(val enabled: Boolean) : VoiceEvent
+
     /** The room connection is established. */
     data object Connected : VoiceEvent
 

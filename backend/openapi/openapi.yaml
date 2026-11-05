@@ -1,33 +1,32 @@
 openapi: 3.1.0
 info:
   title: Hambin API
-  version: 1.0.0
-  description: >
-    Client-neutral HTTP API for room management, presence, shared stream
-    authorization, realtime tickets, and LiveKit voice tokens. Clients retain
-    complete local control over pause, seek, and volume; those actions never
-    mutate durable stream state.
+  version: 3.0.0
+  description: Active Node/PostgreSQL API with backend-owned automatic guest sessions, room lifecycle,
+    private requester-only synchronization, and ticketed Socket.IO audio-only mesh voice. Browser video
+    is fetched directly from its source. See docs/watchparty-migration-compatibility.md for behavior and
+    protocol details.
 servers:
-  - url: https://api.example.com
-    description: Production
+- url: https://watchparty.top
+  description: Same-origin production site/API
 tags:
-  - name: Guest sessions
-  - name: Rooms
-  - name: Stream
-  - name: Realtime
-  - name: Voice
-  - name: Internal
+- name: Guest sessions
+- name: Rooms
+- name: Stream
+- name: Realtime
+- name: Voice
 paths:
   /healthz:
     get:
       operationId: health
       security: []
       responses:
-        "200":
+        '200':
           description: Service is healthy
   /v1/guest-sessions:
     post:
-      tags: [Guest sessions]
+      tags:
+      - Guest sessions
       operationId: createGuestSession
       summary: Create a durable anonymous identity
       security: []
@@ -36,90 +35,108 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/GuestSessionRequest"
+              $ref: '#/components/schemas/GuestSessionRequest'
       responses:
-        "201":
+        '201':
           description: Created
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Session"
-        "400":
-          $ref: "#/components/responses/BadRequest"
+                $ref: '#/components/schemas/Session'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: 'SESSION_EXISTS: an existing browser cookie must be restored or explicitly reset'
+      description: 'Automatic guest creation. Native requests omit browser Origin/header and receive refreshToken.
+        Browser requests require an exact allowed Origin and X-Roomio-Client: browser; a host-only HttpOnly
+        refresh cookie is set and refreshToken is omitted from JSON. All session responses use Cache-Control:
+        no-store. Existing browser cookie returns SESSION_EXISTS; restore or explicitly reset instead.'
+      parameters:
+      - $ref: '#/components/parameters/BrowserClient'
   /v1/guest-sessions/refresh:
     post:
-      tags: [Guest sessions]
+      tags:
+      - Guest sessions
       operationId: refreshGuestSession
-      summary: Rotate a refresh token
+      summary: Refresh access credentials for the same guest
       security: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/RefreshRequest"
+              oneOf:
+              - $ref: '#/components/schemas/RefreshRequest'
+              - type: object
+                maxProperties: 0
       responses:
-        "200":
-          description: Rotated
+        '200':
+          description: Refreshed
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Session"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
+                $ref: '#/components/schemas/Session'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+      description: 'Native body contains refreshToken. Browser sends empty JSON with its HttpOnly cookie,
+        exact allowed Origin and X-Roomio-Client: browser. Stable refresh credentials have a sliding 180-day
+        inactivity lifetime; access expires after fifteen minutes. Concurrent/lost-response retries keep
+        the same identity. Database outages return AUTH_UNAVAILABLE without issuing another guest.'
+      parameters:
+      - $ref: '#/components/parameters/BrowserClient'
   /v1/guest-sessions/revoke:
     post:
-      tags: [Guest sessions]
+      tags:
+      - Guest sessions
       operationId: revokeGuestSession
-      summary: Revoke a refresh token
+      summary: Revoke all credentials for the authenticated identity
       security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/RefreshRequest"
+      - bearerAuth: []
       responses:
-        "204":
+        '204':
           description: Revoked
-        "401":
-          $ref: "#/components/responses/Unauthorized"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+      description: Bearer access token required. Releases active membership, invalidates tickets, disconnects
+        realtime/voice roles and clears the browser cookie. Ordinary room leave does not revoke identity.
   /v1/guest-sessions/profile:
     patch:
-      tags: [Guest sessions]
+      tags:
+      - Guest sessions
       operationId: updateProfile
       summary: Update the caller's display name, avatar, and language
       security:
-        - bearerAuth: []
+      - bearerAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/GuestSessionRequest"
+              $ref: '#/components/schemas/GuestSessionRequest'
       responses:
-        "200":
+        '200':
           description: Updated
           content:
             application/json:
               schema:
                 type: object
-                required: [identity]
+                required:
+                - identity
                 properties:
                   identity:
-                    $ref: "#/components/schemas/GuestIdentity"
-        "400":
-          $ref: "#/components/responses/BadRequest"
+                    $ref: '#/components/schemas/GuestIdentity'
+        '400':
+          $ref: '#/components/responses/BadRequest'
   /v1/rooms:
     post:
-      tags: [Rooms]
+      tags:
+      - Rooms
       operationId: createRoom
       summary: Create a room and join as owner
       security:
-        - bearerAuth: []
+      - bearerAuth: []
       parameters:
-        - $ref: "#/components/parameters/IdempotencyKey"
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -131,271 +148,348 @@ paths:
                   type: string
                   maxLength: 80
       responses:
-        "201":
+        '201':
           description: Created
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RoomAndMembership"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
+                $ref: '#/components/schemas/RoomAndMembership'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
   /v1/rooms/{code}/preview:
     get:
-      tags: [Rooms]
+      tags:
+      - Rooms
       operationId: previewRoom
       summary: Preview a room by party code
       security:
-        - bearerAuth: []
+      - bearerAuth: []
       parameters:
-        - $ref: "#/components/parameters/PartyCode"
+      - $ref: '#/components/parameters/PartyCode'
       responses:
-        "200":
+        '200':
           description: Preview
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RoomPreview"
-        "404":
-          $ref: "#/components/responses/NotFound"
+                $ref: '#/components/schemas/RoomPreview'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /v1/rooms/{code}/join:
     post:
-      tags: [Rooms]
+      tags:
+      - Rooms
       operationId: joinRoom
       summary: Join a room by party code
       security:
-        - bearerAuth: []
+      - bearerAuth: []
       parameters:
-        - $ref: "#/components/parameters/PartyCode"
-        - $ref: "#/components/parameters/IdempotencyKey"
+      - $ref: '#/components/parameters/PartyCode'
+      - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        "200":
+        '200':
           description: Joined
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RoomAndMembership"
-        "409":
-          description: |
-            ROOM_ENDED, ROOM_FULL, or ALREADY_IN_ROOM
+                $ref: '#/components/schemas/RoomAndMembership'
+        '409':
+          description: 'ROOM_ENDED, ROOM_FULL, or ALREADY_IN_ROOM
+
+            '
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: '#/components/schemas/Error'
   /v1/rooms/{roomId}/snapshot:
     get:
-      tags: [Rooms]
+      tags:
+      - Rooms
       operationId: roomSnapshot
       summary: Fetch the current room, members, and stream
       security:
-        - bearerAuth: []
+      - bearerAuth: []
       parameters:
-        - $ref: "#/components/parameters/RoomId"
+      - $ref: '#/components/parameters/RoomId'
       responses:
-        "200":
+        '200':
           description: Snapshot
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Snapshot"
-        "403":
-          $ref: "#/components/responses/Forbidden"
+                $ref: '#/components/schemas/Snapshot'
+        '403':
+          $ref: '#/components/responses/Forbidden'
   /v1/rooms/{roomId}/leave:
     post:
-      tags: [Rooms]
+      tags:
+      - Rooms
       operationId: leaveRoom
       summary: Leave a room immediately
       security:
-        - bearerAuth: []
+      - bearerAuth: []
       parameters:
-        - $ref: "#/components/parameters/RoomId"
+      - $ref: '#/components/parameters/RoomId'
       responses:
-        "200":
+        '200':
           description: Left
           content:
             application/json:
               schema:
                 type: object
-                required: [roomClosed]
+                required:
+                - roomClosed
                 properties:
                   roomClosed:
                     type: boolean
-        "403":
-          $ref: "#/components/responses/Forbidden"
+        '403':
+          $ref: '#/components/responses/Forbidden'
   /v1/rooms/{roomId}/stream/start:
     post:
-      tags: [Stream]
+      tags:
+      - Stream
       operationId: startStream
       summary: Start a shared stream (present owner only)
       security:
-        - bearerAuth: []
+      - bearerAuth: []
       parameters:
-        - $ref: "#/components/parameters/RoomId"
-        - $ref: "#/components/parameters/IdempotencyKey"
+      - $ref: '#/components/parameters/RoomId'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [url]
+              required:
+              - url
               properties:
                 url:
                   type: string
                   format: uri
                   description: HTTPS direct-video URL
       responses:
-        "201":
+        '201':
           description: Started
           content:
             application/json:
               schema:
                 type: object
-                required: [stream]
+                required:
+                - stream
                 properties:
                   stream:
-                    $ref: "#/components/schemas/Stream"
-        "400":
+                    $ref: '#/components/schemas/Stream'
+        '400':
           description: INVALID_STREAM_URL
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
-        "403":
+                $ref: '#/components/schemas/Error'
+        '403':
           description: FORBIDDEN or OWNER_ABSENT
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
-        "409":
+                $ref: '#/components/schemas/Error'
+        '409':
           description: STALE_STREAM_REVISION
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: '#/components/schemas/Error'
   /v1/rooms/{roomId}/stream/abort:
     post:
-      tags: [Stream]
+      tags:
+      - Stream
       operationId: abortStream
       summary: Abort the shared stream for everyone (present owner only)
       security:
-        - bearerAuth: []
+      - bearerAuth: []
       parameters:
-        - $ref: "#/components/parameters/RoomId"
-        - $ref: "#/components/parameters/IdempotencyKey"
+      - $ref: '#/components/parameters/RoomId'
+      - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        "200":
+        '200':
           description: Aborted
           content:
             application/json:
               schema:
                 type: object
-                required: [stream]
+                required:
+                - stream
                 properties:
                   stream:
-                    $ref: "#/components/schemas/Stream"
-        "409":
+                    $ref: '#/components/schemas/Stream'
+        '409':
           description: NO_ACTIVE_STREAM
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: '#/components/schemas/Error'
   /v1/rooms/{roomId}/realtime-ticket:
     post:
-      tags: [Realtime]
+      tags:
+      - Realtime
       operationId: issueRealtimeTicket
       summary: Issue a single-use 30-second realtime ticket
       security:
-        - bearerAuth: []
+      - bearerAuth: []
       parameters:
-        - $ref: "#/components/parameters/RoomId"
+      - $ref: '#/components/parameters/RoomId'
       responses:
-        "201":
+        '201':
           description: Issued
           content:
             application/json:
               schema:
                 type: object
-                required: [ticket, expiresAt]
+                required:
+                - ticket
+                - namespace
+                - expiresAt
                 properties:
                   ticket:
                     type: string
                   expiresAt:
                     type: string
                     format: date-time
-        "403":
-          $ref: "#/components/responses/Forbidden"
-  /v1/rooms/{roomId}/realtime:
-    get:
-      tags: [Realtime]
-      operationId: connectRealtime
-      summary: Upgrade to the room WebSocket using a ticket
+                  namespace:
+                    type: string
+                    description: /hambin/rooms/{roomId}; connect through Engine.IO v4 /socket.io/ with
+                      namespace auth {ticket,protocolVersion:3}
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /v1/guest-sessions/reset:
+    post:
+      tags:
+      - Guest sessions
+      operationId: resetBrowserGuest
+      summary: Explicit browser identity reset
+      description: 'Requires allowed Origin and X-Roomio-Client: browser. Revokes the known cookie identity
+        and clears the cookie, including malformed/unknown cookies. Does not create a new guest. Client
+        must confirm loss of existing ownership. Database outages retain the cookie and return AUTH_UNAVAILABLE.'
       security: []
       parameters:
-        - $ref: "#/components/parameters/RoomId"
-        - name: ticket
-          in: query
-          required: true
-          schema:
-            type: string
+      - $ref: '#/components/parameters/BrowserClient'
       responses:
-        "101":
-          description: Switching Protocols
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-  /v1/rooms/{roomId}/voice/session-token:
+        '204':
+          description: Cookie cleared; known identity revoked
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /v1/identities/bootstrap:
     post:
-      tags: [Voice]
-      operationId: issueVoiceToken
-      summary: Issue a room-scoped LiveKit token to an active member
+      tags:
+      - Guest sessions
+      operationId: restoreGuestProfile
+      summary: Read the authenticated profile without overwriting it
       security:
-        - bearerAuth: []
-      parameters:
-        - $ref: "#/components/parameters/RoomId"
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GuestSessionRequest'
       responses:
-        "201":
-          description: Issued
+        '200':
+          description: Existing profile; new clients obtain it directly from session responses
           content:
             application/json:
               schema:
                 type: object
-                required: [token, url, expiresAt]
+                required:
+                - identity
                 properties:
-                  token:
-                    type: string
-                  url:
-                    type: string
-                  expiresAt:
-                    type: string
-                    format: date-time
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "503":
-          description: VOICE_DISABLED
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-  /internal/livekit/webhook:
-    post:
-      tags: [Internal]
-      operationId: livekitWebhook
-      summary: Signed LiveKit webhook ingestion
+                  identity:
+                    $ref: '#/components/schemas/GuestIdentity'
+  /readyz:
+    get:
+      operationId: readiness
       security: []
       responses:
-        "204":
-          description: Accepted
-        "401":
-          description: INVALID_WEBHOOK
+        '200':
+          description: Database and dispatcher ready; voice availability reported separately
+        '503':
+          description: Draining or dependency unavailable
+  /v1/capabilities:
+    get:
+      operationId: capabilities
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: Available implementations
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                type: object
+                required:
+                - protocolVersion
+                - realtime
+                - voice
+                properties:
+                  protocolVersion:
+                    const: 3
+                  realtime:
+                    type: array
+                    items:
+                      enum:
+                      - socket.io
+                  voiceProtocolVersion:
+                    const: 4
+                  voice:
+                    type: array
+                    items:
+                      enum:
+                      - MESH
+  /v1/rooms/{roomId}/voice/config:
+    post:
+      tags:
+      - Voice
+      operationId: issueMeshConfiguration
+      summary: Join, resume, or refresh an active-member audio-only mesh session
+      description: Explicit voice opt-out uses the authenticated Socket.IO voice.leave command;
+        unexpected socket loss preserves the session for thirty-second resume grace.
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/RoomId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                operation:
+                  type: string
+                  enum: [join, resume, refresh]
+                  description: Join creates a muted generation and ticket. Resume replaces socket authority
+                    while preserving generation and peers within the thirty-second disconnect grace.
+                    Refresh only renews TURN credentials and neither issues nor invalidates tickets.
+                voiceSessionId:
+                  type: string
+                  format: uuid
+                  description: Required for resume and refresh. Omit for a fresh join.
+      responses:
+        '200':
+          description: Configuration; this request does not opt the user into voice
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeshConfiguration'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: VOICE_SESSION_EXPIRED; obtain a fresh join and reconcile peer generations
+        '503':
+          description: VOICE_DISABLED or AUTH_UNAVAILABLE
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
-      bearerFormat: JWT
+      bearerFormat: Opaque backend access credential
   parameters:
     IdempotencyKey:
       name: Idempotency-Key
@@ -410,42 +504,54 @@ components:
       required: true
       schema:
         type: string
-        pattern: "^[0-9A-HJKMNP-TV-Z]{8}$"
+        pattern: ^[0-9A-HJKMNP-TV-Z]{8}$
     RoomId:
       name: roomId
       in: path
       required: true
       schema:
         type: string
+    BrowserClient:
+      name: X-Roomio-Client
+      in: header
+      required: false
+      description: Required as browser for browser cookie session delivery. An exact allowlisted Origin
+        is also mandatory; requests carrying Origin without this header are rejected. Native requests
+        omit both.
+      schema:
+        const: browser
   responses:
     BadRequest:
       description: Invalid request
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/Error"
+            $ref: '#/components/schemas/Error'
     Unauthorized:
       description: Missing or invalid credentials
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/Error"
+            $ref: '#/components/schemas/Error'
     Forbidden:
       description: Not permitted
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/Error"
+            $ref: '#/components/schemas/Error'
     NotFound:
       description: Not found
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/Error"
+            $ref: '#/components/schemas/Error'
   schemas:
     GuestSessionRequest:
       type: object
-      required: [name, avatar, language]
+      required:
+      - name
+      - avatar
+      - language
       properties:
         name:
           type: string
@@ -458,13 +564,20 @@ components:
           maxLength: 16
     RefreshRequest:
       type: object
-      required: [refreshToken]
+      required:
+      - refreshToken
       properties:
         refreshToken:
           type: string
     GuestIdentity:
       type: object
-      required: [id, name, avatar, language, createdAt, updatedAt]
+      required:
+      - id
+      - name
+      - avatar
+      - language
+      - createdAt
+      - updatedAt
       properties:
         id:
           type: string
@@ -482,10 +595,14 @@ components:
           format: date-time
     Session:
       type: object
-      required: [identity, accessToken, accessExpiresAt, refreshToken, refreshExpiresAt]
+      required:
+      - identity
+      - accessToken
+      - accessExpiresAt
+      - refreshExpiresAt
       properties:
         identity:
-          $ref: "#/components/schemas/GuestIdentity"
+          $ref: '#/components/schemas/GuestIdentity'
         accessToken:
           type: string
         accessExpiresAt:
@@ -496,9 +613,16 @@ components:
         refreshExpiresAt:
           type: string
           format: date-time
+      description: refreshToken is present only for native requests; browser refresh is an HttpOnly cookie.
+        Tokens are opaque and not JWTs.
     Room:
       type: object
-      required: [id, code, title, ownerIdentityId, createdAt]
+      required:
+      - id
+      - code
+      - title
+      - ownerIdentityId
+      - createdAt
       properties:
         id:
           type: string
@@ -519,7 +643,14 @@ components:
           format: date-time
     Membership:
       type: object
-      required: [id, roomId, identityId, displayName, avatar, isOwner, joinedAt]
+      required:
+      - id
+      - roomId
+      - identityId
+      - displayName
+      - avatar
+      - isOwner
+      - joinedAt
       properties:
         id:
           type: string
@@ -544,11 +675,17 @@ components:
           format: date-time
         wsConnected:
           type: boolean
-        livekitConnected:
+        voiceConnected:
           type: boolean
     MemberSummary:
       type: object
-      required: [membershipId, identityId, displayName, avatar, isOwner, present]
+      required:
+      - membershipId
+      - identityId
+      - displayName
+      - avatar
+      - isOwner
+      - present
       properties:
         membershipId:
           type: string
@@ -564,15 +701,24 @@ components:
           type: boolean
     RoomAndMembership:
       type: object
-      required: [room, membership]
+      required:
+      - room
+      - membership
       properties:
         room:
-          $ref: "#/components/schemas/Room"
+          $ref: '#/components/schemas/Room'
         membership:
-          $ref: "#/components/schemas/Membership"
+          $ref: '#/components/schemas/Membership'
     RoomPreview:
       type: object
-      required: [code, title, ownerName, ownerPresent, participantCount, availability, streamState]
+      required:
+      - code
+      - title
+      - ownerName
+      - ownerPresent
+      - participantCount
+      - availability
+      - streamState
       properties:
         code:
           type: string
@@ -586,13 +732,26 @@ components:
           type: integer
         availability:
           type: string
-          enum: [OPEN, FULL, ENDED]
+          enum:
+          - OPEN
+          - FULL
+          - ENDED
         streamState:
           type: string
-          enum: [EMPTY, ACTIVE, ABORTED]
+          enum:
+          - EMPTY
+          - ACTIVE
+          - ABORTED
     Stream:
       type: object
-      required: [id, roomId, sessionId, revision, state, url, updatedAt]
+      required:
+      - id
+      - roomId
+      - sessionId
+      - revision
+      - state
+      - url
+      - updatedAt
       properties:
         id:
           type: string
@@ -605,7 +764,10 @@ components:
           format: int64
         state:
           type: string
-          enum: [EMPTY, ACTIVE, ABORTED]
+          enum:
+          - EMPTY
+          - ACTIVE
+          - ABORTED
         url:
           type: string
         startedAt:
@@ -619,45 +781,104 @@ components:
           format: date-time
     Snapshot:
       type: object
-      required: [room, members, stream]
+      required:
+      - room
+      - members
+      - stream
       properties:
         room:
-          $ref: "#/components/schemas/Room"
+          $ref: '#/components/schemas/Room'
         members:
           type: array
           items:
-            $ref: "#/components/schemas/MemberSummary"
+            $ref: '#/components/schemas/MemberSummary'
         stream:
-          $ref: "#/components/schemas/Stream"
+          $ref: '#/components/schemas/Stream'
+        sequence:
+          type: integer
+          description: Last durable event sequence at snapshot capture
     Error:
       type: object
-      required: [code, message]
+      required:
+      - code
+      - message
       properties:
         code:
           type: string
           enum:
-            - INVALID_JSON
-            - INVALID_PROFILE
-            - INVALID_TOKEN
-            - UNAUTHENTICATED
-            - SESSION_EXPIRED
-            - SESSION_REVOKED
-            - IDENTITY_NOT_FOUND
-            - ROOM_NOT_FOUND
-            - ROOM_ENDED
-            - ROOM_FULL
-            - ALREADY_IN_ROOM
-            - NOT_A_MEMBER
-            - INVALID_PARTY_CODE
-            - FORBIDDEN
-            - OWNER_ABSENT
-            - INVALID_STREAM_URL
-            - STALE_STREAM_REVISION
-            - NO_ACTIVE_STREAM
-            - INVALID_TICKET
-            - VOICE_DISABLED
-            - INVALID_WEBHOOK
-            - RATE_LIMITED
-            - INTERNAL_ERROR
+          - INVALID_JSON
+          - INVALID_PROFILE
+          - INVALID_TOKEN
+          - UNAUTHENTICATED
+          - SESSION_EXPIRED
+          - SESSION_REVOKED
+          - IDENTITY_NOT_FOUND
+          - ROOM_NOT_FOUND
+          - ROOM_ENDED
+          - ROOM_FULL
+          - ALREADY_IN_ROOM
+          - NOT_A_MEMBER
+          - INVALID_PARTY_CODE
+          - FORBIDDEN
+          - OWNER_ABSENT
+          - INVALID_STREAM_URL
+          - STALE_STREAM_REVISION
+          - NO_ACTIVE_STREAM
+          - INVALID_TICKET
+          - VOICE_DISABLED
+          - RATE_LIMITED
+          - INTERNAL_ERROR
+          - AUTH_UNAVAILABLE
+          - SESSION_EXISTS
+          - UNAVAILABLE
+          - VOICE_SESSION_EXPIRED
         message:
           type: string
+    MeshConfiguration:
+      type: object
+      required:
+      - mode
+      - roomId
+      - membershipId
+      - voiceSessionId
+      - namespace
+      - iceServers
+      - iceExpiresAt
+      properties:
+        mode:
+          const: MESH
+        roomId:
+          type: string
+        membershipId:
+          type: string
+        voiceSessionId:
+          type: string
+        namespace:
+          type: string
+        protocolVersion:
+          const: 4
+          description: Voice signaling includes generation-fenced explicit requestOffer retries
+            from the higher membership UUID to the lower offerer; see AsyncAPI SignalSend.
+            A retry preserves healthy peers and does not issue another voice session.
+        ticket:
+          type: string
+          description: Present only for join/resume; single-use, expires after thirty seconds.
+            Connect voice namespace with protocolVersion 4. Room protocol remains 3.
+        iceExpiresAt:
+          type: string
+          format: date-time
+        iceServers:
+          type: array
+          items:
+            type: object
+            required:
+            - urls
+            properties:
+              urls:
+                type: array
+                items:
+                  type: string
+              username:
+                type: string
+              credential:
+                type: string

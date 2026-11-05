@@ -30,6 +30,8 @@ import androidx.compose.material.icons.filled.ConfirmationNumber
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.MeetingRoom
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -60,6 +62,10 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import org.jetbrains.compose.resources.stringResource
+import roomio.sharedui.generated.resources.reset_guest_identity
+import roomio.sharedui.generated.resources.reset_guest_identity_description
+import roomio.sharedui.generated.resources.guest_identity_reset
+import roomio.sharedui.generated.resources.cancel
 import roomio.sharedui.generated.resources.Res
 import roomio.sharedui.generated.resources.a_friend_has_the_code
 import roomio.sharedui.generated.resources.back
@@ -100,15 +106,30 @@ internal fun PartyManagerScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val offlineMessage = stringResource(Res.string.offline_message)
     val requestFailed = stringResource(Res.string.request_failed)
+    val resetComplete = stringResource(Res.string.guest_identity_reset)
     LaunchedEffect(effects) {
         effects.collect { effect ->
             when (effect) {
                 is PartyManagerEffect.Error -> snackbarHostState.showSnackbar(
                     if (effect.connectivity) offlineMessage else requestFailed,
                 )
+                PartyManagerEffect.IdentityReset -> snackbarHostState.showSnackbar(resetComplete)
                 else -> Unit
             }
         }
+    }
+    if (state.showResetConfirmation) {
+        AlertDialog(
+            onDismissRequest = { onAction(PartyManagerAction.ResetCancelled) },
+            title = { Text(stringResource(Res.string.reset_guest_identity)) },
+            text = { Text(stringResource(Res.string.reset_guest_identity_description)) },
+            confirmButton = { TextButton(onClick = { onAction(PartyManagerAction.ResetConfirmed) }) {
+                Text(stringResource(Res.string.reset_guest_identity))
+            } },
+            dismissButton = { TextButton(onClick = { onAction(PartyManagerAction.ResetCancelled) }) {
+                Text(stringResource(Res.string.cancel))
+            } },
+        )
     }
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -142,6 +163,11 @@ internal fun PartyManagerScreen(
                     enabled = !state.isLoading,
                     onSelected = { onAction(PartyManagerAction.ModeSelected(it)) },
                 )
+                if (state.canResetIdentity) {
+                    TextButton(enabled = !state.isLoading, onClick = { onAction(PartyManagerAction.ResetRequested) }) {
+                        Text(stringResource(Res.string.reset_guest_identity))
+                    }
+                }
                 when (state.mode) {
                     ManagerMode.CREATE -> CreatePartyPanel(
                         loading = state.isLoading,

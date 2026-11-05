@@ -1,6 +1,7 @@
 package top.roomio.app.androidApp
 
 import android.app.Activity
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -12,14 +13,24 @@ import androidx.core.view.WindowInsetsControllerCompat
 import top.roomio.app.App
 
 class AppActivity : ComponentActivity() {
+    override fun onNewIntent(intent: Intent) {
+        setIntent(intent)
+        super.onNewIntent(intent)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (BuildConfig.DEBUG) {
-            // Local emulator defaults; explicit extras also let a physical device use
-            // adb reverse or a host-LAN address without changing release configuration.
-            System.setProperty("roomio.backendUrl", intent.getStringExtra("roomio.backendUrl") ?: "http://10.0.2.2:8081")
-            System.setProperty("roomio.firebaseProjectId", intent.getStringExtra("roomio.firebaseProjectId") ?: "demo-hambin")
-            System.setProperty("roomio.authEmulatorHost", intent.getStringExtra("roomio.authEmulatorHost") ?: "10.0.2.2:9099")
+            // Use the shared production defaults unless local development extras
+            // explicitly select another backend environment.
+            listOf("roomio.backendUrl").forEach { key ->
+                val overrideValue = intent.getStringExtra(key)
+                if (overrideValue != null) {
+                    System.setProperty(key, overrideValue)
+                } else {
+                    System.clearProperty(key)
+                }
+            }
         }
         enableEdgeToEdge()
         setContent { 

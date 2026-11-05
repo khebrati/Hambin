@@ -8,29 +8,31 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.core.util.Consumer
 import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import top.roomio.domain.party.RoomSessionExtras
 
 @Composable
 internal actual fun rememberRoomLaunchRequests(): Flow<RoomLaunchRequest> {
     val activity = LocalActivity.current as? ComponentActivity
     val requests = remember {
-        MutableSharedFlow<RoomLaunchRequest>(
-            extraBufferCapacity = 4,
+        Channel<RoomLaunchRequest>(
+            capacity = 4,
             onBufferOverflow = BufferOverflow.DROP_OLDEST,
         )
     }
+    val flow = remember(requests) { requests.receiveAsFlow() }
     DisposableEffect(activity) {
         if (activity == null) return@DisposableEffect onDispose { }
         val listener = Consumer<Intent> { intent ->
-            intent.consumeRoomLaunch()?.let(requests::tryEmit)
+            intent.consumeRoomLaunch()?.let { requests.trySend(it) }
         }
         activity.addOnNewIntentListener(listener)
-        activity.intent?.consumeRoomLaunch()?.let(requests::tryEmit)
+        activity.intent?.consumeRoomLaunch()?.let { requests.trySend(it) }
         onDispose { activity.removeOnNewIntentListener(listener) }
     }
-    return requests
+    return flow
 }
 
 /**
@@ -38,9 +40,14 @@ internal actual fun rememberRoomLaunchRequests(): Flow<RoomLaunchRequest> {
  * a room the user has already left.
  */
 private fun Intent.consumeRoomLaunch(): RoomLaunchRequest? {
+    if (action == Intent.ACTION_VIEW) {
+        val code = dataString?.let(RoomInviteLinks::codeFrom)
+        data = null
+        return code?.let(RoomLaunchRequest::Invite)
+    }
     val roomId = getStringExtra(RoomSessionExtras.ROOM_ID) ?: return null
     val asOwner = getBooleanExtra(RoomSessionExtras.AS_OWNER, false)
     removeExtra(RoomSessionExtras.ROOM_ID)
     removeExtra(RoomSessionExtras.AS_OWNER)
-    return RoomLaunchRequest(roomId, asOwner)
+    return RoomLaunchRequest.Room(roomId, asOwner)
 }

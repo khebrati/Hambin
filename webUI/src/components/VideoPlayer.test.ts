@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { forwardSyncPosition, playbackReport } from './VideoPlayer';
+import { forwardSyncPosition, playbackReport, slowLoadingMessage } from './VideoPlayer';
+
+describe('slow source guidance', () => {
+  it('explains the AAC/MKV startup bug only for affected Firefox versions and MKV links', () => {
+    expect(slowLoadingMessage('https://media.test/movie.MKV?token=1', 'Mozilla/5.0 Firefox/153.0')).toContain('entire MKV');
+    expect(slowLoadingMessage('https://media.test/movie.mkv', 'Mozilla/5.0 Firefox/157.0')).toContain('entire MKV');
+    for (const agent of ['Firefox/158.0', 'Firefox/159.0', 'Chrome/154.0', 'Safari/605.1']) {
+      expect(slowLoadingMessage('https://media.test/movie.mkv', agent)).not.toContain('entire MKV');
+    }
+    expect(slowLoadingMessage('https://media.test/movie.mp4', 'Firefox/153.0')).not.toContain('entire MKV');
+    expect(slowLoadingMessage('https://media.test/movie.m3u8', 'Firefox/153.0')).not.toContain('entire MKV');
+  });
+});
 
 describe('forward-only explicit synchronization', () => {
   it('uses milliseconds from the server and clamps to media duration', () => {

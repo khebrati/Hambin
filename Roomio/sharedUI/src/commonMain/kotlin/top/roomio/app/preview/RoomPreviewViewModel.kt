@@ -25,6 +25,7 @@ internal data class RoomPreviewUiState(
     val model: RoomPreviewModel = emptyPreviewModel(),
     val isLoading: Boolean = true,
     val errorMessage: String? = null,
+    val isOffline: Boolean = false,
 ) {
     val canJoin: Boolean
         get() = !isLoading && errorMessage == null && model.availability == RoomAvailability.AVAILABLE
@@ -33,6 +34,7 @@ internal data class RoomPreviewUiState(
 internal sealed interface RoomPreviewAction {
     data object BackClicked : RoomPreviewAction
     data object JoinClicked : RoomPreviewAction
+    data object RetryClicked : RoomPreviewAction
 }
 
 internal sealed interface RoomPreviewEffect {
@@ -63,6 +65,7 @@ internal class RoomPreviewViewModel(
         when (action) {
             RoomPreviewAction.BackClicked -> Unit
             RoomPreviewAction.JoinClicked -> join()
+            RoomPreviewAction.RetryClicked -> if (!state.value.isLoading) load()
         }
     }
 
@@ -72,14 +75,17 @@ internal class RoomPreviewViewModel(
     }
 
     private fun load() {
-        mutableState.update { it.copy(isLoading = true, errorMessage = null) }
+        mutableState.update { it.copy(isLoading = true, errorMessage = null, isOffline = false) }
         viewModelScope.launch {
             try {
+                // An invite can be the first screen on a fresh installation.
+                val profile = profileRepository.currentProfile()
+                sessionRepository.ensureSession(name = profile.name, avatar = profile.avatar.name)
                 val preview = roomRepository.preview(partyCode)
                 mutableState.update { it.copy(model = preview.toPresentation(), isLoading = false) }
             } catch (error: PartyException) {
                 log.w("preview load failed: ${error.code} ${error.message}")
-                mutableState.update { it.copy(isLoading = false, errorMessage = error.code) }
+                mutableState.update { it.copy(isLoading = false, errorMessage = error.code, isOffline = error.isConnectivity()) }
                 mutableEffects.tryEmit(RoomPreviewEffect.Error(error.isConnectivity()))
             }
         }
@@ -100,7 +106,7 @@ internal class RoomPreviewViewModel(
                 mutableEffects.tryEmit(RoomPreviewEffect.Joined(room.id))
             } catch (error: PartyException) {
                 log.w("join failed: ${error.code} ${error.message}")
-                mutableState.update { it.copy(isLoading = false, errorMessage = error.code) }
+                mutableState.update { it.copy(isLoading = false, errorMessage = error.code, isOffline = error.isConnectivity()) }
                 mutableEffects.tryEmit(RoomPreviewEffect.Error(error.isConnectivity()))
             }
         }

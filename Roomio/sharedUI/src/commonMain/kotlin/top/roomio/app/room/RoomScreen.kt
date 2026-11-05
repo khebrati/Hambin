@@ -121,6 +121,7 @@ import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import roomio.sharedui.generated.resources.*
 import top.roomio.app.platform.rememberFullscreenController
+import top.roomio.app.navigation.RoomInviteLinks
 import top.roomio.app.room.player.AudioTrack
 import top.roomio.app.room.player.VideoPlayerHandle
 import top.roomio.app.room.player.VideoPlayerSurface
@@ -130,6 +131,7 @@ import top.roomio.app.room.player.rememberPlatformVideoPlayer
 import top.roomio.app.theme.AppTheme
 import top.roomio.app.theme.LocalThemeIsDark
 import top.roomio.app.theme.RoomioDesignSystem
+import top.roomio.domain.party.VoicePeerStatus
 
 private val log = Logger.withTag("RoomScreen")
 
@@ -184,6 +186,7 @@ internal data class RoomParticipant(
     val isSpeaking: Boolean = false,
     val isMuted: Boolean = false,
     val isPresent: Boolean = true,
+    val voiceStatus: VoicePeerStatus? = null,
 )
 
 private val ownerEmptyRoom = RoomScreenModel(
@@ -471,6 +474,8 @@ internal fun RoomScreen(
                     participants = state.model.participants,
                     micMuted = state.micMuted,
                     voiceState = state.voiceState,
+                    voiceFailureCode = state.voiceFailureCode,
+                    onRetryVoice = { onAction(RoomAction.RetryVoiceConnections) },
                     videoUrl = state.videoUrl,
                     streamActive = state.hasPlayer,
                     isOwner = state.isOwner,
@@ -516,7 +521,7 @@ internal fun RoomScreen(
     if (state.inviteOpen) {
         InviteFriendsDialog(
             partyCode = state.model.partyCode,
-            inviteLink = "https://roomio.app/?invite=${state.model.partyCode}",
+            inviteLink = RoomInviteLinks.create(state.model.partyCode),
             copyState = state.inviteCopyState,
             onDismiss = { onAction(RoomAction.InviteDismissed) },
             onCopied = { onAction(RoomAction.InviteCopySucceeded(it)) },
@@ -1692,6 +1697,8 @@ private fun RoomSupportPanel(
     participants: List<RoomParticipant>,
     micMuted: Boolean,
     voiceState: VoiceConnectionState,
+    voiceFailureCode: String?,
+    onRetryVoice: () -> Unit,
     videoUrl: String,
     streamActive: Boolean,
     isOwner: Boolean,
@@ -1714,6 +1721,15 @@ private fun RoomSupportPanel(
             ParticipantSection(participants, micMuted)
             HorizontalDivider(color = DividerDefaults.color)
             VoicePanel(voiceState, micMuted, onJoinVoice, onToggleMic)
+            if (voiceState == VoiceConnectionState.DEGRADED || participants.any { it.voiceStatus == VoicePeerStatus.UNAVAILABLE }) {
+                OutlinedButton(onClick = onRetryVoice, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(Res.string.voice_retry_connections))
+                }
+            }
+            if (voiceFailureCode == "VOICE_SERVICE_UNAVAILABLE" || voiceFailureCode == "VOICE_AUDIO_DEVICE_FAILED") {
+                Text(stringResource(if (voiceFailureCode == "VOICE_SERVICE_UNAVAILABLE") Res.string.voice_service_failed else Res.string.voice_audio_device_failed),
+                    color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+            }
             OutlinedButton(onClick = onInvite, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Filled.PersonAdd, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
@@ -1781,6 +1797,9 @@ private fun ParticipantRow(participant: RoomParticipant, micMuted: Boolean) {
                 Text(participant.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(
                     when {
+                        participant.voiceStatus == VoicePeerStatus.CONNECTING -> stringResource(Res.string.voice_peer_connecting)
+                        participant.voiceStatus == VoicePeerStatus.RECONNECTING -> stringResource(Res.string.voice_peer_reconnecting)
+                        participant.voiceStatus == VoicePeerStatus.UNAVAILABLE -> stringResource(Res.string.voice_peer_unavailable)
                         !participant.isPresent -> stringResource(Res.string.away)
                         participant.isHost -> stringResource(Res.string.host)
                         speaking -> stringResource(Res.string.speaking)
@@ -1853,6 +1872,8 @@ private fun VoicePanel(
                 when (voiceState) {
                     VoiceConnectionState.IDLE -> stringResource(Res.string.voice_idle_copy)
                     VoiceConnectionState.CONNECTING -> stringResource(Res.string.joining_voice)
+                    VoiceConnectionState.DEGRADED -> stringResource(Res.string.voice_degraded)
+                    VoiceConnectionState.RECONNECTING -> stringResource(Res.string.voice_reconnecting)
                     VoiceConnectionState.FAILED -> stringResource(Res.string.voice_unavailable)
                     VoiceConnectionState.CONNECTED -> stringResource(if (micMuted) Res.string.your_mic_is_muted else Res.string.your_mic_is_on)
                 },
@@ -1861,7 +1882,7 @@ private fun VoicePanel(
         }
         when (voiceState) {
             VoiceConnectionState.CONNECTING -> CircularProgressIndicator(Modifier.size(24.dp))
-            VoiceConnectionState.CONNECTED -> FilledIconButton(
+            VoiceConnectionState.CONNECTED, VoiceConnectionState.DEGRADED, VoiceConnectionState.RECONNECTING -> FilledIconButton(
                 onClick = onToggleMic,
                 colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer),
             ) {
@@ -1871,7 +1892,7 @@ private fun VoicePanel(
                     modifier = Modifier.size(24.dp),
                 )
             }
-            else -> Button(onClick = onJoinVoice, enabled = voiceState == VoiceConnectionState.IDLE) {
+            else -> Button(onClick = onJoinVoice) {
                 Text(stringResource(Res.string.join_voice))
             }
         }
@@ -2227,7 +2248,7 @@ private fun InviteFriendsDialogCompactPreview() = AppTheme(onThemeChanged = {}) 
     ) {
         InviteFriendsDialogCard(
             partyCode = "NOVA-27",
-            inviteLink = "https://roomio.app/?invite=NOVA-27",
+            inviteLink = RoomInviteLinks.create("NOVA-27"),
             copyState = InviteCopyState.IDLE,
             onCopyCode = {},
             onCopyLink = {},
@@ -2245,7 +2266,7 @@ private fun InviteFriendsDialogCopiedPreview() = AppTheme(onThemeChanged = {}) {
     ) {
         InviteFriendsDialogCard(
             partyCode = "NOVA-27",
-            inviteLink = "https://roomio.app/?invite=NOVA-27",
+            inviteLink = RoomInviteLinks.create("NOVA-27"),
             copyState = InviteCopyState.CODE,
             onCopyCode = {},
             onCopyLink = {},

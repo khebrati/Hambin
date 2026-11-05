@@ -89,7 +89,7 @@ class PresentationViewModelTest {
 
     @Test
     fun roomActionsReducePlayerAndDialogState() {
-        val viewModel = RoomViewModel(
+        val viewModel = testRoomViewModel(
             roomId = "room",
             asOwner = true,
             sessionRepository = testSessionRepository,
@@ -114,7 +114,7 @@ class PresentationViewModelTest {
 
     @Test
     fun roomPlayerStateChangesReducePlaybackAndTimeline() {
-        val viewModel = RoomViewModel(
+        val viewModel = testRoomViewModel(
             roomId = "room",
             asOwner = true,
             sessionRepository = testSessionRepository,
@@ -156,7 +156,7 @@ class PresentationViewModelTest {
 
     @Test
     fun roomLiveStreamMapsToLiveWithoutDuration() {
-        val viewModel = RoomViewModel(
+        val viewModel = testRoomViewModel(
             roomId = "room",
             asOwner = true,
             sessionRepository = testSessionRepository,
@@ -189,7 +189,7 @@ class PresentationViewModelTest {
 
     @Test
     fun roomFullscreenTogglesAndResetsOnLeaveOrEnd() {
-        val viewModel = RoomViewModel(
+        val viewModel = testRoomViewModel(
             roomId = "room",
             asOwner = true,
             sessionRepository = testSessionRepository,
@@ -218,7 +218,7 @@ class PresentationViewModelTest {
 
     @Test
     fun roomPlayerErrorMapsToErrorState() {
-        val viewModel = RoomViewModel(
+        val viewModel = testRoomViewModel(
             roomId = "room",
             asOwner = true,
             sessionRepository = testSessionRepository,

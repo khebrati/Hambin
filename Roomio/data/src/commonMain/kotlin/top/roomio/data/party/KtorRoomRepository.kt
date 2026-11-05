@@ -76,7 +76,7 @@ class KtorRoomRepository(
 
     override suspend fun voiceConfiguration(roomId: String, voiceSessionId: String?): VoiceConfiguration = authed {
         val dto = http.post("${config.baseUrl}/v1/rooms/$roomId/voice/config") {
-            voiceSessionId?.let { contentType(ContentType.Application.Json); setBody(VoiceConfigurationRequest(it)) }
+            voiceSessionId?.let { contentType(ContentType.Application.Json); setBody(VoiceConfigurationRequest(it, "resume")) }
         }.bodyOrThrow<VoiceConfigurationDto>()
         dto.toDomain()
     }

@@ -74,11 +74,21 @@ internal class PeerGenerationFence(val localGeneration: Long) {
     var remoteGeneration: Long? = null
         private set
 
+    private fun permitsOffer(senderGeneration: Long, targetGeneration: Long): Boolean =
+        senderGeneration > 0L && (targetGeneration == 0L || targetGeneration == localGeneration) &&
+            (remoteGeneration == null || senderGeneration > remoteGeneration!!)
+
     fun acceptOffer(senderGeneration: Long, targetGeneration: Long): Boolean {
-        if (senderGeneration <= 0L || (targetGeneration != 0L && targetGeneration != localGeneration)) return false
-        if (remoteGeneration != null && senderGeneration <= remoteGeneration!!) return false
+        if (!permitsOffer(senderGeneration, targetGeneration)) return false
         remoteGeneration = senderGeneration
         return true
+    }
+
+    /** A fresh authorized offer replaces the PC independently of local retry exhaustion. */
+    fun acceptRemoteOffer(senderGeneration: Long, targetGeneration: Long, replace: () -> PeerGenerationFence): Boolean {
+        if (!permitsOffer(senderGeneration, targetGeneration)) return false
+        return if (remoteGeneration == null) acceptOffer(senderGeneration, targetGeneration)
+        else replace().acceptOffer(senderGeneration, 0L)
     }
 
     fun acceptAnswer(senderGeneration: Long, targetGeneration: Long): Boolean {

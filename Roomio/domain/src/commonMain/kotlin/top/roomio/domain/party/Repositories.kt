@@ -17,7 +17,7 @@ const val PARTY_CODE_NETWORK = "NETWORK"
 /** True when the failure happened before the backend could answer, for example while offline. */
 fun PartyException.isConnectivity(): Boolean = code == PARTY_CODE_NETWORK
 
-/** Creates and maintains the guest identity and its rotated tokens. */
+/** Creates and maintains the guest identity and its credentials. */
 interface SessionRepository {
     /**
      * Returns the stored session, creating a guest identity if none exists.
@@ -30,8 +30,11 @@ interface SessionRepository {
     /** The stored session, or null when this device has never registered. */
     suspend fun currentSession(): GuestSession?
 
-    /** Rotates the refresh token. Returns null when there is no session. */
+    /** Refreshes the access token. Returns null when there is no session. */
     suspend fun refresh(): GuestSession?
+
+    /** Explicitly revokes and clears this device identity after user confirmation. */
+    suspend fun reset()
 
     /** Updates the backend profile and the locally cached identity. */
     suspend fun updateProfile(name: String, avatar: String, language: String): GuestIdentity

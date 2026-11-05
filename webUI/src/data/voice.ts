@@ -1,9 +1,9 @@
 import { io, type Socket } from 'socket.io-client'
 
 export interface VoiceState {
-  status: 'off' | 'connecting' | 'connected' | 'error'
+  status: 'off' | 'connecting' | 'connected' | 'degraded' | 'reconnecting' | 'error'
   muted: boolean
-  members: Record<string, { muted: boolean; speaking: boolean }>
+  members: Record<string, { muted: boolean; speaking: boolean; connection?: 'connected' | 'reconnecting' | 'unavailable'; packetsReceived?: number; packetsLost?: number; candidateType?: string }>
   error?: string
 }
 interface Options {
@@ -14,12 +14,12 @@ interface Options {
 }
 interface Descriptor {
   mode: string; roomId: string; membershipId: string; voiceSessionId: string
-  namespace: string; ticket: string; iceServers: RTCIceServer[]; iceExpiresAt: string
+  namespace: string; ticket?: string; iceServers: RTCIceServer[]; iceExpiresAt: string
 }
-interface Member { membershipId: string; voiceSessionId: string; muted: boolean }
+interface Member { membershipId: string; voiceSessionId: string; muted: boolean; signalingConnected?: boolean }
 interface Signal {
-  generation: string; targetGeneration: string; peerGeneration: number; targetPeerGeneration: number
-  sdp?: RTCSessionDescriptionInit; ice?: RTCIceCandidateInit; restart?: boolean
+  negotiationId: string; generation: string; targetGeneration: string; peerGeneration: number; targetPeerGeneration: number
+  sdp?: RTCSessionDescriptionInit; ice?: RTCIceCandidateInit; restart?: boolean; requestOffer?: boolean
 }
 
 /** Same peer-pair epoch fence as Android's PeerGenerationFence. */
@@ -47,7 +47,7 @@ export function audioOnlySdp(sdp: unknown): sdp is string {
 interface Peer {
   member: Member; pc: RTCPeerConnection; fence: PeerGenerationFence; audio: HTMLAudioElement
   pending: { epoch: number; ice: RTCIceCandidateInit }[]; retries: number
-  timer?: ReturnType<typeof setTimeout>; outgoing: Promise<void>; ready: boolean; localReady: boolean; localIce: RTCIceCandidateInit[]
+  timer?: ReturnType<typeof setTimeout>; outgoing: Promise<void>; ready: boolean; localReady: boolean; localIce: RTCIceCandidateInit[]; retrying?: boolean; exhausted?: boolean
 }
 const permanent = new Set(['SESSION_REVOKED', 'INVALID_TOKEN', 'NOT_A_MEMBER', 'ROOM_ENDED', 'ROOM_NOT_FOUND'])
 function code(error: unknown) {
@@ -66,6 +66,12 @@ export class MeshVoice {
   private serial: Promise<void> = Promise.resolve()
   private signalQueue: Promise<void> = Promise.resolve()
   private lastSignalAt = 0
+  private muteSerial: Promise<void> = Promise.resolve()
+  private muteIntent = true
+  private muteRevision = 0
+  private signalSequence = 0
+  private received = new Set<string>()
+  private offerRequestEpochs = new Map<string, number>()
   private active = false
   private run = 0
   private rosterReady = false
@@ -74,6 +80,7 @@ export class MeshVoice {
   private authPaused = false
   private pollBusy = false
   private cancelOpen?: () => void
+  private cancelCapture?: () => void
   private activity = new Map<string, { hits: number; last: number }>()
   private energies = new Map<string, { energy: number; duration: number }>()
   constructor(private readonly options: Options) {}
@@ -82,52 +89,95 @@ export class MeshVoice {
     if (this.active) { await this.resumeAudio(); return }
     this.active = true
     const run = ++this.run
+    const startup = this.later(() => { if (this.current(run) && !this.rosterReady) this.fail(new Error('Voice startup timed out. Join voice to retry.'), true) }, 30_000)
     this.state = { status: 'connecting', muted: true, members: {} }
     this.publish()
     try {
       // Only this explicit opt-in operation requests capture; no camera is requested.
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+      const capture = navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+      let discarded = false
+      void capture.then(stream => { if (!this.current(run)) { discarded = true; stream.getTracks().forEach(track => track.stop()) } }).catch(() => {})
+      const cancelled = new Promise<never>((_, reject) => { this.cancelCapture = () => reject(new Error('Voice capture cancelled')) })
+      const stream = await Promise.race([capture, cancelled])
+      this.cancelCapture = undefined
       stream.getAudioTracks().forEach(track => { track.enabled = false })
-      if (!this.current(run)) { stream.getTracks().forEach(track => track.stop()); return }
+      if (!this.current(run)) { if (!discarded) stream.getTracks().forEach(track => track.stop()); return }
       this.stream = stream
       await this.open(run, false)
       if (!this.current(run)) return
       this.later(() => void this.refreshCredentials(run), 5 * 60_000)
       this.later(() => void this.poll(run), 200)
     } catch (error) { if (this.current(run)) { this.fail(error, true); throw error } }
+    finally { clearTimeout(startup); this.timers.delete(startup) }
   }
 
   async setMuted(muted: boolean) {
     if (!this.active) return
-    // Always stop capture immediately, even while signaling is offline.
-    if (muted) this.stream?.getAudioTracks().forEach(track => { track.enabled = false })
-    this.state.muted = muted
-    this.publish()
-    try {
-      await this.ack('voice.mute', { muted })
-      if (this.active && this.state.muted === muted) this.stream?.getAudioTracks().forEach(track => { track.enabled = !muted })
-      await this.resumeAudio()
-    } catch (error) {
-      if (!muted) {
-        this.state.muted = true
+    this.muteIntent = muted
+    const revision = ++this.muteRevision
+    if (muted) {
+      this.stream?.getAudioTracks().forEach(track => { track.enabled = false })
+      this.state.muted = true; this.publish()
+    }
+    const run = this.run
+    const operation = this.muteSerial.catch(() => {}).then(async () => {
+      if (!this.current(run)) return
+      try {
+        const socket = this.socket
+        await this.ack('voice.mute', { muted })
+        if (!this.current(run) || revision !== this.muteRevision) return
+        if (!muted && !this.canEnableCapture(run, revision, socket)) throw new Error('Voice authorization changed. Retry after reconnecting.')
+        this.state.muted = muted
+        this.stream?.getAudioTracks().forEach(track => { track.enabled = !muted })
+        this.publish()
+        if (this.blockedAudio) void this.resumeAudio().catch(() => {})
+      } catch (error) {
+        if (!this.current(run)) return
         this.stream?.getAudioTracks().forEach(track => { track.enabled = false })
+        this.state.muted = true
+        this.fail(error)
+        throw error
       }
-      this.fail(error)
-      throw error
+    })
+    this.muteSerial = operation
+    return operation
+  }
+
+  private canEnableCapture(run: number, revision: number, socket: Socket | undefined) {
+    return this.current(run) && revision === this.muteRevision && socket === this.socket && socket?.connected === true && this.rosterReady && !this.authPaused
+  }
+
+  /** Retry only unavailable links; established audio remains untouched. */
+  retryConnections() {
+    if (!this.socket?.connected) { this.reconnect(this.run); return }
+    for (const peer of this.peers.values()) if (peer.pc.connectionState !== 'connected') {
+      this.enqueue(() => this.manualRetry(peer))
     }
   }
 
-  async refreshAuth(idToken: string) {
+  async refreshAuth(accessToken: string) {
     if (!this.active) return
+    const run = this.run; const socket = this.socket
     try {
-      await this.ack('auth.refresh', { idToken })
+      await this.ack('auth.refresh', { accessToken })
+      if (!this.current(run) || socket !== this.socket) return
       this.authPaused = false
-    } catch (error) { this.authPaused = true; this.fail(error, permanent.has(code(error))); throw error }
+      this.updateStatus()
+    } catch (error) {
+      if (!this.current(run) || socket !== this.socket) return
+      this.authPaused = true; this.fail(error, permanent.has(code(error))); throw error
+    }
   }
 
   /** Call directly from a click when the browser blocks remote audio autoplay. */
   async resumeAudio() {
-    const results = await Promise.allSettled([...this.peers.values()].filter(p => p.audio.srcObject).map(p => p.audio.play()))
+    const run = this.run
+    const results = await Promise.allSettled([...this.peers.values()].filter(p => p.audio.srcObject).map(async peer => {
+      let timer: ReturnType<typeof setTimeout> | undefined
+      try { await Promise.race([peer.audio.play(), new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Voice audio playback timed out')), 5000) })]) }
+      finally { clearTimeout(timer) }
+    }))
+    if (!this.current(run)) return
     this.blockedAudio = results.some(result => result.status === 'rejected')
     if (this.blockedAudio) {
       this.fail(new Error('Audio playback was blocked. Tap Resume voice audio.'))
@@ -138,13 +188,29 @@ export class MeshVoice {
 
   disconnect() {
     this.active = false
-    ++this.run
+    ++this.run; ++this.muteRevision
     this.cancelOpen?.(); this.cancelOpen = undefined
+    this.cancelCapture?.(); this.cancelCapture = undefined
     this.timers.forEach(clearTimeout); this.timers.clear()
-    this.socket?.removeAllListeners(); this.socket?.disconnect(); this.socket = undefined
+    const socket = this.socket; this.socket = undefined
+    if (socket) {
+      socket.removeAllListeners()
+      if (socket.connected) {
+        // Opt-out is distinct from a recoverable transport disconnect. Retire only
+        // the captured socket; a late leave acknowledgement cannot close a new call.
+        const deadline = setTimeout(() => socket.disconnect(), 1000)
+        socket.timeout(1000).emit('voice.leave', {}, (error: Error | null, response: { ok?: boolean; code?: string } | undefined) => {
+          clearTimeout(deadline)
+          if (error || response?.ok !== true) console.debug('Voice leave was not acknowledged', response?.code || 'NETWORK')
+          socket.disconnect()
+        })
+      } else socket.disconnect()
+    }
     this.peers.forEach(peer => this.closePeer(peer)); this.peers.clear()
     this.stream?.getTracks().forEach(track => track.stop()); this.stream = undefined
-    this.descriptor = undefined; this.epochs.clear(); this.activity.clear(); this.energies.clear()
+    this.pollBusy = false
+    this.serial = Promise.resolve(); this.signalQueue = Promise.resolve(); this.muteSerial = Promise.resolve()
+    this.descriptor = undefined; this.muteIntent = true; this.received.clear(); this.offerRequestEpochs.clear(); this.epochs.clear(); this.activity.clear(); this.energies.clear()
     this.rosterReady = false; this.reconnecting = false; this.blockedAudio = false; this.authPaused = false
     this.state = { status: 'off', muted: true, members: {} }; this.publish()
   }
@@ -157,7 +223,7 @@ export class MeshVoice {
   private fail(error: unknown, fatal = false) {
     const message = error instanceof Error ? error.message : code(error) || 'Voice connection failed. Retry voice.'
     if (fatal) this.disconnect()
-    this.state = { ...this.state, status: 'error', error: message }; this.publish()
+    this.state = { ...this.state, status: !fatal && this.active && (this.rosterReady || this.reconnecting || this.peers.size > 0) ? this.reconnecting ? 'reconnecting' : 'degraded' : 'error', error: message }; this.publish()
   }
   private later(action: () => void, ms: number) {
     const timer = setTimeout(() => { this.timers.delete(timer); action() }, ms)
@@ -170,34 +236,37 @@ export class MeshVoice {
       if (this.current(run)) this.fail(error, permanent.has(code(error)))
     })
   }
-  private async configuration(generation?: string) {
-    const result = await this.options.request<Descriptor>(`/v1/rooms/${this.options.roomId}/voice/config`, generation ? { voiceSessionId: generation } : {})
+  private async configuration(generation?: string, operation: 'join' | 'resume' | 'refresh' = generation ? 'resume' : 'join') {
+    const result = await this.options.request<Descriptor>(`/v1/rooms/${this.options.roomId}/voice/config`, { operation, ...(generation ? { voiceSessionId: generation } : {}) })
     if (result.mode !== 'MESH' || result.roomId !== this.options.roomId || result.namespace !== `/hambin/voice/${this.options.roomId}`) throw new Error('Unexpected voice configuration')
     return result
   }
   private async open(run: number, reconnect: boolean) {
+    if (!this.current(run)) return
     let descriptor: Descriptor
     if (reconnect && this.descriptor) {
       try { descriptor = await this.configuration(this.descriptor.voiceSessionId) }
       catch (error) {
         if (code(error) !== 'VOICE_SESSION_EXPIRED') throw error
+        if (!this.current(run)) return
         descriptor = await this.configuration()
       }
     } else descriptor = await this.configuration()
     if (!this.current(run)) return
     if (this.descriptor && descriptor.voiceSessionId !== this.descriptor.voiceSessionId) {
-      this.peers.forEach(p => this.closePeer(p)); this.peers.clear(); this.epochs.clear()
+      this.peers.forEach(p => this.closePeer(p)); this.peers.clear(); this.epochs.clear(); this.offerRequestEpochs.clear()
     }
     this.descriptor = descriptor; this.rosterReady = false
     this.socket?.removeAllListeners(); this.socket?.disconnect()
     const origin = (import.meta.env.VITE_BACKEND_URL || window.location.origin).replace(/\/$/, '')
     const socket = io(`${origin}${descriptor.namespace}`, {
       path: '/socket.io/', transports: ['websocket'], reconnection: false, forceNew: true,
-      autoConnect: false, auth: { ticket: descriptor.ticket, protocolVersion: 2 },
+      autoConnect: false, auth: { ticket: descriptor.ticket, protocolVersion: 4 },
     })
     this.socket = socket
     await new Promise<void>((resolve, reject) => {
       let settled = false
+      let muteReplayed = false
       const timer = this.later(() => finish(new Error('Voice roster timed out')), 10_000)
       const finish = (error?: unknown) => {
         if (settled) return
@@ -208,12 +277,19 @@ export class MeshVoice {
       socket.on('voice.roster', (payload: { members: Member[] }) => this.enqueue(async () => {
         if (this.socket !== socket) return
         await this.applyRoster(payload.members)
+        if (!muteReplayed) {
+          muteReplayed = true
+          this.authPaused = false
+          this.updateStatus()
+          // Server installs its authorized handlers before publishing the roster.
+          // The transport connect event can arrive while that setup is still pending.
+          void this.setMuted(this.muteIntent).catch(() => {})
+        }
         finish()
       }))
       socket.on('signal', (payload: { from: string; msg: string }) => this.enqueue(async () => {
         if (this.socket === socket) await this.receive(payload)
       }))
-      socket.on('connect', () => { void this.ack('voice.mute', { muted: this.state.muted }).catch(error => this.fail(error)) })
       socket.on('connect_error', (error: Error & { data?: unknown }) => {
         finish(error.data || error)
         if (settled && this.current(run)) this.reconnect(run)
@@ -231,11 +307,14 @@ export class MeshVoice {
       if (!this.current(run)) return
       try {
         await this.options.token()
+        if (!this.current(run)) return
         await this.open(run, true)
-        this.reconnecting = false
+        if (!this.current(run)) return
+        this.reconnecting = false; this.updateStatus()
       } catch (error) {
         if (!this.current(run)) return
-        if (permanent.has(code(error)) || ++attempt >= 6) { this.reconnecting = false; this.fail(error, true); return }
+        if (permanent.has(code(error))) { this.reconnecting = false; this.fail(error, true); return }
+        if (++attempt >= 6) { this.reconnecting = false; this.state = { ...this.state, status: 'degraded', error: 'Voice signaling is unavailable. Retry voice connections.' }; this.publish(); return }
         this.later(() => void retry(), Math.min(1000 * 2 ** attempt, 15_000))
       }
     }
@@ -245,9 +324,11 @@ export class MeshVoice {
     const socket = this.socket
     if (!socket?.connected) return Promise.reject(new Error('Voice signaling is offline'))
     return new Promise((resolve, reject) => {
-      socket.timeout(8000).emit(event, payload, (error: Error | null, response: { code?: string } | undefined) => {
-        if (error) reject(error)
+      socket.timeout(8000).emit(event, payload, (error: Error | null, response: { code?: string; ok?: boolean; expiresAt?: string } | undefined) => {
+        if (socket !== this.socket || !socket.connected) reject(new Error('Voice signaling was replaced'))
+        else if (error) reject(error)
         else if (response?.code) reject(Object.assign(new Error(response.code), response))
+        else if (!response || (event === 'auth.refresh' ? typeof response.expiresAt !== 'string' : response.ok !== true)) reject(new Error('Invalid voice acknowledgement'))
         else resolve(response)
       })
     })
@@ -258,9 +339,9 @@ export class MeshVoice {
     if (!self || self.voiceSessionId !== this.descriptor!.voiceSessionId) throw new Error('Voice session was replaced')
     const roster = new Map(members.map(member => [member.membershipId, member]))
     for (const [id, peer] of this.peers) {
-      if (roster.get(id)?.voiceSessionId !== peer.member.voiceSessionId) { this.closePeer(peer); this.peers.delete(id) }
+      if (roster.get(id)?.voiceSessionId !== peer.member.voiceSessionId) { this.closePeer(peer); this.peers.delete(id); this.offerRequestEpochs.delete(`${id}:${peer.member.voiceSessionId}`) }
     }
-    this.state.members = Object.fromEntries(members.map(m => [m.membershipId, { muted: m.muted, speaking: !m.muted && (this.state.members[m.membershipId]?.speaking ?? false) }]))
+    this.state.members = Object.fromEntries(members.map(m => [m.membershipId, { muted: m.muted, speaking: !m.muted && (this.state.members[m.membershipId]?.speaking ?? false), connection: m.membershipId === this.descriptor!.membershipId ? 'connected' as const : 'reconnecting' as const }]))
     for (const member of members) {
       if (member.membershipId === this.descriptor!.membershipId) continue
       const peer = this.peers.get(member.membershipId) ?? this.createPeer(member)
@@ -278,12 +359,13 @@ export class MeshVoice {
     this.stream!.getAudioTracks().forEach(track => pc.addTrack(track, this.stream!))
     pc.ondatachannel = event => event.channel.close()
     pc.ontrack = event => {
+      if (!this.live(peer)) return
       if (event.track.kind !== 'audio') { event.track.enabled = false; return }
       audio.srcObject = new MediaStream([event.track])
       void audio.play().catch(() => { if (this.peers.get(member.membershipId) === peer) { this.blockedAudio = true; this.fail(new Error('Audio playback was blocked. Tap Resume voice audio.')) } })
     }
     pc.onicecandidate = event => {
-      if (!event.candidate) return
+      if (!this.live(peer) || !event.candidate) return
       if (peer.localReady) this.send(peer, { ice: event.candidate.toJSON() })
       else if (peer.localIce.length < 64) peer.localIce.push(event.candidate.toJSON())
     }
@@ -313,12 +395,12 @@ export class MeshVoice {
     peer.localReady = true
     for (const ice of peer.localIce.splice(0)) this.send(peer, { ice })
   }
-  private send(peer: Peer, content: Pick<Signal, 'sdp' | 'ice' | 'restart'>) {
+  private send(peer: Peer, content: Pick<Signal, 'sdp' | 'ice' | 'restart' | 'requestOffer'>) {
     if (!this.live(peer) || !this.rosterReady || this.authPaused) return
     if (content.restart && peer.fence.remote === undefined) return
     const message: Signal = {
-      generation: this.descriptor!.voiceSessionId, targetGeneration: peer.member.voiceSessionId,
-      peerGeneration: peer.fence.local, targetPeerGeneration: content.sdp?.type === 'offer' ? 0 : peer.fence.remote ?? 0, ...content,
+      negotiationId: `web:${this.run}:${++this.signalSequence}`, generation: this.descriptor!.voiceSessionId, targetGeneration: peer.member.voiceSessionId,
+      peerGeneration: peer.fence.local, targetPeerGeneration: content.sdp?.type === 'offer' || content.requestOffer ? 0 : peer.fence.remote ?? 0, ...content,
     }
     if (content.sdp && !audioOnlySdp(content.sdp.sdp)) { this.fail(new Error('Only microphone audio is supported')); return }
     // Per-peer FIFO preserves SDP/candidate order. Server remains authoritative.
@@ -334,7 +416,7 @@ export class MeshVoice {
         for (let attempt = 0; ; attempt++) {
           try { await this.ack('signal', { to: peer.member.membershipId, msg: JSON.stringify(message) }); return }
           catch (error) {
-            if (code(error) !== 'RATE_LIMITED' || attempt >= 2) throw error
+            if ((code(error) && code(error) !== 'RATE_LIMITED') || attempt >= 2) throw error
             await new Promise(resolve => setTimeout(resolve, 250 * (attempt + 1)))
             if (!this.live(peer)) return
             this.lastSignalAt = Date.now()
@@ -354,8 +436,26 @@ export class MeshVoice {
     try { message = JSON.parse(payload.msg) as Signal } catch { return }
     let peer = this.peers.get(payload.from)
     if (!peer || !message || message.generation !== peer.member.voiceSessionId || message.targetGeneration !== this.descriptor!.voiceSessionId) return
-    if (Number(!!message.sdp) + Number(!!message.ice) + Number(message.restart === true) !== 1) return
+    if (typeof message.negotiationId !== 'string') return
+    const receivedKey = `${payload.from}:${message.generation}:${message.negotiationId}`
+    if (this.received.has(receivedKey)) return
+    if (this.received.size >= 4096) this.received.delete(this.received.values().next().value!)
+    this.received.add(receivedKey)
+    if (Number(!!message.sdp) + Number(!!message.ice) + Number(message.restart === true) + Number(message.requestOffer === true) !== 1) return
     const sender = message.peerGeneration; const target = message.targetPeerGeneration
+    if (message.requestOffer) {
+      if (this.descriptor!.membershipId >= payload.from || !Number.isSafeInteger(sender) || sender <= 0 || !Number.isSafeInteger(target) || target < 0 || (target !== 0 && target !== peer.fence.local) || (peer.fence.remote !== undefined && sender < peer.fence.remote)) return
+      const key = `${payload.from}:${peer.member.voiceSessionId}`
+      if (sender <= (this.offerRequestEpochs.get(key) ?? 0)) return
+      // This high-water mark survives replacement of the failed peer object.
+      this.offerRequestEpochs.set(key, sender)
+      if (peer.pc.connectionState === 'connected' && (peer.fence.remote === undefined || sender <= peer.fence.remote)) return
+      const member = peer.member
+      this.closePeer(peer); this.peers.delete(payload.from)
+      this.createPeer(member, 0)
+      this.updateStatus()
+      return
+    }
     if (message.sdp) {
       const { type, sdp } = message.sdp
       if ((type !== 'offer' && type !== 'answer') || !audioOnlySdp(sdp)) return
@@ -385,9 +485,27 @@ export class MeshVoice {
       else if (peer.pending.length < 64) peer.pending.push({ epoch: sender, ice })
     } else if (message.restart && peer.fence.accept('restart', sender, target)) await this.retry(peer, false)
   }
+  private async manualRetry(peer: Peer) {
+    if (!this.live(peer) || peer.pc.connectionState === 'connected' || !this.rosterReady || !this.socket?.connected || this.authPaused) return
+    const member = peer.member
+    this.closePeer(peer); this.peers.delete(member.membershipId)
+    const replacement = this.createPeer(member, 0)
+    if (this.descriptor!.membershipId > member.membershipId) {
+      // Recreate first, so every user request has a fresh requester epoch even
+      // when no answer has ever established the automatic restart fence.
+      this.send(replacement, { requestOffer: true })
+      await replacement.outgoing
+    }
+    this.updateStatus()
+  }
+
   private async retry(peer: Peer, notify: boolean) {
     if (!this.live(peer) || !this.rosterReady || !this.socket?.connected) return
-    if (peer.retries >= 3) { this.fail(new Error('Could not connect to every voice participant. Retry voice.'), true); return }
+    if (peer.retrying || peer.exhausted) return
+    if (peer.retries >= 3) { peer.exhausted = true; this.closePeer(peer); this.updateStatus(); return }
+    peer.retrying = true
+    await new Promise<void>(resolve => this.later(resolve, 200 + Math.random() * 300))
+    if (!this.live(peer)) return
     if (notify && peer.fence.remote !== undefined) {
       this.send(peer, { restart: true }); await peer.outgoing
       if (!this.live(peer)) return
@@ -405,23 +523,39 @@ export class MeshVoice {
   }
   private updateStatus() {
     if (!this.active || this.blockedAudio || this.authPaused) return
-    const ready = this.rosterReady && [...this.peers.values()].every(peer => peer.pc.connectionState === 'connected')
-    this.state = { ...this.state, status: ready ? 'connected' : 'connecting', error: undefined }; this.publish()
+    for (const peer of this.peers.values()) {
+      const member = this.state.members[peer.member.membershipId]
+      if (member) member.connection = peer.pc.connectionState === 'connected' ? 'connected' : peer.exhausted ? 'unavailable' : 'reconnecting'
+    }
+    const degraded = [...this.peers.values()].some(peer => peer.pc.connectionState !== 'connected')
+    this.state = { ...this.state, status: this.reconnecting ? 'reconnecting' : !this.rosterReady ? 'connecting' : degraded ? 'degraded' : 'connected', error: undefined }; this.publish()
   }
+
   private async refreshCredentials(run: number) {
-    if (!this.current(run)) return
+    if (!this.current(run) || !this.descriptor) return
+    const snapshot = this.descriptor; const socket = this.socket
+    const ownsSnapshot = () => this.current(run) && this.descriptor === snapshot && this.socket === socket
     let delay = 5 * 60_000
     try {
-      await this.refreshAuth(await this.options.token())
-      const descriptor = await this.configuration(this.descriptor!.voiceSessionId)
-      if (!this.current(run)) return
-      if (descriptor.voiceSessionId !== this.descriptor!.voiceSessionId || descriptor.membershipId !== this.descriptor!.membershipId) throw Object.assign(new Error('Voice session was replaced'), { code: 'SESSION_REVOKED' })
-      this.descriptor = descriptor
+      const accessToken = await this.options.token()
+      if (!ownsSnapshot()) { delay = 30_000; return }
+      await this.refreshAuth(accessToken)
+      if (!ownsSnapshot()) { delay = 30_000; return }
+      const descriptor = await this.configuration(snapshot.voiceSessionId, 'refresh')
+      if (!ownsSnapshot()) { delay = 30_000; return }
+      if (descriptor.voiceSessionId !== snapshot.voiceSessionId || descriptor.membershipId !== snapshot.membershipId) throw Object.assign(new Error('Voice session was replaced'), { code: 'SESSION_REVOKED' })
+      this.descriptor = { ...snapshot, ...descriptor }
       this.peers.forEach(peer => peer.pc.setConfiguration({ iceServers: descriptor.iceServers }))
       this.updateStatus()
-    } catch (error) { if (this.current(run)) this.fail(error, permanent.has(code(error))); delay = 30_000 }
-    if (this.current(run)) this.later(() => void this.refreshCredentials(run), delay)
+    } catch (error) {
+      if (ownsSnapshot()) this.fail(error, permanent.has(code(error)))
+      delay = 30_000
+    } finally {
+      // A stale response must not stop renewal for the replacement generation.
+      if (this.current(run)) this.later(() => void this.refreshCredentials(run), delay)
+    }
   }
+
   private async poll(run: number) {
     if (!this.current(run)) return
     if (!this.pollBusy) {
@@ -433,6 +567,9 @@ export class MeshVoice {
           const stats = await peer.pc.getStats()
           if (!this.live(peer)) return
           stats.forEach(report => {
+            const member = this.state.members[peer.member.membershipId]
+            if (member && report.type === 'candidate-pair' && report.state === 'succeeded' && report.localCandidateId) member.candidateType = stats.get(report.localCandidateId)?.candidateType
+            if (member && report.type === 'inbound-rtp') { member.packetsReceived = report.packetsReceived; member.packetsLost = report.packetsLost }
             if (report.kind !== 'audio' && report.mediaType !== 'audio') return
             const local = report.type === 'media-source'
             if (!local && report.type !== 'inbound-rtp') return
@@ -458,7 +595,7 @@ export class MeshVoice {
         }
         this.publish()
       } catch { /* A closed peer may reject an in-flight stats request. */ }
-      finally { this.pollBusy = false }
+      finally { if (this.run === run) this.pollBusy = false }
     }
     if (this.current(run)) this.later(() => void this.poll(run), 200)
   }

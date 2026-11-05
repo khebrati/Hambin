@@ -1,6 +1,6 @@
 # Assumptions
 
-These are temporary design assumptions only. Confirmed items have been moved out of active assumptions and linked to requirements.
+These are early design assumptions. Later accepted decisions and requirements take precedence: the current implementation uses native/browser clients, the Node/PostgreSQL backend, audio-only mesh voice, and backend-owned automatic guest sessions (DD-022, DD-023, DD-028). None of the historical uncertainty below authorizes reintroducing Firebase authentication.
 
 ## Active Assumptions
 

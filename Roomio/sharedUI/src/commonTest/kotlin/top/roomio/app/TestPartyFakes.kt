@@ -1,6 +1,8 @@
 package top.roomio.app
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.cancel
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.emptyFlow
 import top.roomio.domain.party.GuestIdentity
 import top.roomio.domain.party.GuestSession
@@ -25,6 +27,7 @@ internal object testSessionRepository : SessionRepository {
     private val session = GuestSession(identity, "access", "refresh")
     override suspend fun ensureSession(name: String, avatar: String, language: String) = session
     override suspend fun currentSession() = session
+    override suspend fun reset() = Unit
     override suspend fun refresh() = session
     override suspend fun updateProfile(name: String, avatar: String, language: String) = identity
 }
@@ -46,6 +49,7 @@ internal class RecordingSessionRepository : SessionRepository {
 
     override suspend fun currentSession() = session
 
+    override suspend fun reset() = Unit
     override suspend fun refresh() = session
 
     override suspend fun updateProfile(name: String, avatar: String, language: String): GuestIdentity {
@@ -89,4 +93,20 @@ internal object testVoiceClient : VoiceClient {
 internal object testSessionKeeper : SessionKeeper {
     override fun start(room: top.roomio.domain.party.RoomSession) = Unit
     override fun stop() = Unit
+}
+
+/** Adapts existing presentation fixtures to the application coordinator boundary. */
+internal fun testRoomViewModel(
+    roomId: String,
+    asOwner: Boolean,
+    sessionRepository: SessionRepository,
+    roomRepository: RoomRepository,
+    realtimeClient: RealtimeClient,
+    voiceClient: VoiceClient,
+    sessionKeeper: SessionKeeper,
+): top.roomio.app.room.RoomViewModel {
+    val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main.immediate)
+    val coordinator = top.roomio.domain.party.DefaultVoiceCoordinator(roomRepository, voiceClient, sessionKeeper, scope)
+    val vm = top.roomio.app.room.RoomViewModel(roomId, asOwner, sessionRepository, roomRepository, realtimeClient, coordinator)
+    return vm
 }

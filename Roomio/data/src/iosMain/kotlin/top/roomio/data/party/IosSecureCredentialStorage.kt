@@ -1,5 +1,6 @@
 package top.roomio.data.party
 
+import top.roomio.domain.party.PartyException
 import kotlinx.cinterop.CFTypeRefVar
 import kotlinx.cinterop.addressOf
 import kotlinx.cinterop.alloc
@@ -29,15 +30,15 @@ import platform.Security.kSecMatchLimitOne
 import platform.Security.kSecReturnData
 import platform.Security.kSecValueData
 
-/** Firebase tokens are stored as a generic-password item protected by iOS Keychain. */
+/** Guest credentials are stored as a generic-password item protected by iOS Keychain. */
 private class IosSecureCredentialStorage : SecureCredentialStorage {
     override fun read(): String? = memScoped {
         val result = alloc<CFTypeRefVar>()
         val status = SecItemCopyMatching(query(returnData = true) as CFDictionaryRef, result.ptr)
         if (status == errSecItemNotFound) return null
         check(status == errSecSuccess) { "Keychain credential read failed (status $status)" }
-        val data = result.value as? NSData ?: return null
-        val bytes = data.bytes?.readBytes(data.length.toInt()) ?: return null
+        val data = result.value as? NSData ?: throw PartyException("INVALID_TOKEN", "Saved guest credentials are unreadable; reset the guest identity")
+        val bytes = data.bytes?.readBytes(data.length.toInt()) ?: throw PartyException("INVALID_TOKEN", "Saved guest credentials are empty; reset the guest identity")
         bytes.decodeToString()
     }
 
@@ -58,7 +59,8 @@ private class IosSecureCredentialStorage : SecureCredentialStorage {
     }
 
     override fun clear() {
-        SecItemDelete(query() as CFDictionaryRef)
+        val status = SecItemDelete(query() as CFDictionaryRef)
+        check(status == errSecSuccess || status == errSecItemNotFound) { "Keychain credential removal failed (status $status)" }
     }
 
     private fun query(returnData: Boolean = false) = NSMutableDictionary().apply {

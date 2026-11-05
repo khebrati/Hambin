@@ -1,6 +1,6 @@
 package top.roomio.data.party
 
-/** Platform-backed storage for Firebase credentials. Implementations must never store plaintext. */
+/** Platform-backed storage for backend guest credentials. Implementations must never store plaintext. */
 interface SecureCredentialStorage {
     fun read(): String?
     fun write(value: String)

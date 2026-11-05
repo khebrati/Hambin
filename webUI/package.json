@@ -11,7 +11,6 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "firebase": "^13.0.0",
     "hls.js": "^1.7.3",
     "lucide-react": "1.24.0",
     "react": "19.2.7",
@@ -26,8 +25,5 @@
     "typescript": "7.0.2",
     "vite": "8.1.4",
     "vitest": "^5.0.4"
-  },
-  "overrides": {
-    "@grpc/grpc-js": "^1.14.6"
   }
 }

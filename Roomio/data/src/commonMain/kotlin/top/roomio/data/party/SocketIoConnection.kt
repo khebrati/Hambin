@@ -6,6 +6,7 @@ import io.ktor.websocket.Frame
 import io.ktor.websocket.close
 import io.ktor.websocket.send
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -39,10 +40,10 @@ internal class SocketIoConnection(
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val sendMutex = Mutex()
-    private val acknowledgementMutex = Mutex()
     private val namespaces = mutableMapOf<String, SocketIoNamespace>()
     private val engineOpened = CompletableDeferred<Unit>()
     private val closed = CompletableDeferred<Throwable?>()
+    internal val isClosed: Boolean get() = closed.isCompleted
     private var nextAckId = 0
     private var heartbeatMs = DEFAULT_PING_INTERVAL_MS
     private var timeoutMs = DEFAULT_PING_TIMEOUT_MS
@@ -55,16 +56,17 @@ internal class SocketIoConnection(
 
     suspend fun awaitOpen() = withTimeout(OPEN_TIMEOUT_MS) { engineOpened.await() }
 
-    suspend fun connectNamespace(namespace: String, ticket: String): SocketIoNamespace {
+    suspend fun connectNamespace(namespace: String, ticket: String, protocolVersion: Int = 3): SocketIoNamespace {
         require(namespace.startsWith('/') && namespace.length <= 256)
         val client = SocketIoNamespace(this, namespace)
         synchronized(namespaces) {
+            check(!closed.isCompleted) { "Connection is closed" }
             check(namespace !in namespaces) { "Namespace already connected" }
             namespaces[namespace] = client
         }
         val auth = json.encodeToString(JsonObject.serializer(), JsonObject(mapOf(
             "ticket" to json.parseToJsonElement(json.encodeToString(ticket)),
-            "protocolVersion" to JsonPrimitive(2),
+            "protocolVersion" to JsonPrimitive(protocolVersion),
         )))
         sendRaw(encodeNamespaceConnect(namespace, auth))
         withTimeout(NAMESPACE_CONNECT_TIMEOUT_MS) { client.connected.await() }
@@ -75,24 +77,33 @@ internal class SocketIoConnection(
         require(name.length in 1..64)
         val ack = CompletableDeferred<JsonElement>()
         val ackId = sendMutex.withLock {
-            val client = namespaces[namespace] ?: error("Namespace is closed")
-            acknowledgementMutex.withLock {
+            val client = synchronized(namespaces) { namespaces[namespace] } ?: error("Namespace is closed")
+            synchronized(client.pendingAcks) {
+                client.failure?.let { throw it }
                 check(client.pendingAcks.size < MAX_PENDING_ACKS) { "Too many pending Socket.IO acknowledgements" }
             }
             val id = nextAckId++
-            acknowledgementMutex.withLock { client.pendingAcks[id] = ack }
+            synchronized(client.pendingAcks) {
+                client.failure?.let { throw it }
+                client.pendingAcks[id] = ack
+            }
             val event = json.encodeToString(JsonArray.serializer(), JsonArray(listOf(
                 json.parseToJsonElement(json.encodeToString(name)),
                 payload,
             )))
-            socket.send(Frame.Text(encodeNamespaceEvent(namespace, id, event)))
+            try {
+                socket.send(Frame.Text(encodeNamespaceEvent(namespace, id, event)))
+            } catch (error: Throwable) {
+                terminate(error)
+                throw error
+            }
             id
         }
         try {
             return withTimeout(ACK_TIMEOUT_MS) { ack.await() }
         } finally {
-            val client = namespaces[namespace]
-            if (client != null) acknowledgementMutex.withLock { client.pendingAcks.remove(ackId) }
+            val client = synchronized(namespaces) { namespaces[namespace] }
+            if (client != null) synchronized(client.pendingAcks) { client.pendingAcks.remove(ackId) }
         }
     }
 
@@ -106,15 +117,15 @@ internal class SocketIoConnection(
 
     internal suspend fun unregister(namespace: String) {
         val remove = synchronized(namespaces) { namespaces.remove(namespace) }
+        remove?.fail(PartyException("SOCKET_CLOSED", "Socket.IO namespace closed"))
         if (remove != null && !closed.isCompleted) runCatching { sendRaw("41$namespace,") }
         if (synchronized(namespaces) { namespaces.isEmpty() }) close()
     }
 
     suspend fun close() {
-        if (!closed.isCompleted) {
-            runCatching { socket.close(CloseReason(CloseReason.Codes.NORMAL, "client closing")) }
-            scope.cancel()
-        }
+        terminate(PartyException("SOCKET_CLOSED", "Socket.IO connection closed"))
+        runCatching { socket.close(CloseReason(CloseReason.Codes.NORMAL, "client closing")) }
+        scope.cancel()
     }
 
     private suspend fun sendRaw(text: String) = sendMutex.withLock { socket.send(Frame.Text(text)) }
@@ -130,9 +141,8 @@ internal class SocketIoConnection(
             }
         } catch (error: Throwable) {
             failure = error
-            if (error !is kotlinx.coroutines.CancellationException) failNamespaces(error)
         } finally {
-            if (!closed.isCompleted) closed.complete(failure)
+            terminate(failure ?: PartyException("SOCKET_CLOSED", "Socket.IO connection ended"))
             scope.cancel()
         }
     }
@@ -160,9 +170,13 @@ internal class SocketIoConnection(
         val client = synchronized(namespaces) { namespaces[packet.namespace] } ?: return
         when (packet.type) {
             SOCKET_CONNECT -> client.connected.complete(Unit)
-            SOCKET_CONNECT_ERROR -> client.connected.completeExceptionally(
-                PartyException("INVALID_TICKET", "Socket.IO namespace rejected the ticket"),
-            )
+            SOCKET_CONNECT_ERROR -> {
+                val data = runCatching { json.parseToJsonElement(packet.data).jsonObject }.getOrNull()
+                val details = data?.get("data") as? JsonObject
+                val code = details?.get("code")?.jsonPrimitive?.contentOrNull
+                    ?: data?.get("code")?.jsonPrimitive?.contentOrNull ?: "INVALID_TICKET"
+                client.fail(PartyException(code, "Socket.IO namespace rejected the ticket"))
+            }
             SOCKET_EVENT -> {
                 val values = json.parseToJsonElement(packet.data).jsonArray
                 val name = values.firstOrNull()?.jsonPrimitive?.contentOrNull ?: return
@@ -174,7 +188,7 @@ internal class SocketIoConnection(
             SOCKET_ACK -> {
                 val id = packet.acknowledgementId?.toIntOrNull() ?: return
                 val payload = json.parseToJsonElement(packet.data).jsonArray.firstOrNull() ?: JsonNull
-                acknowledgementMutex.withLock { client.pendingAcks.remove(id) }?.complete(payload)
+                synchronized(client.pendingAcks) { client.pendingAcks.remove(id) }?.complete(payload)
             }
             SOCKET_DISCONNECT -> client.fail(IllegalStateException("Socket.IO namespace disconnected"))
             else -> client.fail(IllegalArgumentException("Unsupported Socket.IO packet type ${packet.type}"))
@@ -185,15 +199,23 @@ internal class SocketIoConnection(
         while (scope.isActive) {
             delay(HEARTBEAT_CHECK_MS)
             if (engineOpened.isCompleted && nowMs() - lastPacketAt > heartbeatMs + timeoutMs) {
+                terminate(PartyException("SOCKET_HEARTBEAT_TIMEOUT", "Socket.IO heartbeat timed out"))
                 close()
                 return
             }
         }
     }
 
-    private fun failNamespaces(error: Throwable) {
-        val active = synchronized(namespaces) { namespaces.values.toList() }
-        active.forEach { it.fail(error) }
+    private fun terminate(error: Throwable) {
+        // Cancellation of this transport is a disconnect to independent namespace
+        // consumers. Forwarding its CancellationException would silently cancel
+        // their recovery loops even when their own jobs are still active.
+        val failure = if (error is CancellationException)
+            PartyException("SOCKET_CLOSED", "Socket.IO transport cancelled") else error
+        if (!closed.complete(failure)) return
+        engineOpened.completeExceptionally(failure)
+        val active = synchronized(namespaces) { namespaces.values.toList().also { namespaces.clear() } }
+        active.forEach { it.fail(failure) }
     }
 
     private fun JsonObject.longOrDefault(key: String, fallback: Long): Long =
@@ -216,18 +238,27 @@ internal class SocketIoNamespace internal constructor(
 ) {
     internal val connected = CompletableDeferred<Unit>()
     internal val pendingAcks = mutableMapOf<Int, CompletableDeferred<JsonElement>>()
+    internal var failure: Throwable? = null
     private val mutableEvents = Channel<SocketIoEvent>(capacity = 64)
     val events: Channel<SocketIoEvent> get() = mutableEvents
+    /** Includes transport termination before the namespace event consumer runs. */
+    internal val isConnected: Boolean get() = !connection.isClosed && synchronized(pendingAcks) {
+        connected.isCompleted && !connected.isCancelled && failure == null
+    }
 
     suspend fun emit(name: String, payload: JsonElement): JsonElement = connection.sendEvent(this.name, name, payload)
     suspend fun emitWithoutAck(name: String, payload: JsonElement) = connection.sendEventWithoutAck(this.name, name, payload)
     suspend fun close() = connection.unregister(name)
 
     internal fun fail(error: Throwable) {
+        synchronized(pendingAcks) {
+            if (failure != null) return
+            failure = error
+            pendingAcks.values.forEach { it.completeExceptionally(error) }
+            pendingAcks.clear()
+        }
         connected.completeExceptionally(error)
         mutableEvents.close(error)
-        pendingAcks.values.forEach { it.completeExceptionally(error) }
-        pendingAcks.clear()
     }
 }
 

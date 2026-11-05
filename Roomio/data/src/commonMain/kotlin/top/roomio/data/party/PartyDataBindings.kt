@@ -5,7 +5,6 @@ import dev.zacsweers.metro.Binds
 import dev.zacsweers.metro.BindingContainer
 import dev.zacsweers.metro.Provides
 import dev.zacsweers.metro.SingleIn
-import co.touchlab.kermit.Logger
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.api.createClientPlugin
@@ -25,6 +24,11 @@ import top.roomio.domain.party.RoomRepository
 import top.roomio.domain.party.SessionKeeper
 import top.roomio.domain.party.SessionRepository
 import top.roomio.domain.party.VoiceClient
+import top.roomio.domain.party.VoiceCoordinator
+import top.roomio.domain.party.DefaultVoiceCoordinator
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Dispatchers
 
 @BindingContainer
 interface PartyDataBindings {
@@ -39,7 +43,7 @@ interface PartyDataBindings {
 
     companion object {
         /** The deployed backend. Override here to point at another environment. */
-        const val DEFAULT_BASE_URL = "https://api.roomio.audiosense.ir"
+        const val DEFAULT_BASE_URL = "https://watchparty.top"
 
         @Provides
         @SingleIn(AppScope::class)
@@ -51,18 +55,8 @@ interface PartyDataBindings {
             val overrides = platformBackendOverrides()
             return BackendConfig(
                 baseUrl = overrides.backendUrl ?: DEFAULT_BASE_URL,
-                firebaseProjectId = overrides.firebaseProjectId ?: DEFAULT_FIREBASE_PROJECT_ID,
-                firebaseAuthEmulatorHost = overrides.authEmulatorHost,
             )
         }
-
-        @Provides
-        @SingleIn(AppScope::class)
-        fun provideFirebaseAuthConfig(config: BackendConfig): FirebaseAuthConfig = FirebaseAuthConfig(
-            projectId = config.firebaseProjectId,
-            apiKey = config.firebaseApiKey,
-            emulatorHost = config.firebaseAuthEmulatorHost,
-        )
 
         @Provides
         @SingleIn(AppScope::class)
@@ -77,6 +71,11 @@ interface PartyDataBindings {
         @Provides
         @SingleIn(AppScope::class)
         fun provideSessionKeeper(roomRepository: RoomRepository): SessionKeeper = createSessionKeeper(roomRepository)
+
+        @Provides
+        @SingleIn(AppScope::class)
+        fun provideVoiceCoordinator(rooms: RoomRepository, voice: VoiceClient, keeper: SessionKeeper): VoiceCoordinator =
+            DefaultVoiceCoordinator(rooms, voice, keeper, CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate))
 
         @Provides
         @SingleIn(AppScope::class)
@@ -108,22 +107,21 @@ interface PartyDataBindings {
 /** Applies credentials after Ktor has resolved each request's final URL. */
 internal fun backendAuthorizationPlugin(tokens: TokenStore, config: BackendConfig) =
     createClientPlugin("BackendAuthorization") {
-        val log = Logger.withTag("BackendAuth")
+
         onRequest { request, _ ->
             val requestUrl = request.url.build()
             val path = requestUrl.encodedPath
             val isRealtimeHandshake = path.endsWith("/socket.io/") || path.endsWith("/socket.io")
-            val isBackendRequest = !isRealtimeHandshake && hasBackendOrigin(requestUrl, config.baseUrl)
+            val isSessionExchange = path == "/v1/guest-sessions" || path == "/v1/guest-sessions/refresh"
+            val isBackendRequest = !isRealtimeHandshake && !isSessionExchange && hasBackendOrigin(requestUrl, config.baseUrl)
             if (isBackendRequest) {
                 tokens.credentials()?.let { credentials ->
-                    request.headers[HttpHeaders.Authorization] = "Bearer ${credentials.idToken}"
+                    request.headers[HttpHeaders.Authorization] = "Bearer ${credentials.accessToken}"
                 }
             } else {
                 request.headers.remove(HttpHeaders.Authorization)
             }
-            if (path == "/v1/identities/bootstrap") {
-                log.i("bootstrap auth scope host=${requestUrl.host}:${requestUrl.port} backendMatch=$isBackendRequest firebaseCredentialsPresent=${tokens.credentials() != null}")
-            }
+
         }
     }
 
@@ -133,13 +131,6 @@ internal fun hasBackendOrigin(request: Url, baseUrl: String): Boolean {
         request.port == backend.port && request.protocol == backend.protocol
 }
 
-/** Firebase REST URLs carry the public API key in the query string; exclude their full exchange. */
-internal fun shouldLogHttpRequest(request: Url): Boolean {
-    val host = request.host.lowercase()
-    val path = request.encodedPath.lowercase()
-    val firebaseAuthHost = host == "identitytoolkit.googleapis.com" ||
-        host == "securetoken.googleapis.com"
-    val firebaseAuthEmulatorPath = path.contains("/identitytoolkit.googleapis.com/v1/accounts:") ||
-        path.contains("/securetoken.googleapis.com/v1/token")
-    return !firebaseAuthHost && !firebaseAuthEmulatorPath
-}
+/** Session responses and refresh bodies contain credentials; suppress their complete exchange. */
+internal fun shouldLogHttpRequest(request: Url): Boolean =
+    !request.encodedPath.trimEnd('/').let { it == "/v1/guest-sessions" || it.startsWith("/v1/guest-sessions/") }

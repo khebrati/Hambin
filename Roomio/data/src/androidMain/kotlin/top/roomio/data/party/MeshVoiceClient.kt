@@ -1,6 +1,11 @@
 package top.roomio.data.party
 
 import android.Manifest
+import android.media.AudioDeviceCallback
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
+import android.os.Handler
+import android.os.Looper
 import android.content.Context
 import android.content.pm.PackageManager
 import co.touchlab.kermit.Logger
@@ -17,6 +22,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
@@ -24,7 +31,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.encodeToString
@@ -63,6 +72,8 @@ import top.roomio.domain.party.SessionRepository
 import top.roomio.domain.party.VoiceClient
 import top.roomio.domain.party.VoiceConfiguration
 import top.roomio.domain.party.VoiceEvent
+import top.roomio.domain.party.VoiceSessionState
+import top.roomio.domain.party.VoicePeerStatus
 import top.roomio.domain.party.VoiceSession
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -111,7 +122,7 @@ internal class MeshVoiceClient(
             active = session
             session
         } catch (error: Throwable) {
-            session.disconnect()
+            withContext(NonCancellable) { session.disconnect() }
             throw error
         }
     }
@@ -149,12 +160,17 @@ private class MeshVoiceSession(
     private val output = Channel<VoiceEvent>(capacity = 32)
     override val events: Flow<VoiceEvent> = output.receiveAsFlow()
     private val peers = linkedMapOf<String, PeerState>()
+    private val linkState = MeshLinkStateMachine()
     private val memberStates = linkedMapOf<String, VoiceMember>()
     private val peerEpochs = mutableMapOf<String, Long>()
-    private val retryingPeers = mutableSetOf<String>()
     private val activityTracker = VoiceActivityTracker()
     private val speakingLock = Any()
     private val eventMutex = Mutex()
+    private val outboundMutex = Mutex()
+    private val retryJobs = mutableMapOf<String, Job>()
+    private var signalSequence = 0L
+    private val microphoneIntent = MicrophoneIntent()
+    private val muteMutex = Mutex()
     private val initialRoster = CompletableDeferred<Unit>()
     private val ready = CompletableDeferred<Unit>()
     @Volatile private var rosterReady = false
@@ -163,19 +179,28 @@ private class MeshVoiceSession(
     private var namespace: SocketIoNamespace? = null
     private var factory: PeerConnectionFactory? = null
     private var audioDevice: AudioDeviceModule? = null
+    private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    private val routeCallback = object : AudioDeviceCallback() {
+        override fun onAudioDevicesAdded(devices: Array<out AudioDeviceInfo>) = routeChanged()
+        override fun onAudioDevicesRemoved(devices: Array<out AudioDeviceInfo>) = routeChanged()
+    }
     private var source: AudioSource? = null
     private var track: AudioTrack? = null
     @Volatile private var microphoneEnabled = false
     @Volatile private var closed = false
 
     suspend fun open() {
+        voiceLog.i("Opening voice signaling")
         ensureRtc()
+        audioManager.registerAudioDeviceCallback(routeCallback, Handler(Looper.getMainLooper()))
+        routeChanged()
         val socket = http.webSocketSession(socketIoUrl(backend.baseUrl))
         val engine = SocketIoConnection(socket, json)
         connection = engine
         try {
             engine.awaitOpen()
-            namespace = engine.connectNamespace(descriptor.namespace, descriptor.ticket)
+            namespace = engine.connectNamespace(descriptor.namespace, descriptor.ticket, protocolVersion = 4)
+            voiceLog.i("Voice signaling connected; waiting for peer audio")
         } catch (error: Throwable) {
             engine.close()
             throw error
@@ -192,12 +217,41 @@ private class MeshVoiceSession(
             PeerConnectionFactory.initialize(
                 PeerConnectionFactory.InitializationOptions.builder(context).createInitializationOptions(),
             )
-            audioDevice = JavaAudioDeviceModule.builder(context).createAudioDeviceModule()
+            audioDevice = JavaAudioDeviceModule.builder(context)
+                .setAudioRecordErrorCallback(object : JavaAudioDeviceModule.AudioRecordErrorCallback {
+                    override fun onWebRtcAudioRecordInitError(message: String) = audioFailure(true)
+                    override fun onWebRtcAudioRecordStartError(code: JavaAudioDeviceModule.AudioRecordStartErrorCode, message: String) = audioFailure(true)
+                    override fun onWebRtcAudioRecordError(message: String) = audioFailure(true)
+                })
+                .setAudioTrackErrorCallback(object : JavaAudioDeviceModule.AudioTrackErrorCallback {
+                    override fun onWebRtcAudioTrackInitError(message: String) = audioFailure(false)
+                    override fun onWebRtcAudioTrackStartError(code: JavaAudioDeviceModule.AudioTrackStartErrorCode, message: String) = audioFailure(false)
+                    override fun onWebRtcAudioTrackError(message: String) = audioFailure(false)
+                }).createAudioDeviceModule()
             (audioDevice as? JavaAudioDeviceModule)?.setSpeakerMute(false)
+            (audioDevice as? JavaAudioDeviceModule)?.setMicrophoneMute(true)
             factory = PeerConnectionFactory.builder().setAudioDeviceModule(audioDevice).createPeerConnectionFactory()
             source = factory!!.createAudioSource(MediaConstraints())
             track = factory!!.createAudioTrack("hambin-microphone", source).apply { setEnabled(false) }
         }
+    }
+
+    private fun routeChanged() {
+        scope.launch { eventMutex.withLock {
+            if (closed) return@withLock
+            val inputs = audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS)
+            val preferred = inputs.firstOrNull { it.type in setOf(AudioDeviceInfo.TYPE_WIRED_HEADSET, AudioDeviceInfo.TYPE_USB_HEADSET, AudioDeviceInfo.TYPE_BLUETOOTH_SCO) }
+            (audioDevice as? JavaAudioDeviceModule)?.setPreferredInputDevice(preferred)
+            // Android owns playout routing; no exclusive audio focus is requested from the movie.
+            voiceLog.i("Voice audio route changed inputType=${preferred?.type ?: 0}")
+        } }
+    }
+
+    private fun audioFailure(capture: Boolean) {
+        if (closed) return
+        if (capture) setMicrophoneEnabled(false)
+        output.trySend(VoiceEvent.AudioDeviceFailure(capture))
+        voiceLog.w("Voice audio-device failure capture=$capture")
     }
 
     private suspend fun receiveEvents() {
@@ -208,7 +262,7 @@ private class MeshVoiceSession(
                 for (event in ns.events) {
                     when (event.name) {
                         "voice.roster" -> applyRoster(event.payload)
-                        "signal" -> receiveSignal(event.payload)
+                        "signal" -> eventMutex.withLock { receiveSignal(event.payload) }
                         "error" -> {
                             val code = event.payload.jsonObject["code"]?.jsonPrimitive?.contentOrNull
                             if (code != null && code in PERMANENT_VOICE_ERRORS)
@@ -227,7 +281,7 @@ private class MeshVoiceSession(
                     fail("Voice session ended")
                     break
                 }
-                markMeshDisconnected()
+                eventMutex.withLock { markMeshDisconnected() }
                 try {
                     reconnectSignaling(reconnectAttempt++)
                 } catch (cancel: CancellationException) {
@@ -247,21 +301,31 @@ private class MeshVoiceSession(
         val backoff = (RECONNECT_BASE_MS * (1L shl attempt.coerceAtMost(6))).coerceAtMost(RECONNECT_MAX_MS)
         delay(backoff)
         sessions.refresh()
-        val dto = http.post("${backend.baseUrl}/v1/rooms/${descriptor.roomId}/voice/config") {
-            contentType(ContentType.Application.Json)
-            setBody(VoiceConfigurationRequest(descriptor.voiceSessionId))
-        }.bodyOrThrow<VoiceConfigurationDto>()
-        if (dto.voiceSessionId != descriptor.voiceSessionId || dto.membershipId != descriptor.membershipId) {
-            throw PartyException("SESSION_REVOKED", "Voice session was replaced")
+        val dto = try {
+            http.post("${backend.baseUrl}/v1/rooms/${descriptor.roomId}/voice/config") {
+                contentType(ContentType.Application.Json)
+                setBody(VoiceConfigurationRequest(descriptor.voiceSessionId, "resume"))
+            }.bodyOrThrow<VoiceConfigurationDto>()
+        } catch (error: PartyException) {
+            if (error.code != "VOICE_SESSION_EXPIRED") throw error
+            http.post("${backend.baseUrl}/v1/rooms/${descriptor.roomId}/voice/config").bodyOrThrow<VoiceConfigurationDto>()
         }
-        descriptor = dto.toDomain()
+        eventMutex.withLock {
+            if (dto.voiceSessionId != descriptor.voiceSessionId) {
+                peers.keys.toList().forEach(::removePeer)
+                peerEpochs.clear()
+                microphoneIntent.request(false, ::applyCapture)
+                output.trySend(VoiceEvent.MicrophoneChanged(false))
+            }
+            descriptor = dto.toDomain()
+        }
         rosterReady = false
         val previous = connection
         val socket = http.webSocketSession(socketIoUrl(backend.baseUrl))
         val engine = SocketIoConnection(socket, json)
         try {
             engine.awaitOpen()
-            val nextNamespace = engine.connectNamespace(descriptor.namespace, descriptor.ticket)
+            val nextNamespace = engine.connectNamespace(descriptor.namespace, descriptor.ticket, protocolVersion = 4)
             connection = engine
             namespace = nextNamespace
             previous?.close()
@@ -279,6 +343,9 @@ private class MeshVoiceSession(
 
     private fun markMeshDisconnected() {
         rosterReady = false
+        microphoneIntent.suspendCapture(::applyCapture)
+        output.trySend(VoiceEvent.MicrophoneChanged(false))
+        publishStatus()
         if (connectedAnnounced) {
             connectedAnnounced = false
             output.trySend(VoiceEvent.Disconnected)
@@ -293,14 +360,11 @@ private class MeshVoiceSession(
             val muted = obj["muted"]?.jsonPrimitive?.contentOrNull?.toBooleanStrictOrNull() ?: true
             VoiceMember(id, generation, muted)
         }.filter { it.membershipId != descriptor.membershipId }
+        voiceLog.i("Voice roster: ${roster.size} remote participants")
         if (roster.size > MAX_REMOTE_PEERS) {
             throw PartyException("VOICE_CAPACITY_EXCEEDED", "This voice room has too many participants")
         }
         val authoritative = roster.associateBy { it.membershipId }
-        val wasConnected = connectedAnnounced
-        val changedPeer = peers.any { (id, state) -> authoritative[id]?.let { it.generation != state.member.generation } == true } ||
-            authoritative.keys.any { it !in peers }
-        if (wasConnected && (!rosterReady || changedPeer)) markMeshDisconnected()
         peers.keys.toList().filter { it !in authoritative }.forEach { id ->
             removePeer(id)
             clearSpeaking(id)
@@ -317,9 +381,12 @@ private class MeshVoiceSession(
             peers[member.membershipId]?.remoteAudioTrack?.setEnabled(!member.muted)
             if (member.muted) clearSpeaking(member.membershipId)
         }
+        val firstRoster = !rosterReady
         rosterReady = true
         initialRoster.complete(Unit)
         publishConnectedWhenMeshReady()
+        // A mute ACK broadcasts another roster. Replay only after join/resume.
+        if (firstRoster) scope.launch { applyMuteIntent() }
     }
 
     private fun createPeer(member: VoiceMember, retries: Int = 0) {
@@ -330,51 +397,50 @@ private class MeshVoiceSession(
         val peer = rtc.createPeerConnection(rtcConfig, object : PeerConnection.Observer {
             override fun onSignalingChange(state: PeerConnection.SignalingState) = Unit
             override fun onIceConnectionChange(stateValue: PeerConnection.IceConnectionState) {
-                state?.iceState = stateValue
-                if (stateValue == PeerConnection.IceConnectionState.CONNECTED || stateValue == PeerConnection.IceConnectionState.COMPLETED) {
-                    state?.connected = true
-                    state?.retries = 0
-                    synchronized(retryingPeers) { retryingPeers.remove(member.membershipId) }
-                    publishConnectedWhenMeshReady()
-                } else if (stateValue == PeerConnection.IceConnectionState.FAILED) {
-                    state?.connected = false
-                    markMeshDisconnected()
-                    scope.launch { retryPeer(member.membershipId, notifyRemote = true) }
-                } else if (stateValue == PeerConnection.IceConnectionState.DISCONNECTED) {
-                    state?.connected = false
-                    markMeshDisconnected()
-                    scope.launch { retryIfStillDisconnected(member.membershipId, state) }
-                } else if (stateValue == PeerConnection.IceConnectionState.CLOSED && peers[member.membershipId] === state) {
-                    markMeshDisconnected()
-                    scope.launch { retryPeer(member.membershipId, notifyRemote = true) }
-                }
+                scope.launch { eventMutex.withLock {
+                    val observed = state ?: return@withLock
+                    if (closed || peers[member.membershipId] !== observed) return@withLock
+                    observed.iceState = stateValue
+                    when (stateValue) {
+                        PeerConnection.IceConnectionState.CONNECTED, PeerConnection.IceConnectionState.COMPLETED -> {
+                            observed.connected = true
+                            observed.retries = 0
+                            linkState.connected(member.membershipId, observed.localPeerGeneration)
+                            retryJobs.remove(member.membershipId)?.cancel()
+                            publishConnectedWhenMeshReady()
+                        }
+                        PeerConnection.IceConnectionState.FAILED, PeerConnection.IceConnectionState.CLOSED -> {
+                            observed.connected = false
+                            linkState.disconnected(member.membershipId, observed.localPeerGeneration)
+                            scheduleRetry(member.membershipId, observed, 0L)
+                        }
+                        PeerConnection.IceConnectionState.DISCONNECTED -> {
+                            observed.connected = false
+                            linkState.disconnected(member.membershipId, observed.localPeerGeneration)
+                            scheduleRetry(member.membershipId, observed, DISCONNECTED_GRACE_MS)
+                        }
+                        else -> Unit
+                    }
+                    publishStatus()
+                } }
             }
             override fun onStandardizedIceConnectionChange(stateValue: PeerConnection.IceConnectionState) = Unit
-            override fun onConnectionChange(stateValue: PeerConnection.PeerConnectionState) {
-                if (stateValue == PeerConnection.PeerConnectionState.CONNECTED) {
-                    state?.connected = true
-                    state?.retries = 0
-                    synchronized(retryingPeers) { retryingPeers.remove(member.membershipId) }
-                    publishConnectedWhenMeshReady()
-                } else if (stateValue == PeerConnection.PeerConnectionState.FAILED) {
-                    state?.connected = false
-                    markMeshDisconnected()
-                    scope.launch { retryPeer(member.membershipId, notifyRemote = true) }
-                } else if (stateValue == PeerConnection.PeerConnectionState.DISCONNECTED) {
-                    state?.connected = false
-                    state?.iceState = PeerConnection.IceConnectionState.DISCONNECTED
-                    markMeshDisconnected()
-                    scope.launch { retryIfStillDisconnected(member.membershipId, state) }
-                } else if (stateValue == PeerConnection.PeerConnectionState.CLOSED && peers[member.membershipId] === state) {
-                    markMeshDisconnected()
-                    scope.launch { retryPeer(member.membershipId, notifyRemote = true) }
-                }
-            }
+            override fun onConnectionChange(stateValue: PeerConnection.PeerConnectionState) = Unit
             override fun onIceConnectionReceivingChange(receiving: Boolean) = Unit
             override fun onIceGatheringChange(stateValue: PeerConnection.IceGatheringState) = Unit
             override fun onIceCandidate(candidate: IceCandidate) {
-                if (state == null) return
-                scope.launch { sendSignal(member, ice = candidate) }
+                val observed = state ?: return
+                scope.launch { eventMutex.withLock {
+                    if (!closed && peers[member.membershipId] === observed) {
+                        deliverPeerSignal(
+                            send = { sendSignal(member, ice = candidate) },
+                            rejected = { error ->
+                                voiceLog.w("Voice ICE acknowledgement rejected: ${(error as? PartyException)?.code ?: "TRANSPORT_ERROR"}")
+                                if (!observed.connected) scheduleRetry(member.membershipId, observed, RETRY_DELAY_MS)
+                            },
+                        )
+                    }
+                } }
             }
             override fun onIceCandidatesRemoved(candidates: Array<IceCandidate>) = Unit
             override fun onAddStream(stream: org.webrtc.MediaStream) = Unit
@@ -386,8 +452,12 @@ private class MeshVoiceSession(
                 val remoteTrack = transceiver.receiver.track()
                 if (remoteTrack is VideoTrack) remoteTrack.setEnabled(false)
                 if (remoteTrack is AudioTrack) {
-                    state?.remoteAudioTrack = remoteTrack
-                    remoteTrack.setEnabled(!(memberStates[member.membershipId]?.muted ?: true))
+                    scope.launch { eventMutex.withLock {
+                        val observed = state ?: return@withLock
+                        if (closed || peers[member.membershipId] !== observed) return@withLock
+                        observed.remoteAudioTrack = remoteTrack
+                        remoteTrack.setEnabled(!(memberStates[member.membershipId]?.muted ?: true))
+                    } }
                 }
             }
             override fun onRemoveTrack(receiver: RtpReceiver) = Unit
@@ -403,7 +473,11 @@ private class MeshVoiceSession(
         val peerState = PeerState(member, peer, PeerGenerationFence(epoch), retries = retries)
         state = peerState
         peers[member.membershipId] = peerState
-        if (descriptor.membershipId < member.membershipId) scope.launch { negotiateOffer(member.membershipId) }
+        linkState.opened(member.membershipId, member.generation, epoch, retries)
+        if (descriptor.membershipId < member.membershipId) scope.launch { eventMutex.withLock {
+            if (!closed && peers[member.membershipId] === peerState) negotiateOffer(member.membershipId)
+        } }
+        scheduleRetry(member.membershipId, peerState, 10_000L)
     }
 
     private fun rtcConfiguration(): PeerConnection.RTCConfiguration {
@@ -427,8 +501,9 @@ private class MeshVoiceSession(
             val offer = state.peer.createDescription(isOffer = true)
             state.peer.setDescription(local = true, offer)
             sendSignal(state.member, sdp = offer)
-        } catch (_: Throwable) {
-            retryPeer(id, notifyRemote = true)
+        } catch (error: Throwable) {
+            if (error is CancellationException) throw error
+            peers[id]?.let { scheduleRetry(id, it, RETRY_DELAY_MS) }
         }
     }
 
@@ -459,13 +534,16 @@ private class MeshVoiceSession(
             val description = SessionDescription(sessionType, sdp)
             if (description.type == SessionDescription.Type.OFFER) {
                 if (descriptor.membershipId < from) return
-                val knownRemoteGeneration = state.remotePeerGeneration
-                if (!state.generationFence.acceptOffer(peerGeneration, targetPeerGeneration)) return
-                if (knownRemoteGeneration != null) {
-                    retryPeer(from, notifyRemote = false)
-                    state = peers[from] ?: return
-                    if (!state.generationFence.acceptOffer(peerGeneration, targetPeerGeneration)) return
-                }
+                if (!state.generationFence.acceptRemoteOffer(peerGeneration, targetPeerGeneration) {
+                    val old = state
+                    retryJobs.remove(from)?.cancel()
+                    peers.remove(from)
+                    old.peer.close()
+                    old.peer.dispose()
+                    createPeer(old.member, retries = 0)
+                    state = peers.getValue(from)
+                    state.generationFence
+                }) return
                 state.remoteDescriptionSet = false
                 state.pendingIce.removeAll { it.first != peerGeneration }
             } else {
@@ -492,6 +570,11 @@ private class MeshVoiceSession(
                 val value = IceCandidate(mid, line, candidate)
                 if (state.remoteDescriptionSet && state.remotePeerGeneration == peerGeneration) state.peer.addIceCandidate(value)
                 else if (state.pendingIce.size < MAX_PENDING_ICE) state.pendingIce.addLast(peerGeneration to value)
+            } else if (parsed["requestOffer"]?.jsonPrimitive?.contentOrNull == "true") {
+                if (descriptor.membershipId >= from ||
+                    !linkState.acceptOfferRequest(from, state.member.generation, peerGeneration,
+                        targetPeerGeneration, state.remotePeerGeneration)) return
+                replaceFailedPeer(from, state, remoteReplaced = true)
             } else if (parsed["restart"]?.jsonPrimitive?.contentOrNull == "true") {
                 if (!state.generationFence.acceptRestart(peerGeneration, targetPeerGeneration)) return
                 retryPeer(from, notifyRemote = false)
@@ -504,6 +587,7 @@ private class MeshVoiceSession(
         sdp: SessionDescription? = null,
         ice: IceCandidate? = null,
         restart: Boolean = false,
+        requestOffer: Boolean = false,
     ) {
         val state = peers[member.membershipId] ?: return
         val targetPeerGeneration = when {
@@ -512,6 +596,7 @@ private class MeshVoiceSession(
             else -> state.remotePeerGeneration ?: 0L
         }
         val message = buildJsonObject {
+            put("negotiationId", JsonPrimitive("android-${++signalSequence}"))
             put("generation", JsonPrimitive(descriptor.voiceSessionId))
             put("targetGeneration", JsonPrimitive(member.generation))
             put("peerGeneration", JsonPrimitive(state.localPeerGeneration))
@@ -526,6 +611,7 @@ private class MeshVoiceSession(
                 put("sdpMLineIndex", JsonPrimitive(ice.sdpMLineIndex))
             })
             if (restart) put("restart", JsonPrimitive(true))
+            if (requestOffer) put("requestOffer", JsonPrimitive(true))
         }
         val encoded = json.encodeToString(JsonObject.serializer(), message)
         if (encoded.length > MAX_SIGNAL_CHARS) return
@@ -533,39 +619,61 @@ private class MeshVoiceSession(
             put("to", JsonPrimitive(member.membershipId))
             put("msg", JsonPrimitive(encoded))
         }
-        runCatching { namespace?.emit("signal", payload) }
+        acknowledged("signal", payload)
+    }
+
+    private fun scheduleRetry(id: String, observed: PeerState, waitMs: Long) {
+        if (retryJobs[id]?.isActive == true || observed.connected) return
+        retryJobs[id] = scope.launch {
+            delay(waitMs + kotlin.random.Random.nextLong(50L, 250L))
+            eventMutex.withLock {
+                retryJobs.remove(id)
+                if (!closed && peers[id] === observed && !observed.connected) retryPeer(id, true)
+            }
+        }
     }
 
     private suspend fun retryPeer(id: String, notifyRemote: Boolean) {
-        if (!synchronized(retryingPeers) { retryingPeers.add(id) }) return
-        val state = peers[id] ?: run {
-            synchronized(retryingPeers) { retryingPeers.remove(id) }
-            return
-        }
-        if (state.retries >= MAX_PEER_RETRIES) {
-            fail("Could not connect to every voice participant")
-            return
-        }
-        markMeshDisconnected()
-        state.retries++
-        val member = memberStates[id] ?: state.member
-        if (notifyRemote) sendSignal(member, restart = true)
+        val state = peers[id] ?: return
+        linkState.disconnected(id, state.localPeerGeneration)
+        val nextAttempt = linkState.retry(id, state.localPeerGeneration) ?: run { publishStatus(); return }
+        val member = memberStates[id] ?: return
+        if (notifyRemote) runCatching { sendSignal(member, restart = true) }
+        retryJobs.remove(id)?.cancel()
         peers.remove(id)
         state.peer.close(); state.peer.dispose()
-        createPeer(member, retries = state.retries)
-        delay(RETRY_DELAY_MS * state.retries)
-        if (descriptor.membershipId < member.membershipId) negotiateOffer(id)
+        createPeer(member, retries = nextAttempt)
+        publishStatus()
     }
 
-    private suspend fun retryIfStillDisconnected(id: String, observed: PeerState?) {
-        if (observed == null) return
-        delay(DISCONNECTED_GRACE_MS)
-        if (!closed && peers[id] === observed &&
-            observed.iceState == PeerConnection.IceConnectionState.DISCONNECTED
-        ) retryPeer(id, notifyRemote = true)
+    override fun retryFailedConnections() {
+        scope.launch { eventMutex.withLock {
+            peers.values.filter { !it.connected }.toList().forEach { observed ->
+                val id = observed.member.membershipId
+                if (!rosterReady || closed) return@forEach
+                // Fresh requester epochs fence repeated manual retries even if
+                // the initial negotiation never learned its offerer's epoch.
+                replaceFailedPeer(id, observed)
+                if (descriptor.membershipId > id) runCatching {
+                    sendSignal(observed.member, requestOffer = true)
+                }.onFailure { voiceLog.w("Voice offer request rejected") }
+            }
+        } }
+    }
+
+    private fun replaceFailedPeer(id: String, observed: PeerState, remoteReplaced: Boolean = false) {
+        if (observed.connected && !remoteReplaced || peers[id] !== observed) return
+        retryJobs.remove(id)?.cancel()
+        peers.remove(id)
+        observed.peer.close()
+        observed.peer.dispose()
+        createPeer(observed.member, retries = 0)
+        publishStatus()
     }
 
     private fun removePeer(id: String) {
+        retryJobs.remove(id)?.cancel()
+        linkState.remove(id)
         peers.remove(id)?.let { state ->
             state.peer.close()
             state.peer.dispose()
@@ -573,71 +681,138 @@ private class MeshVoiceSession(
         }
     }
 
-    override fun setMicrophoneEnabled(enabled: Boolean) {
+    private fun applyCapture(enabled: Boolean) {
         microphoneEnabled = enabled
+        (audioDevice as? JavaAudioDeviceModule)?.setMicrophoneMute(!enabled)
         track?.setEnabled(enabled)
-        if (!enabled) clearSpeaking(descriptor.membershipId)
-        scope.launch {
-            // Muting capture must not mute the remote speaker path or request
-            // audio focus from the movie player.
-            (audioDevice as? JavaAudioDeviceModule)?.setSpeakerMute(false)
-            runCatching {
-                namespace?.emit("voice.mute", buildJsonObject { put("muted", JsonPrimitive(!enabled)) })
-            }.onFailure { if (!closed) voiceLog.w("mute state could not be sent") }
+    }
+
+    override fun setMicrophoneEnabled(enabled: Boolean) {
+        microphoneIntent.request(enabled, ::applyCapture)
+        scope.launch { applyMuteIntent() }
+    }
+
+    private suspend fun applyMuteIntent() = muteMutex.withLock {
+        val request = microphoneIntent.latest()
+        val wanted = request.enabled
+        if (closed || !rosterReady) {
+            microphoneIntent.suspendCapture(::applyCapture)
+            output.trySend(VoiceEvent.MicrophoneChanged(false))
+            return@withLock
+        }
+        try {
+            val muteNamespace = namespace
+            acknowledged("voice.mute", buildJsonObject { put("muted", JsonPrimitive(!wanted)) })
+            // A delayed unmute cannot override a newer mute command.
+            microphoneIntent.authorized(request, !closed && rosterReady && namespace === muteNamespace && muteNamespace?.isConnected == true) { capture ->
+                applyCapture(capture)
+                output.trySend(VoiceEvent.MicrophoneChanged(capture))
+            }
+        } catch (error: Throwable) {
+            if (error is CancellationException) throw error
+            microphoneEnabled = false
+            microphoneIntent.suspendCapture(::applyCapture)
+            output.trySend(VoiceEvent.MicrophoneChanged(false))
+            voiceLog.w("Voice mute acknowledgement rejected")
         }
     }
 
-    private suspend fun refreshCredentials() {
-        while (scope.isActive && !closed) {
-            delay(5 * 60_000L)
+    private suspend fun acknowledged(name: String, payload: JsonElement): JsonElement = outboundMutex.withLock {
+        var lastError: Throwable? = null
+        repeat(3) { attempt ->
+            if (closed) throw PartyException("VOICE_DISCONNECTED", "Voice is off")
+            delay(75L) // Below the shared member signal/mute rate budget, including seven peers.
             try {
-                sessions.refresh()
-                val credentials = tokens.credentials() ?: throw PartyException("SESSION_EXPIRED", "Voice session expired")
-                val authAck = namespace?.emit("auth.refresh", buildJsonObject {
-                    put("idToken", JsonPrimitive(credentials.idToken))
-                })?.jsonObject
-                val authError = authAck?.get("code")?.jsonPrimitive?.contentOrNull
-                if (authError != null) throw PartyException(authError, "Voice session authentication failed")
-                val dto = http.post("${backend.baseUrl}/v1/rooms/${descriptor.roomId}/voice/config") {
-                    contentType(ContentType.Application.Json)
-                    setBody(VoiceConfigurationRequest(descriptor.voiceSessionId))
-                }.bodyOrThrow<VoiceConfigurationDto>()
-                if (dto.voiceSessionId != descriptor.voiceSessionId || dto.membershipId != descriptor.membershipId) {
-                    fail("Voice session was replaced")
-                    return
-                }
-                descriptor = dto.toDomain()
-                // Apply refreshed TURN credentials without interrupting active
-                // audio; the next ICE restart uses the new server credentials.
-                peers.values.forEach { peer ->
-                    if (!peer.peer.setConfiguration(rtcConfiguration()))
-                        voiceLog.w("refreshed ICE server settings could not be applied to an active peer")
-                }
-            } catch (cancel: CancellationException) {
-                throw cancel
-            } catch (_: Throwable) {
-                // Existing media remains available through a short API outage.
-                delay(30_000L)
+                val liveNamespace = namespace?.takeIf { it.isConnected }
+                    ?: throw PartyException("VOICE_DISCONNECTED", "Voice signaling unavailable")
+                val response = liveNamespace.emit(name, payload)
+                validateVoiceAcknowledgement(name, response)
+                if (closed || namespace !== liveNamespace || !liveNamespace.isConnected)
+                    throw PartyException("VOICE_DISCONNECTED", "Voice signaling was replaced or closed")
+                return@withLock response
+            } catch (error: Throwable) {
+                // ACK timeout cancels only the request child, not the session owner.
+                kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                lastError = error
+                if (error is PartyException && error.code !in setOf("RATE_LIMITED", "VOICE_RATE_LIMITED")) throw error
+                delay(250L * (attempt + 1))
             }
         }
+        throw lastError ?: PartyException("VOICE_SIGNAL_FAILED", "Voice request failed")
+    }
+
+    private suspend fun refreshCredentials() = refreshVoiceCredentials({ scope.isActive && !closed }) {
+                val expected = eventMutex.withLock { if (closed) null else descriptor }
+                    ?: return@refreshVoiceCredentials
+                sessions.refresh()
+                val credentials = tokens.credentials() ?: throw PartyException("SESSION_EXPIRED", "Voice session expired")
+                acknowledged("auth.refresh", buildJsonObject {
+                    put("accessToken", JsonPrimitive(credentials.accessToken))
+                })
+                if (eventMutex.withLock { closed || descriptor !== expected }) return@refreshVoiceCredentials
+                val dto = http.post("${backend.baseUrl}/v1/rooms/${expected.roomId}/voice/config") {
+                    contentType(ContentType.Application.Json)
+                    setBody(VoiceConfigurationRequest(expected.voiceSessionId, "refresh"))
+                }.bodyOrThrow<VoiceConfigurationDto>()
+                val incoming = dto.toDomain()
+                val replaced = eventMutex.withLock {
+                    when (voiceRefreshDisposition(expected, descriptor, incoming, closed)) {
+                        VoiceRefreshDisposition.STALE -> false
+                        VoiceRefreshDisposition.REPLACED -> {
+                            // Fence pending reconnect work before releasing the
+                            // owner; teardown itself must run outside this mutex.
+                            scope.cancel()
+                            true
+                        }
+                        VoiceRefreshDisposition.APPLY -> {
+                            descriptor = incoming
+                            // Existing audio stays available; the next ICE restart
+                            // uses these refreshed credentials.
+                            peers.values.forEach { peer ->
+                                if (!peer.peer.setConfiguration(rtcConfiguration()))
+                                    voiceLog.w("refreshed ICE server settings could not be applied to an active peer")
+                            }
+                            false
+                        }
+                    }
+                }
+                if (replaced) fail("Voice session was replaced")
     }
 
     private fun publishConnectedWhenMeshReady() {
-        if (closed || !initialRoster.isCompleted || !rosterReady || connectedAnnounced) return
-        if (memberStates.size != peers.size || peers.values.any { !it.connected }) return
-        connectedAnnounced = true
-        ready.complete(Unit)
-        output.trySend(VoiceEvent.Connected)
+        if (closed || !initialRoster.isCompleted || !rosterReady) return
+        if (!connectedAnnounced) {
+            connectedAnnounced = true
+            ready.complete(Unit)
+            output.trySend(VoiceEvent.Connected)
+        }
+        publishStatus()
+    }
+
+    private fun publishStatus() {
+        val links = linkState.snapshot()
+        val status = when {
+            closed -> VoiceSessionState.OFF
+            !rosterReady -> VoiceSessionState.RECONNECTING
+            links.values.any { it != VoicePeerStatus.CONNECTED } -> VoiceSessionState.DEGRADED
+            else -> VoiceSessionState.CONNECTED
+        }
+        output.trySend(VoiceEvent.StatusChanged(status, links))
     }
 
     private suspend fun publishSpeakingLevels() {
+        var samples = 0
         while (scope.isActive && !closed) {
             delay(SPEAKING_POLL_MS)
+            eventMutex.withLock {
+            if (closed) return
+            samples++
             val observed = mutableMapOf<String, Boolean>()
             for ((membershipId, state) in peers.toMap()) {
                 if (!state.connected) continue
                 val levels = withTimeoutOrNull(STATS_CALLBACK_TIMEOUT_MS) { state.peer.readAudioLevels(state.energyDelta) }
                     ?: AudioLevels()
+                if (samples % 100 == 0) voiceLog.i("Voice RTP received=${levels.received} lost=${levels.lost} sent=${levels.sent} candidate=${levels.candidateType}")
                 observed[membershipId] = levels.remote >= SPEAKING_LEVEL_THRESHOLD
                 if (microphoneEnabled) {
                     observed[descriptor.membershipId] = observed[descriptor.membershipId] == true ||
@@ -647,6 +822,7 @@ private class MeshVoiceSession(
             if (!microphoneEnabled) clearSpeaking(descriptor.membershipId)
             val ids = synchronized(speakingLock) { (observed.keys + activityTracker.speakers()).toSet() }
             ids.forEach { updateSpeaking(it, observed[it] == true) }
+            }
         }
     }
 
@@ -660,25 +836,28 @@ private class MeshVoiceSession(
             output.trySend(VoiceEvent.SpeakersChanged(activityTracker.speakers()))
     }
 
-    override suspend fun disconnect() {
-        if (closed) return
+    override suspend fun disconnect() = withContext(NonCancellable) {
+        if (closed) return@withContext
         closed = true
-        microphoneEnabled = false
-        track?.setEnabled(false)
+        microphoneIntent.request(false, ::applyCapture)
         synchronized(speakingLock) {
             if (activityTracker.clearAll()) output.trySend(VoiceEvent.SpeakersChanged(emptySet()))
         }
         scope.cancel()
-        runCatching { namespace?.emit("voice.mute", buildJsonObject { put("muted", JsonPrimitive(true)) }) }
-        runCatching { namespace?.close() }
-        connection?.close()
-        peers.keys.toList().forEach(::removePeer)
-        track?.dispose(); track = null
-        source?.dispose(); source = null
-        factory?.dispose(); factory = null
-        audioDevice?.release(); audioDevice = null
+        audioManager.unregisterAudioDeviceCallback(routeCallback)
+        eventMutex.withLock {
+            peers.keys.toList().forEach(::removePeer)
+            track?.dispose(); track = null
+            source?.dispose(); source = null
+            factory?.dispose(); factory = null
+            audioDevice?.release(); audioDevice = null
+        }
+        withTimeoutOrNull(1_000L) { runCatching {
+            namespace?.emit("voice.leave", buildJsonObject {})?.let { validateVoiceAcknowledgement("voice.leave", it) }
+        } }
+        withTimeoutOrNull(1_000L) { runCatching { namespace?.close() }; connection?.close() }
         output.close()
-        onReleased(this)
+        onReleased(this@MeshVoiceSession)
     }
 
     private suspend fun fail(reason: String) {
@@ -738,7 +917,10 @@ private class MeshVoiceSession(
     }
 }
 
-private data class AudioLevels(val local: Double = 0.0, val remote: Double = 0.0)
+private data class AudioLevels(
+    val local: Double = 0.0, val remote: Double = 0.0,
+    val received: Long = 0, val lost: Long = 0, val sent: Long = 0, val candidateType: String = "unknown",
+)
 
 private fun nowMs(): Long = kotlin.time.Clock.System.now().toEpochMilliseconds()
 
@@ -761,7 +943,13 @@ private suspend fun PeerConnection.readAudioLevels(energyDelta: AudioEnergyDelta
                 "inbound-rtp" -> remoteLevel = maxOf(remoteLevel, level)
             }
         }
-        continuation.resume(AudioLevels(localLevel, remoteLevel))
+        val received = report.statsMap.values.filter { it.type == "inbound-rtp" }.sumOf { (it.members["packetsReceived"] as? Number)?.toLong() ?: 0L }
+        val lost = report.statsMap.values.filter { it.type == "inbound-rtp" }.sumOf { (it.members["packetsLost"] as? Number)?.toLong() ?: 0L }
+        val sent = report.statsMap.values.filter { it.type == "outbound-rtp" }.sumOf { (it.members["packetsSent"] as? Number)?.toLong() ?: 0L }
+        val selectedId = report.statsMap.values.firstNotNullOfOrNull { it.members["selectedCandidatePairId"] as? String }
+        val localId = report.statsMap[selectedId]?.members?.get("localCandidateId") as? String
+        val candidate = report.statsMap[localId]?.members?.get("candidateType") as? String ?: "unknown"
+        continuation.resume(AudioLevels(localLevel, remoteLevel, received, lost, sent, candidate))
     })
 }
 

@@ -204,3 +204,65 @@
 - **Decision:** Deploy the integrated browser build and migrated Node API together on VPS `46.249.98.175`. Caddy serves the frontend and routes `/v1` and `/socket.io` to the internal API on the same origin. Use `watchparty.audiosense.ir` temporarily and `turn.watchparty.audiosense.ir` for authenticated voice relay; keep both DNS-only. This supersedes the earlier temporary `watchparty.me`/`watchparty.top` hostname proposals and the local-only deployment scope.
 - **Configuration:** Domain names belong in protected deployment configuration. A later switch to `watchparty.top` changes ingress and TURN configuration. Because browser storage is origin-scoped, moving domains does not automatically preserve the browser's anonymous identity; retain the old origin or plan an explicit transition.
 - **Boundary:** Deploy the existing browser integration and pinned WatchParty fork; no production Auth Emulator, legacy Go/LiveKit cutover, Git publication, or capacity claim is implied. Admin credentials stay outside Git and images. See [deployment operations](../backend/deploy/README.md).
+
+
+## DD-025: Watchparty.top as Primary Hosted Domain
+
+- **Status:** Approved by the stakeholder on 2026-10-16.
+- **Decision:** Use `watchparty.top` as the primary website and same-origin API, and `turn.watchparty.top` for authenticated TURN. Keep `watchparty.audiosense.ir` as a Caddy-served legacy alias so existing browser identities remain usable on the origin where their anonymous credentials are stored.
+- **Configuration:** Point both site hostnames and the TURN hostname to VPS `46.249.98.175`; configure `SITE_DOMAIN=watchparty.top` and `TURN_DOMAIN=turn.watchparty.top`. Native clients use `https://watchparty.top` as their backend base URL. Firebase's `firebaseapp.com` auth domain remains unchanged; add `watchparty.top` to authorized domains if required by project policy.
+- **Consequence:** Browser identity storage is origin-scoped and is not copied to the new hostname. The legacy site alias must remain reachable while users depend on credentials stored there. See [deployment operations](../backend/deploy/README.md).
+
+
+## DD-026: Fresh Deployment on the Replacement VPS
+
+- **Status:** Approved by the stakeholder on 2026-10-23.
+- **Decision:** Deploy a fresh browser/API/PostgreSQL/Coturn stack on `45.146.241.92`, using `watchparty.top` for the site/API and `relay.watchparty.top` for TURN. Start with an empty application database and fresh database/TURN secrets; do not migrate old server data.
+- **Configuration:** Retain the existing Firebase project `hambin-dab14` and its authentication configuration. The application database is fresh; Firebase accounts and browser-local credentials are not deleted by this deployment. Redirect `www.watchparty.top` to the primary origin.
+- **Prior decisions:** Supersedes DD-024/DD-025 host and TURN hostname settings and the requirement to serve a legacy origin on the replacement VPS. Leave the old server untouched.
+
+## DD-027: Request Browser Playback Before Metadata Completes
+
+- **Date:** 2026-10-23
+- **Status:** Authorized by the request to investigate, fix, and deploy slow direct-video startup.
+- **Decision:** After a shared URL reaches the player, request native playback immediately with automatic preloading. For hls.js, request playback when the manifest is parsed. Handle autoplay denial with a local Play action without waiting for metadata.
+- **Slow sources:** After 15 seconds of loading/buffering, offer guidance and an explicit local retry while preserving the in-progress download. For initial MKV loading on Firefox before 158, explain the known full-file AAC metadata scan and suggest an updated browser or a different source format. Do not automatically restart or fail a slow source.
+- **Boundary:** Each browser fetches movie bytes directly from the supplied source. No video proxy, server download, storage, transcoding, or new service contract is introduced. Native Android playback remains unchanged.
+- **Evidence and limits:** See [playback investigation](video-playback-investigation-20261023.md). Removing the metadata-only startup cycle does not fix a browser demuxer bug or guarantee a startup time for external sources.
+
+
+## DD-028: Backend-Owned Automatic Guest Authentication
+
+- **Status:** Approved by the stakeholder on 2026-10-23; implementation and deployment authorized.
+- **Decision:** Remove Firebase from both clients, the active Node backend, dependencies, development tooling, and deployment configuration. Keep automatic guests with no registration/login UI; PostgreSQL owns identity and sessions as well as existing product data. Retire the unused fork server/UI that depends on Firebase. Node, PostgreSQL, Caddy, and private Coturn remain the selected stack.
+- **Credentials:** Use independent opaque 32-byte random access/refresh credentials and persist only SHA-256 credential hashes server-side. Access expires after fifteen minutes; stable refresh credentials have a sliding 180-day inactivity lifetime and are invalidated by revocation. Successful refresh retains identity and existing room/voice state. Stable refresh credentials make concurrent refresh and lost-response retries safe.
+- **Client storage:** Browser access tokens stay in memory and refresh credentials use a host-only `Secure; HttpOnly; SameSite=Strict; Path=/` cookie. Browser session mutations require an exact allowed Origin and `X-Roomio-Client: browser`. Native credentials remain behind the existing platform secure-storage boundary. Transient network, storage, or database failures never authorize automatic guest replacement. Confirmed identity reset is the recovery path for permanently unusable credentials.
+- **Cutover:** Start with fresh backend guest identities; no Firebase identity/profile/room-ownership importer or mixed-client period. Remove saved old room-resumption state while preserving non-secret local preferences. Existing database product rows need not be erased. Applied migration checksums remain unchanged; the new schema migration removes provider-specific identity mapping and adds credential tables. Rolling back to the Firebase-backed release requires restoring the pre-cutover database and matching release/configuration.
+- **Interfaces:** Shared HTTP contracts define guest-session create/refresh/revoke and browser reset. Socket.IO protocol 3 uses `auth.refresh {accessToken}` and one-use room/voice tickets; authentication refresh must preserve membership, playback, voice peers, and mute intent. No Google authentication request is required for guest creation, restoration, or room use.
+- **Prior decisions:** Supersedes the Firebase portions of DD-022, DD-023, DD-025, and DD-026. Other accepted product behavior and the current `watchparty.top` / `relay.watchparty.top` deployment remain unchanged. Historical evidence is retained as history, not active setup instructions.
+- **Delivery:** Deploy the backend/browser on the current VPS after local tests and browser verification. Compile/test Android and provide the release APK; the stakeholder will perform actual-device verification. Deleting the external Firebase cloud project is outside this rollout.
+
+## DD-029: Browser Media Controls Match Android
+
+- **Status:** Approved by the stakeholder on 2026-10-30.
+- **Decision:** Align the browser player with Android's media control order, Material 3 styling, selection dialogs, and compact/expanded layout. Include local play/pause, fifteen-second backward/forward seeking, timeline/time, Sync to room, subtitles, audio tracks, microphone mute/unmute, video mute/volume, and fullscreen. Fullscreen retains these actions, reveals controls on interaction, and hides idle controls after three seconds without hiding keyboard-focused controls. Live sources show a Live indicator and omit ordinary timeline/skip controls.
+- **Track selection:** Use subtitle and audio radio-selection dialogs with selected-state feedback. Subtitles offer Off, available tracks, Choose subtitle file, and Done. Audio offers Automatic; list specific tracks when multiple supported tracks are exposed. Each viewer's playback, subtitle, audio, and volume choices stay local; explicit Sync remains requester-only and forward-only.
+- **Local subtitle adaptation:** Extend the browser's VTT import to SRT, SSA/ASS, and TTML/DFXP/XML. Convert supported timing and textual content to browser WebVTT locally. Preserve Unicode text and line breaks; advanced font/layout, animation, drawing, and positioning behavior are not guaranteed to match Media3. Reject malformed or unsupported timed content with an actionable error.
+- **Platform boundary:** Available source tracks come from HLS or the browser's exposed media-track APIs. Browsers do not expose every MP4/MKV embedded track or support every Android codec. This decision expands DD-023's local subtitle-format scope but does not promise universal container/codec parity. Preserve DD-027 direct-client playback, autoplay recovery, and slow-loading guidance; no server media proxy, download, storage, or transcoding is introduced.
+
+## DD-030: Android Room Invite App Links
+
+- **Status:** Approved by the stakeholder on 2026-10-30.
+- **Decision:** Native copy-link actions produce the browser-compatible `https://watchparty.top/?invite=CODE`. Android accepts this HTTPS origin on fresh launches and while running, opens the pre-join preview, establishes the automatic guest session when necessary, and requires explicit Join confirmation. Preview failures provide retry and cancellation; full and ended parties cannot be joined.
+- **Boundary:** Validate the incoming action, exact origin, root path, and a single bounded invite parameter. The backend validates room codes, availability, identity, and membership. Incoming links do not grant owner privileges or automatically leave an existing room. Existing notification room-return requests remain separate from invite previews.
+- **Deployment:** The website must serve `/.well-known/assetlinks.json` for the Android package and release signing certificate. Debug certificates are excluded. Until website association is published and verified, the handler can be tested explicitly or selected in Android's supported-link settings; automatic browser-to-app routing is not yet guaranteed. This supersedes mock-link wording in DD-004 and DD-007 for production invites.
+
+## DD-031: Retain Mesh Voice with Independent Peer Recovery
+
+- **Status:** Approved by the stakeholder on 2026-11-05; implementation authorized; release acceptance pending.
+- **Decision:** Retain Node/PostgreSQL/private Coturn and audio-only eight-person peer mesh. Authenticated roster completion enables the session. Report degraded calls and reconnecting/unavailable peer links explicitly; preserve healthy audio while another link retries. Retry failed links only after three bounded automatic attempts.
+- **Lifecycle:** Explicit opt-in starts muted; authorize unmute before capture. Android confirms its microphone foreground service before capture. Task removal leaves; process death never automatically restores the microphone. Movie audio and local playback remain independent.
+- **Contract:** Voice protocol 4 separates join, 30-second generation-preserving resume, and ticket-independent ICE credential refresh. Socket leases fence replacement races; stable negotiation IDs make acknowledgement retries idempotent. Room protocol remains 3. Ship coordinated clients/backend without legacy-data migration.
+- **Relay:** Add TURN TLS 443 through TCP SNI routing alongside UDP/TCP 3478 and TLS 5349, with configurable capacity ceilings. Capacity and reliable audio require the [physical, relay, recovery, soak, and load acceptance gates](voice-stability-acceptance.md); signaling tests alone do not establish them.
+
+- **DD-031 explicit peer repair:** A user retry by the non-offerer first creates a new local peer epoch, then sends authenticated `requestOffer: true` to the designated offerer. A missing remote epoch uses target epoch zero. Both voice generations and a requester-epoch high-water mark fence stale or duplicate requests. A newer requester epoch proves that remote peer disposal occurred and repairs that addressed pair even if its local ICE state still appears connected; other healthy links stay intact. Automatic restart keeps its strict negotiated-epoch fence.
