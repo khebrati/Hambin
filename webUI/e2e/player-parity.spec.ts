@@ -35,7 +35,7 @@ test('Android control actions and subtitle import stay local and work in fullscr
   await expect.poll(() => page.locator('video').evaluate(video => Array.from(video.textTracks).some(track => track.mode === 'showing'))).toBe(true);
   await expect.poll(() => page.locator('video').evaluate(video => Array.from(video.textTracks).flatMap(track => Array.from(track.cues ?? []).map(cue => (cue as VTTCue).text)))).toContain('سلام دنیا');
   // The source stays direct; importing subtitles does not replace or reload it.
-  await expect(page.locator('video')).toHaveAttribute('src', 'https://media.example.test/movie.mkv');
+  await expect(page.locator('video')).toHaveAttribute('src', 'https://media.example.test/movie.mp4');
   if (await dialog.isVisible()) await dialog.getByRole('button', { name: 'Done', exact: true }).click();
   await page.getByRole('button', { name: 'Subtitles', exact: true }).click();
   await dialog.getByRole('radio', { name: 'Off', exact: true }).check();

@@ -2177,6 +2177,23 @@ input[type="range"]::-moz-range-thumb {
   position: relative;
 }
 
+.integrated-player,
+.integrated-player__engine {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  direction: ltr;
+}
+
+.integrated-player video {
+  object-fit: contain;
+}
+
+.integrated-player__engine[data-subtitles="off"] .ASS-box,
+.integrated-player__engine[data-subtitles="off"] > svg {
+  visibility: hidden;
+}
+
 .media-player .player-controls__row {
   grid-template-columns: minmax(72px, 1fr) auto auto;
 }

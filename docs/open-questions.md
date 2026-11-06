@@ -136,7 +136,7 @@ Resolved questions are preserved with their answers for traceability.
 ## Browser media parity (2026-10-30)
 
 - [Resolved, DD-029] Use Android's media control UI and local subtitle/audio selection behavior in the browser, including local subtitle imports in the Android-supported file extensions.
-- Browser APIs and codecs may not expose embedded MP4/MKV audio/subtitle tracks that Android can select. DD-029 accepts this direct-playback platform limitation; universal embedded-track support would require a separate architecture decision.
+- Browser APIs and codecs may not expose embedded MP4/MKV audio/subtitle tracks that Android can select. DD-037 adds integrated MKV demuxing with browser decoding and embedded text/audio selection, superseding DD-036 extraction. Unsupported codecs, missing CORS/range access, bitmap subtitles, and universal embedded audio/subtitle parity remain outside the guarantee. See [tested limitations](browser-mkv-subtitles-20261106.md).
 - Imported SSA/ASS and TTML content is adapted to WebVTT text and timing. Advanced styling, animation, drawing, and placement parity with Media3 is outside the accepted browser rendering guarantee.
 
 ## Mesh voice release gates (2026-11-05)

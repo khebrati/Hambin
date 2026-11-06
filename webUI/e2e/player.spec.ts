@@ -19,7 +19,7 @@ test('requests playback before metadata and keeps a slow download alive until an
   await expect(page.getByText('Loading video', { exact: true })).toBeVisible();
   await page.clock.fastForward(15_001);
   await expect(page.getByText(/The video source is taking longer/)).toBeVisible();
-  expect(await page.locator('video').getAttribute('src')).toBe('https://media.example.test/movie.mkv');
+  expect(await page.locator('video').getAttribute('src')).toBe('https://media.example.test/movie.mp4');
   expect(await page.evaluate(() => (window as any).playCalls.length)).toBe(1);
   await page.getByRole('button', { name: 'Retry video' }).click();
   await expect.poll(() => page.evaluate(() => (window as any).playCalls.length)).toBe(2);
@@ -48,7 +48,7 @@ test('late media events cannot clear a load error', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Retry video' })).toBeVisible();
 });
 
-test('affected Firefox explains slow MKV loading in mobile RTL with large text', async ({ browser }) => {
+test('slow native video guidance fits mobile RTL with large text', async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, userAgent: 'Mozilla/5.0 Firefox/153.0' });
   try {
     const page = await context.newPage();
@@ -58,7 +58,7 @@ test('affected Firefox explains slow MKV loading in mobile RTL with large text',
     await page.goto('/e2e/player.html?theme=dark&largeText=1&dir=rtl');
     await expect(page.getByText('Loading video', { exact: true })).toBeVisible();
     await page.clock.fastForward(15_001);
-    await expect(page.getByText(/This Firefox version may download the entire MKV/)).toBeVisible();
+    await expect(page.getByText(/The video source is taking longer than usual/)).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.getByRole('button', { name: 'Retry video' }).scrollIntoViewIfNeeded();
     await expect(page.getByRole('button', { name: 'Retry video' })).toBeInViewport();

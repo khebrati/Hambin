@@ -52,3 +52,4 @@ Desktop.ini
 # Browser test artifacts
 webUI/test-results/
 webUI/playwright-report/
+webUI/public/vendor/avplayer/

@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { forwardSyncPosition, playbackReport, slowLoadingMessage } from './VideoPlayer';
+import { usesIntegratedPlayer } from './avPlayer';
+
+describe('integrated player routing', () => {
+  it('uses the MKV path while ordinary files and manifests keep their existing engines', () => {
+    for (const url of ['https://media.test/movie.mkv', 'https://media.test/MOVIE.MKV?token=1#part']) expect(usesIntegratedPlayer(url)).toBe(true);
+    for (const url of ['https://media.test/movie.mp4', 'https://media.test/master.m3u8', 'https://media.test/movie.mp4?next=movie.mkv', 'https://media.test/movie.mp4#movie.mkv', 'invalid']) expect(usesIntegratedPlayer(url)).toBe(false);
+  });
+});
 
 describe('slow source guidance', () => {
   it('explains the AAC/MKV startup bug only for affected Firefox versions and MKV links', () => {

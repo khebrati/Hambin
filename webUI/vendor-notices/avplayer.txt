@@ -1,0 +1,11 @@
+Hambin uses libmedia AVPlayer 1.3.1, by Gaoxing Zhao and contributors.
+License: LGPL-3.0-or-later. Copyright notices remain in the distributed JavaScript.
+Upstream source and corresponding version: https://github.com/zhaohappy/libmedia/tree/152f629d3021fd8013efa464fcb7b55f9fbe7753
+Package: https://www.npmjs.com/package/@libmedia/avplayer/v/1.3.1
+The license texts accompany these assets as COPYING.LGPLv3 and COPYING.GPLv3.
+Hambin modifies subtitle-queue reset ordering during seek. The corresponding
+source change accompanies these assets as avplayer-seek.patch.
+
+AVPlayer includes assjs and ass-compiler, licensed under MIT.
+Their original licenses accompany the assets as ASSJS-LICENSE and ASS-COMPILER-LICENSE.
+Source: https://github.com/weizhenye/ASS

@@ -4,6 +4,7 @@ import { AudioLines, FastForward, Fullscreen, Mic, MicOff, Minimize2, Pause, Pla
 import { Button, Dialog, IconButton, LoadingIndicator, StatusCard } from './Material';
 import type { StreamStatus } from '../types';
 import { subtitleFileToVtt } from './subtitles';
+import { AvMedia, usesIntegratedPlayer, type PlayerMedia } from './avPlayer';
 
 interface NativeAudioTrack { id: string; label: string; language: string; enabled: boolean; }
 interface NativeAudioTrackList extends EventTarget { readonly length: number; [index: number]: NativeAudioTrack; }
@@ -64,6 +65,11 @@ export function VideoPlayer(props: VideoPlayerProps) {
 
 function MediaPlayer({ url, onReport, onNotify, onState, syncTarget, onSync, syncDisabled, onToggleMic, micMuted = true, micLabel, micDisabled }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const engineSurfaceRef = useRef<HTMLDivElement>(null);
+  const engineRef = useRef<AvMedia | null>(null);
+  const [browserPlayback, setBrowserPlayback] = useState(false);
+  const integrated = usesIntegratedPlayer(url) && !browserPlayback;
+  const media = (): PlayerMedia | null => engineRef.current ?? videoRef.current;
   const containerRef = useRef<HTMLDivElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const callbacks = useRef({ onReport, onNotify, onState });
@@ -84,6 +90,7 @@ function MediaPlayer({ url, onReport, onNotify, onState, syncTarget, onSync, syn
   const [fullscreen, setFullscreen] = useState(false);
   const [audio, setAudio] = useState<TrackChoice[]>([]);
   const [subtitles, setSubtitles] = useState<TrackChoice[]>([]);
+  const [unsupportedSubtitles, setUnsupportedSubtitles] = useState(0);
   const [audioId, setAudioId] = useState('automatic');
   const [trackDialog, setTrackDialog] = useState<'subtitles' | 'audio' | null>(null);
   const [subtitleError, setSubtitleError] = useState('');
@@ -160,26 +167,29 @@ function MediaPlayer({ url, onReport, onNotify, onState, syncTarget, onSync, syn
     const video = videoRef.current!;
     let active = true;
     let failed = false;
-    setStatus('loading'); setReady(false); setError(''); setBlocked(false); setPosition(0); setDuration(NaN); setBuffered(0); setLive(false); setAudio([]); setSubtitles([]); automaticAudioId.current = null;
+    importGeneration.current++; setImporting(false); setSubtitleError('');
+    setStatus('loading'); setReady(false); setError(''); setBlocked(false); setPosition(0); setDuration(NaN); setBuffered(0); setLive(false); setAudio([]); setSubtitles([]); setUnsupportedSubtitles(0); setLocalSubtitle(null); automaticAudioId.current = null;
     // A local Retry rebuilds the source and returns track selection to its defaults.
     audioSelection.current = 'automatic'; setAudioId('automatic');
     subtitleSelection.current = 'off'; setSubtitleId('off');
     const fail = (message: string) => { if (active) { failed = true; setError(message); setStatus('error'); setReady(false); } };
     const update = () => {
       if (!active) return;
-      setPosition(video.currentTime); setDuration(video.duration); setPaused(video.paused);
-      if (video.duration === Infinity) setLive(true);
-      setBuffered(video.buffered.length ? video.buffered.end(video.buffered.length - 1) : 0);
+      const current = media()!;
+      if (!current.seeking) setPosition(current.currentTime);
+      setDuration(current.duration); setPaused(current.paused); setVolume(current.volume); setMuted(current.muted);
+      if (current.duration === Infinity) setLive(true);
+      setBuffered(current.buffered.length ? current.buffered.end(current.buffered.length - 1) : 0);
     };
     const autoplay = () => {
-      void video.play().catch((reason: unknown) => {
+      void media()!.play().catch((reason: unknown) => {
         if (!active || failed) return;
         if (reason instanceof DOMException && reason.name === 'AbortError') return;
         if (reason instanceof DOMException && reason.name === 'NotAllowedError') { setBlocked(true); setStatus('paused'); }
         else fail('This video could not start. Check its format and connection, then retry.');
       });
     };
-    const canplay = () => { if (failed) return; setReady(true); setStatus(video.paused ? 'paused' : 'playing'); update(); };
+    const canplay = () => { if (failed) return; setReady(true); setStatus(media()!.paused ? 'paused' : 'playing'); update(); };
     const playing = () => { if (failed) return; setBlocked(false); setPaused(false); setStatus('playing'); };
     const pause = () => { setPaused(true); if (!failed && !video.error) setStatus('paused'); };
     const waiting = () => { if (!failed && !video.paused) setStatus(video.readyState ? 'buffering' : 'loading'); };
@@ -200,6 +210,27 @@ function MediaPlayer({ url, onReport, onNotify, onState, syncTarget, onSync, syn
       setSubtitles(Array.from(video.textTracks).flatMap((track, index) =>
         track.kind !== 'subtitles' && track.kind !== 'captions' || track === localTrackRef.current?.track ? [] : [{ id: `native:${index}`, name: track.label || track.language || `Subtitles ${index + 1}` }]));
     };
+    if (integrated) {
+      const engine = new AvMedia(engineSurfaceRef.current!, url, {
+        tracks: (audio, subtitles, automatic, unsupported) => {
+          if (!active) return;
+          setAudio(audio); setSubtitles(subtitles); automaticAudioId.current = automatic; setUnsupportedSubtitles(unsupported);
+        },
+        state: state => {
+          if (!active || failed) return;
+          if (state === 'playing') { canplay(); playing(); }
+          else if (state === 'buffering') setStatus('buffering');
+          else pause();
+        },
+        update, error: fail,
+      });
+      engineRef.current = engine;
+      void engine.ready.then(() => { if (active) autoplay(); }).catch(() => {
+        if (active) fail(navigator.onLine ? 'Unable to load this video. The source may block access or use an unsupported format. Retry or use browser playback.' : 'You are offline. Reconnect, then retry the video.');
+      });
+      const timer = window.setInterval(() => { const report = playbackReport(engine); if (active && !failed && report) callbacks.current.onReport(report.positionMs, report.playing); }, 1000);
+      return () => { active = false; window.clearInterval(timer); engine.destroy(); engineRef.current = null; };
+    }
     video.textTracks.addEventListener('addtrack', nativeTracks);
     video.textTracks.addEventListener('removetrack', nativeTracks);
     const nativeAudio = (video as TrackMedia).audioTracks;
@@ -236,7 +267,7 @@ function MediaPlayer({ url, onReport, onNotify, onState, syncTarget, onSync, syn
   }, [url, retry]);
 
   useEffect(() => {
-    const video = videoRef.current;
+    const video = media();
     if (!syncTarget || !video || !ready || appliedRequest.current === syncTarget.requestId) return;
     appliedRequest.current = syncTarget.requestId;
     const end = live && video.seekable.length ? video.seekable.end(video.seekable.length - 1) : video.duration;
@@ -248,11 +279,11 @@ function MediaPlayer({ url, onReport, onNotify, onState, syncTarget, onSync, syn
   }, [syncTarget, ready, live]);
 
   const play = async () => {
-    try { await videoRef.current?.play(); setBlocked(false); }
+    try { await media()?.play(); setBlocked(false); }
     catch { setBlocked(true); callbacks.current.onNotify('Playback could not start. Try Play again or retry the video.'); }
   };
   const seek = (value: number) => {
-    const video = videoRef.current;
+    const video = media();
     if (!video || !ready || !Number.isFinite(video.duration) || live) return;
     try { video.currentTime = Math.max(0, Math.min(value, video.duration)); setPosition(video.currentTime); }
     catch { callbacks.current.onNotify('Seeking is unavailable for this video.'); }
@@ -260,6 +291,10 @@ function MediaPlayer({ url, onReport, onNotify, onState, syncTarget, onSync, syn
   const selectSubtitle = (value: string) => {
     subtitleSelection.current = value;
     setSubtitleId(value);
+    if (engineRef.current) {
+      void engineRef.current.selectSubtitle(value).catch(() => { setSubtitleError('Unable to select that subtitle track. Choose another track or a local file.'); setTrackDialog('subtitles'); });
+      return;
+    }
     const video = videoRef.current;
     if (video) Array.from(video.textTracks).forEach((track, index) => {
       track.mode = value === `native:${index}` || value === 'local' && track === localTrackRef.current?.track ? 'showing' : 'disabled';
@@ -272,6 +307,11 @@ function MediaPlayer({ url, onReport, onNotify, onState, syncTarget, onSync, syn
   const selectAudio = (value: string) => {
     audioSelection.current = value;
     setAudioId(value);
+    if (engineRef.current) {
+      void engineRef.current.selectAudio(value === 'automatic' ? automaticAudioId.current || 'av:1' : value).catch(() => callbacks.current.onNotify('Unable to select that audio track. Choose another track.'));
+      setTrackDialog(null);
+      return;
+    }
     const hls = hlsRef.current;
     if (hls) {
       // hls.js setAudioOption(undefined) clears a manual language preference.
@@ -298,7 +338,11 @@ function MediaPlayer({ url, onReport, onNotify, onState, syncTarget, onSync, syn
       const content = await subtitleFileToVtt(file);
       if (generation !== importGeneration.current || !videoRef.current) return;
       selectSubtitle('off');
-      setLocalSubtitle({ url: URL.createObjectURL(new Blob([content], { type: 'text/vtt' })), name: file.name });
+      if (engineRef.current) {
+        await engineRef.current.importSubtitle(content, file.name);
+        if (generation !== importGeneration.current || !engineRef.current) return;
+        setLocalSubtitle({ url: '', name: file.name });
+      } else setLocalSubtitle({ url: URL.createObjectURL(new Blob([content], { type: 'text/vtt' })), name: file.name });
       subtitleSelection.current = 'local'; setSubtitleId('local'); setTrackDialog(null);
     } catch (reason) {
       if (generation === importGeneration.current) setSubtitleError(reason instanceof Error ? reason.message : 'Unable to read that subtitle file.');
@@ -316,11 +360,12 @@ function MediaPlayer({ url, onReport, onNotify, onState, syncTarget, onSync, syn
   const seekable = ready && Number.isFinite(duration) && duration > 0 && !live;
   return <div ref={containerRef} className={`cinema-player media-player ${fallbackFullscreen ? 'is-fullscreen' : ''} ${expanded && !controlsVisible ? 'controls-hidden' : ''}`} aria-label="Video player" tabIndex={0} onPointerDown={() => { keyboardInteraction.current = false; revealControls(); }} onPointerUp={() => { pointerActive.current = false; revealControls(); }} onPointerMove={revealControls} onKeyDown={revealControls} onFocus={revealControls}>
     <div className="cinema-player__visual" onClick={() => { if (expanded) setControlsVisible(value => !value); }}>
-      <video ref={videoRef} playsInline preload="auto" aria-label="Room video" style={{ width: '100%', height: '100%', objectFit: 'contain' }}>
-        {localSubtitle && <track ref={element => { localTrackRef.current = element; if (element) element.track.mode = subtitleSelection.current === 'local' ? 'showing' : 'disabled'; }} key={localSubtitle.url} kind="subtitles" src={localSubtitle.url} label={localSubtitle.name} onLoad={(event) => { event.currentTarget.track.mode = subtitleSelection.current === 'local' ? 'showing' : 'disabled'; }} onError={() => { setSubtitleError('Unable to display that subtitle file. Choose another file.'); setTrackDialog('subtitles'); selectSubtitle('off'); }} />}
+      <div ref={engineSurfaceRef} className="integrated-player" hidden={!integrated} />
+      <video ref={videoRef} hidden={integrated} aria-hidden={integrated || undefined} playsInline preload="auto" aria-label="Room video" style={{ width: '100%', height: '100%', objectFit: 'contain' }}>
+        {localSubtitle?.url && <track ref={element => { localTrackRef.current = element; if (element) element.track.mode = subtitleSelection.current === 'local' ? 'showing' : 'disabled'; }} key={localSubtitle.url} kind="subtitles" src={localSubtitle.url} label={localSubtitle.name} onLoad={(event) => { event.currentTarget.track.mode = subtitleSelection.current === 'local' ? 'showing' : 'disabled'; }} onError={() => { setSubtitleError('Unable to display that subtitle file. Choose another file.'); setTrackDialog('subtitles'); selectSubtitle('off'); }} />}
       </video>
-      {error ? <div className="player-buffering"><StatusCard title="Unable to play video" tone="error" actions={<Button onClick={() => setRetry(value => value + 1)}>Retry video</Button>}>{error}</StatusCard></div>
-        : status === 'loading' || status === 'buffering' ? <div className="player-buffering"><LoadingIndicator label={status === 'loading' ? 'Loading video' : 'Buffering'} />{slowLoading && <><p className="player-loading-help">{slowLoadingMessage(ready ? '' : url, navigator.userAgent)}</p><Button onClick={() => setRetry(value => value + 1)}>Retry video</Button></>}</div>
+      {error ? <div className="player-buffering"><StatusCard title="Unable to play video" tone="error" actions={<><Button onClick={() => setRetry(value => value + 1)}>Retry video</Button>{integrated && <Button variant="text" onClick={() => { setBrowserPlayback(true); setRetry(value => value + 1); }}>Use browser player</Button>}</>}>{error}</StatusCard></div>
+        : status === 'loading' || status === 'buffering' ? <div className="player-buffering"><LoadingIndicator label={status === 'loading' ? 'Loading video' : 'Buffering'} />{slowLoading && <><p className="player-loading-help">{slowLoadingMessage(ready || integrated ? '' : url, navigator.userAgent)}</p><Button onClick={() => setRetry(value => value + 1)}>Retry video</Button></>}</div>
         : paused ? <button className="player-big-play" aria-label="Play video" onClick={event => { event.stopPropagation(); void play(); }}><Play size={38} aria-hidden="true" /></button> : null}
     </div>
     <div ref={controlsRef} className="player-controls" onPointerDown={() => { pointerActive.current = true; revealControls(); }} onPointerUp={() => { pointerActive.current = false; revealControls(); }} onPointerCancel={() => { pointerActive.current = false; revealControls(); }} onBlur={revealControls}>
@@ -330,7 +375,7 @@ function MediaPlayer({ url, onReport, onNotify, onState, syncTarget, onSync, syn
         <span className="player-time">{time(position)} {!live && <span>/ {time(duration)}</span>}<span className="sr-only"> Buffered to {time(buffered)}</span></span>
         <div className="transport" role="group" aria-label="Playback controls">
           {!live && <IconButton icon={Rewind} label="Rewind 15 seconds" disabled={!seekable} onClick={() => seek(position - 15)} />}
-          <IconButton icon={paused ? Play : Pause} label={paused ? 'Play' : 'Pause'} variant="filled" disabled={!!error} onClick={() => paused ? void play() : videoRef.current?.pause()} />
+          <IconButton icon={paused ? Play : Pause} label={paused ? 'Play' : 'Pause'} variant="filled" disabled={!!error} onClick={() => paused ? void play() : media()?.pause()} />
           {!live && <IconButton icon={FastForward} label="Fast-forward 15 seconds" disabled={!seekable} onClick={() => seek(position + 15)} />}
         </div>
         <div className="volume-control">
@@ -338,19 +383,21 @@ function MediaPlayer({ url, onReport, onNotify, onState, syncTarget, onSync, syn
           <IconButton icon={Subtitles} label="Subtitles" variant={subtitleId !== 'off' ? 'tonal' : 'standard'} aria-pressed={subtitleId !== 'off'} onClick={() => { setSubtitleError(''); setTrackDialog('subtitles'); }} />
           {audio.length > 0 && <IconButton icon={AudioLines} label="Audio tracks" variant={audioId !== 'automatic' ? 'tonal' : 'standard'} aria-pressed={audioId !== 'automatic'} onClick={() => setTrackDialog('audio')} />}
           <IconButton icon={micMuted ? MicOff : Mic} label={micLabel || (micMuted ? 'Unmute microphone' : 'Mute microphone')} disabled={!onToggleMic || micDisabled} aria-pressed={!micMuted} onClick={onToggleMic} />
-          <IconButton icon={muted || volume === 0 ? VolumeX : Volume2} label={muted || volume === 0 ? 'Unmute video' : 'Mute video'} onClick={() => { const video = videoRef.current!; if (video.muted || !video.volume) { video.muted = false; if (!video.volume) video.volume = 1; } else video.muted = true; }} />
-          <label><span className="sr-only">Volume</span><input type="range" min={0} max={100} value={muted ? 0 : volume * 100} onChange={event => { const video = videoRef.current!; video.volume = Number(event.target.value) / 100; video.muted = false; }} style={{ '--range-progress': `${muted ? 0 : volume * 100}%` } as CSSProperties} /></label>
+          <IconButton icon={muted || volume === 0 ? VolumeX : Volume2} label={muted || volume === 0 ? 'Unmute video' : 'Mute video'} onClick={() => { const video = media()!; if (video.muted || !video.volume) { video.muted = false; if (!video.volume) video.volume = 1; } else video.muted = true; }} />
+          <label><span className="sr-only">Volume</span><input type="range" min={0} max={100} value={muted ? 0 : volume * 100} onChange={event => { const video = media()!; video.volume = Number(event.target.value) / 100; video.muted = false; }} style={{ '--range-progress': `${muted ? 0 : volume * 100}%` } as CSSProperties} /></label>
           <IconButton icon={expanded ? Minimize2 : Fullscreen} label={expanded ? 'Exit fullscreen' : 'Enter fullscreen'} aria-pressed={expanded} onClick={() => void toggleFullscreen()} />
         </div>
       </div>
     </div>
     <input ref={fileRef} type="file" accept=".vtt,.srt,.ssa,.ass,.ttml,.dfxp,.xml" aria-label="Local subtitle file" hidden onChange={event => { const file = event.target.files?.[0]; event.target.value = ''; if (file) void importSubtitle(file); }} />
-    <Dialog open={trackDialog === 'subtitles'} title="Subtitles" onClose={() => setTrackDialog(null)} actions={<><Button variant="text" disabled={importing} icon={<Subtitles size={18} aria-hidden="true" />} onClick={() => fileRef.current?.click()}>{importing ? 'Reading subtitles…' : 'Choose subtitle file'}</Button><Button variant="text" onClick={() => setTrackDialog(null)}>Done</Button></>}>
-      {subtitles.length === 0 && !localSubtitle && <p>No subtitle tracks are available from this source in your browser. You can choose a local subtitle file.</p>}
+    <Dialog open={trackDialog === 'subtitles'} title="Subtitles" onClose={() => setTrackDialog(null)} actions={<><Button variant="text" disabled={importing || integrated && !ready} icon={<Subtitles size={18} aria-hidden="true" />} onClick={() => fileRef.current?.click()}>{importing ? 'Reading subtitles…' : 'Choose subtitle file'}</Button><Button variant="text" onClick={() => setTrackDialog(null)}>Done</Button></>}>
+      {subtitles.length === 0 && !localSubtitle && <p>{integrated && status === 'loading' ? 'Subtitle tracks will appear when the video is ready.' : 'No supported subtitle tracks are available from this source in your browser. You can choose a local subtitle file.'}</p>}
       <div className="player-track-choices" role="radiogroup" aria-label="Subtitle track">
         {[{ id: 'off', name: 'Off' }, ...subtitles, ...(localSubtitle ? [{ id: 'local', name: localSubtitle.name }] : [])].map(track => <label key={track.id} className="player-track-choice"><input type="radio" name="subtitle-track" value={track.id} checked={subtitleId === track.id} onChange={() => { selectSubtitle(track.id); setTrackDialog(null); }} /><span>{track.name}</span></label>)}
       </div>
       <p className="player-subtitle-help">SRT, VTT, SSA/ASS or TTML files · Up to 5 MB. Advanced subtitle styling may look different.</p>
+      {unsupportedSubtitles > 0 && <p>Some embedded subtitle formats are not supported. You can choose a local subtitle file.</p>}
+      {browserPlayback && <p>Some embedded tracks may be unavailable in browser playback. <Button variant="text" onClick={() => { setBrowserPlayback(false); setRetry(value => value + 1); setTrackDialog(null); }}>Try enhanced player</Button></p>}
       {subtitleError && <StatusCard title="Unable to load subtitles" tone="error">{subtitleError}</StatusCard>}
     </Dialog>
     <Dialog open={trackDialog === 'audio'} title="Audio tracks" onClose={() => setTrackDialog(null)} actions={<Button variant="text" onClick={() => setTrackDialog(null)}>Done</Button>}>

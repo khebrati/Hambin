@@ -24,7 +24,7 @@ function decodeEntities(text: string): string {
   });
 }
 
-function plainCueText(text: string): string {
+export function plainCueText(text: string): string {
   return decodeEntities(text
     .replace(/<br\s*\/?\s*>/gi, '\n')
     .replace(/<\/?(?:b|i|u|ruby|rt|font)(?:\s[^>]*)?>/gi, '')

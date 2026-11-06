@@ -1,0 +1,16 @@
+# Synthetic integrated-player fixture
+
+`movie.mkv` contains a generated 320 × 180 test pattern, two generated sine-wave AAC tracks, and the authored Persian captions in `captions.srt`. It contains no third-party media. Container duration: 27 seconds (`-shortest` ends at the last subtitle). It exercises the actual AVPlayer demuxer, native MediaSource decoding, audio selection, and subtitle renderer.
+
+Generated with FFmpeg 6.1.1:
+
+```sh
+ffmpeg -f lavfi -i 'testsrc2=size=320x180:rate=12:duration=32' \
+  -f lavfi -i 'sine=frequency=440:sample_rate=48000:duration=32' \
+  -f lavfi -i 'sine=frequency=880:sample_rate=48000:duration=32' \
+  -i captions.srt -map 0:v -map 1:a -map 2:a -map 3:s \
+  -c:v libx264 -preset veryfast -crf 32 -g 24 -c:a aac -b:a 32k -c:s srt \
+  -metadata:s:a:0 language=fas -metadata:s:a:0 title=Persian \
+  -metadata:s:a:1 language=eng -metadata:s:a:1 title=English \
+  -metadata:s:s:0 language=fas -metadata:s:s:0 title=Persian -shortest movie.mkv
+```

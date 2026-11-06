@@ -11,13 +11,18 @@
   document.documentElement.dataset.textScale = params.get('largeText') === '1' ? 'large' : 'standard';
   document.documentElement.dir = params.get('dir') || 'ltr';
   window.playerActions = [];
+  window.playerReports = [];
   function Fixture() {
+    const [source, setSource] = useState(params.get('url') || 'https://media.example.test/movie.mp4');
+    const [syncTarget, setSyncTarget] = useState();
+    window.replacePlayerSource = setSource;
+    window.syncPlayerTo = (positionMs) => setSyncTarget({ requestId: crypto.randomUUID(), positionMs });
     const [micMuted, setMicMuted] = useState(true);
     const [notice, setNotice] = useState('');
     return React.createElement(React.Fragment, null,
       React.createElement(VideoPlayer, {
-        url: params.get('url') || 'https://media.example.test/movie.mkv',
-        sessionId: 'player-test', onReport() {}, onNotify: setNotice,
+        url: source, syncTarget,
+        sessionId: 'player-test', onReport(positionMs, playing) { window.playerReports.push({ positionMs, playing }); }, onNotify: setNotice,
         micMuted,
         onToggleMic() { window.playerActions.push('mic'); setMicMuted(value => !value); },
         onSync() { window.playerActions.push('sync'); },
