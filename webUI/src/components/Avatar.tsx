@@ -35,7 +35,7 @@ export function Avatar({
   );
 }
 
-export function ParticipantItem({ participant }: { participant: Participant }) {
+export function ParticipantItem({ participant, voiceConnection }: { participant: Participant; voiceConnection?: 'connected' | 'reconnecting' | 'unavailable' }) {
   return (
     <div className={`participant ${participant.isSpeaking ? 'is-speaking' : ''}`}>
       <div className="participant__avatar-wrap">
@@ -51,7 +51,7 @@ export function ParticipantItem({ participant }: { participant: Participant }) {
       <div className="participant__copy">
         <strong>{participant.isSelf ? 'You' : participant.name}</strong>
         <span>
-          {participant.present === false ? 'Away' : participant.isOwner ? (
+          {voiceConnection === 'reconnecting' ? 'Reconnecting voice' : voiceConnection === 'unavailable' ? 'Voice unavailable' : participant.present === false ? 'Away' : participant.isOwner ? (
             <>
               <Star size={12} aria-hidden="true" /> Host
             </>

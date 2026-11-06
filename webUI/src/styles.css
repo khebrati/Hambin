@@ -2302,3 +2302,19 @@ input[type="range"]::-moz-range-thumb {
   .media-player .transport { grid-area: transport; }
   .media-player .volume-control { grid-area: volume; justify-content: flex-end; }
 }
+
+.voice-panel > .md-button {
+  flex-shrink: 0;
+}
+
+.voice-panel__progress {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  color: var(--md-sys-color-primary);
+}
+
+.voice-panel .md-icon-button svg {
+  width: 24px;
+  height: 24px;
+}

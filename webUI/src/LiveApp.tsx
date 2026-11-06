@@ -178,7 +178,7 @@ export default function LiveApp() {
         voice.current = client;
         await client.join();
       } else await voice.current.setMuted(!voiceState.muted);
-    } catch (error) { notify(error instanceof Error ? error.message : 'Voice is unavailable. Try again.'); }
+    } catch { /* MeshVoice publishes failure state; the voice pane owns recovery. */ }
   };
   const sync = async () => {
     setSyncing(true);
@@ -208,7 +208,7 @@ export default function LiveApp() {
       {screen === 'settings' && <SettingsScreen identity={identity} theme={theme} onToggleTheme={toggleTheme} onBack={() => setScreen('home')} onSave={saveProfile} saving={saving} />}
       {screen === 'party-manager' && <PartyManagerScreen initialMode={managerMode} joinStatus={joinStatus} errorMessage={joinError} codeDraft={codeDraft} onCodeChange={setCodeDraft} theme={theme} onToggleTheme={toggleTheme} onBack={() => setScreen('home')} onCreate={() => void enterRoom('/v1/rooms')} onPreview={loadPreview} onResetError={() => {setJoinStatus('idle');setJoinError('');}} live />}
       {screen === 'room-preview' && roomPreview && <><RoomPreviewScreen preview={roomPreview} joinStatus={joinStatus} theme={theme} onToggleTheme={toggleTheme} onBack={() => {setScreen('party-manager');setManagerMode('join');setJoinStatus('idle');}} onJoin={() => void enterRoom(`/v1/rooms/${roomPreview.id}/join`)} errorMessage={joinError} /></>}
-      {screen === 'party' && party && <><PartyScreen key={roomId} party={party} streamStatus={streamStatus} theme={theme} aborting={aborting} onToggleTheme={toggleTheme} onStartStream={startStream} onSetStreamStatus={setStreamStatus} onAbort={abortStream} onLeave={leave} onNotify={notify} live={{ connected, leaving, voice: voiceState, onToggleVoice: toggleVoice, onRetryVoice: () => voice.current?.retryConnections(), onResumeVoice: () => { void voice.current?.resumeAudio().catch(e => notify(e.message)); }, onDisconnectVoice: () => {voice.current?.disconnect();voice.current=null;setVoiceState(voiceOff);}, onSync: sync, syncing, syncTarget, onReport: (positionMs, playing) => { playback.current = {positionMs,playing}; realtime.current?.report(positionMs, playing); } }} /></>}
+      {screen === 'party' && party && <><PartyScreen key={roomId} party={party} streamStatus={streamStatus} theme={theme} aborting={aborting} onToggleTheme={toggleTheme} onStartStream={startStream} onSetStreamStatus={setStreamStatus} onAbort={abortStream} onLeave={leave} onNotify={notify} live={{ connected, leaving, voice: voiceState, onToggleVoice: toggleVoice, onRetryVoice: () => voice.current?.retryConnections(), onResumeVoice: () => { void voice.current?.resumeAudio().catch(e => notify(e.message)); }, onSync: sync, syncing, syncTarget, onReport: (positionMs, playing) => { playback.current = {positionMs,playing}; realtime.current?.report(positionMs, playing); } }} /></>}
     </>}
     <Snackbar message={snackbar?.message || ''} onDismiss={() => setSnackbar(null)} action={snackbar?.partyCode ? { label: 'Return to party', disabled: joinStatus === 'loading', onClick: () => { void enterRoom(`/v1/rooms/${encodeURIComponent(snackbar.partyCode!)}/join`); } } : undefined} />
   </div>;

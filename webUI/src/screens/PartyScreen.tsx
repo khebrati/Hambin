@@ -65,7 +65,6 @@ export interface LivePartyControls {
   leaving: boolean;
   voice: VoiceState;
   onToggleVoice: () => Promise<void>;
-  onDisconnectVoice: () => void;
   onResumeVoice: () => void;
   onRetryVoice: () => void;
   onSync: () => Promise<void>;
@@ -106,7 +105,8 @@ export function PartyScreen({
   const [position, setPosition] = useState(1122);
   const [volume, setVolume] = useState(72);
   const [previousVolume, setPreviousVolume] = useState(72);
-  const [micMuted, setMicMuted] = useState(false);
+  const [micMuted, setMicMuted] = useState(true);
+  const [voiceJoined, setVoiceJoined] = useState(false);
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [abortOpen, setAbortOpen] = useState(false);
   const [urlOpen, setUrlOpen] = useState(false);
@@ -120,7 +120,28 @@ export function PartyScreen({
   const hasPlayer = live ? !!party.streamUrl : ['playing', 'paused', 'buffering'].includes(streamStatus);
   const partyCode = party.code || party.id;
   const voiceMuted = live ? live.voice.muted : micMuted;
-  const voiceLabel = live?.voice.status === 'off' || live?.voice.status === 'error' ? 'Join voice (muted)' : live?.voice.status === 'connecting' ? 'Connecting voice' : voiceMuted ? 'Unmute microphone' : 'Mute microphone';
+  const voiceStatus = live?.voice.status ?? (voiceJoined ? 'connected' : 'off');
+  const voiceLabel = voiceMuted ? 'Unmute' : 'Mute';
+  const voiceMessage = voiceStatus === 'off' ? 'Talk with the room'
+    : voiceStatus === 'connecting' ? 'Joining voice…'
+    : voiceStatus === 'degraded' ? 'Some voice connections need attention'
+    : voiceStatus === 'reconnecting' ? 'Reconnecting voice signaling'
+    : voiceStatus === 'error' ? live?.voice.error === 'NETWORK'
+      ? 'Could not reach voice. Check your connection and try again.'
+      : 'Could not join voice. Try again.'
+    : voiceMuted ? 'Your mic is muted' : 'Your mic is on';
+  const retryVoiceAvailable = voiceStatus === 'degraded'
+    || Object.values(live?.voice.members ?? {}).some(member => member.connection === 'unavailable');
+  const toggleMic = () => {
+    // Joining is an explicit action in the voice pane, including from fullscreen.
+    if (voiceStatus === 'off' || voiceStatus === 'error' || voiceStatus === 'connecting') return;
+    if (live) void live.onToggleVoice();
+    else setMicMuted(current => !current);
+  };
+  const joinVoice = () => {
+    if (live) void live.onToggleVoice();
+    else { setVoiceJoined(true); setMicMuted(true); }
+  };
   // Ownership is stable while realtime presence is still connecting or recovering.
   const isOwner = party.role === 'owner';
   const inviteLink = useMemo(() => {
@@ -254,7 +275,7 @@ export function PartyScreen({
               ownerName={party.ownerName}
             />
           ) : live ? (
-            <VideoPlayer url={party.streamUrl} sessionId={party.streamSessionId || ''} onReport={live.onReport} onNotify={onNotify} onState={onSetStreamStatus} syncTarget={live.syncTarget} onSync={() => void live.onSync()} syncDisabled={!live.connected || live.syncing} onToggleMic={() => void live.onToggleVoice()} micMuted={voiceMuted} micLabel={voiceLabel} micDisabled={!live.connected || live.voice.status === 'connecting'} />
+            <VideoPlayer url={party.streamUrl} sessionId={party.streamSessionId || ''} onReport={live.onReport} onNotify={onNotify} onState={onSetStreamStatus} syncTarget={live.syncTarget} onSync={() => void live.onSync()} syncDisabled={!live.connected || live.syncing} onToggleMic={toggleMic} micMuted={voiceMuted} micLabel={voiceLabel} />
           ) : (
             <CinemaPlayer
               status={streamStatus}
@@ -291,45 +312,30 @@ export function PartyScreen({
           ) : null}
 
           <div className="participants-compact">
-            <ParticipantStrip participants={participants} />
+            <ParticipantStrip participants={participants} voiceMembers={live?.voice.members} />
           </div>
         </section>
 
         <aside className="party-support" aria-label="Party details">
           <div className="participants-wide">
-            <ParticipantStrip participants={participants} />
+            <ParticipantStrip participants={participants} voiceMembers={live?.voice.members} />
           </div>
 
           <section className="voice-panel" aria-labelledby="voice-heading">
             <div>
               <span className="eyebrow">Voice room</span>
-              <h2 id="voice-heading">{live?.voice.status === 'off' ? 'Voice is optional' : live?.voice.status === 'error' ? 'Voice needs retry' : live?.voice.status === 'reconnecting' ? 'Reconnecting voice…' : live?.voice.status === 'degraded' ? 'Some voice links need attention' : live?.voice.status === 'connecting' ? 'Connecting voice…' : voiceMuted ? 'Your mic is muted' : 'Your mic is on'}</h2>
+              <h2 id="voice-heading" aria-live={voiceStatus === 'error' ? 'assertive' : 'polite'}>{voiceMessage}</h2>
             </div>
-            <IconButton
-              icon={voiceMuted ? MicOff : Mic}
-              label={voiceLabel}
-              variant={voiceMuted ? 'standard' : 'tonal'}
-              selected={!voiceMuted}
-              onClick={() => live ? void live.onToggleVoice() : setMicMuted((current) => !current)}
-              disabled={live ? !live.connected || live.voice.status === 'connecting' : false}
-            />
+            {voiceStatus === 'connecting' ? (
+              <span className="md-loading__shape voice-panel__progress" role="progressbar" aria-label="Joining voice" />
+            ) : voiceStatus === 'off' || voiceStatus === 'error' ? (
+              <Button onClick={joinVoice}>Join voice</Button>
+            ) : (
+              <IconButton icon={voiceMuted ? MicOff : Mic} label={voiceLabel} variant="tonal" onClick={toggleMic} />
+            )}
           </section>
-
-          {live && (live.voice.error || ['connecting', 'degraded', 'reconnecting'].includes(live.voice.status)) && <StatusCard
-            title={live.voice.status === 'connecting' ? 'Connecting voice…' : live.voice.status === 'reconnecting' ? 'Reconnecting voice…' : 'Voice needs attention'}
-            loading={['connecting', 'reconnecting'].includes(live.voice.status)}
-            tone={live.voice.status === 'error' ? 'error' : 'info'}
-            actions={<>
-              {['error', 'degraded', 'reconnecting'].includes(live.voice.status) && <Button variant="text" onClick={live.voice.status === 'error' ? () => void live.onToggleVoice() : live.onRetryVoice}>Retry voice connections</Button>}
-              {live.voice.error?.includes('playback was blocked') && <Button variant="text" onClick={live.onResumeVoice}>Resume voice audio</Button>}
-            </>}
-          >{live.voice.error || 'You can keep watching while voice connects.'}</StatusCard>}
-          {live && ['degraded', 'reconnecting'].includes(live.voice.status) && <ul className="md-status-list" aria-label="Voice connections">{party.participants.map(member => {
-            const connection = live.voice.members[member.id]?.connection;
-            const labels = { connected: 'Connected', reconnecting: 'Reconnecting…', unavailable: 'Connection unavailable' };
-            return connection && <li key={member.id}><strong>{member.name}</strong><span>{labels[connection]}</span></li>;
-          })}</ul>}
-          {live && live.voice.status !== 'off' && <Button variant="text" onClick={live.onDisconnectVoice}>Disconnect voice</Button>}
+          {live && retryVoiceAvailable && <Button variant="outlined" fullWidth onClick={live.onRetryVoice}>Retry voice connections</Button>}
+          {live?.voice.error?.includes('playback was blocked') && <Button variant="outlined" fullWidth onClick={live.onResumeVoice}>Resume voice audio</Button>}
           <Button
             variant="outlined"
             icon={<UserPlus size={18} aria-hidden="true" />}
@@ -767,7 +773,7 @@ function CinemaScene({ quiet = false }: { quiet?: boolean }) {
   );
 }
 
-function ParticipantStrip({ participants }: { participants: Party['participants'] }) {
+function ParticipantStrip({ participants, voiceMembers }: { participants: Party['participants']; voiceMembers?: VoiceState['members'] }) {
   return (
     <section className="participant-section" aria-labelledby="participants-title">
       <div className="participant-section__heading">
@@ -779,7 +785,7 @@ function ParticipantStrip({ participants }: { participants: Party['participants'
       </div>
       <div className="participant-list">
         {participants.map((participant) => (
-          <ParticipantItem key={participant.id} participant={participant} />
+          <ParticipantItem key={participant.id} participant={participant} voiceConnection={voiceMembers?.[participant.id]?.connection} />
         ))}
       </div>
     </section>

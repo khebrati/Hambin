@@ -128,18 +128,18 @@ test('mesh voice connects at two and four peers with real browser WebRTC', async
       page.on('websocket', ws => ws.on('framereceived', frame => { const match=/\"code\":\"([^\"]+)\"/.exec(String(frame.payload)); if(match && ['RATE_LIMITED','STALE_NEGOTIATION','SESSION_EXPIRED','FORBIDDEN','AUTH_UNAVAILABLE'].includes(match[1])) console.log('voice server code',i,match[1]); }));
       if(i===0){await openHome(page);code=await create(page);}
       else await join(page,code);
-      await page.getByRole('button',{name:'Join voice (muted)',exact:true}).click();
+      await page.getByRole('button',{name:'Join voice',exact:true}).click();
       if([1,3].includes(i)) {
         for(const peerPage of pages) await expect.poll(()=>peerPage.evaluate(()=>((window as any).__roomioPeers as RTCPeerConnection[]).filter(p=>p.connectionState==='connected').length),{timeout:45000}).toBe(i);
       }
     }
-    for(const page of pages) await page.getByRole('button',{name:'Unmute microphone',exact:true}).click();
+    for(const page of pages) await page.locator('.voice-panel').getByRole('button',{name:'Unmute',exact:true}).click();
     for(const page of pages) await expect.poll(()=>page.evaluate(async()=>{
       const peers=((window as any).__roomioPeers as RTCPeerConnection[]).filter(p=>p.connectionState==='connected');
       const received=await Promise.all(peers.map(async pc=>{const stats=await pc.getStats();return [...stats.values()].some(s=>s.type==='inbound-rtp'&&s.kind==='audio'&&s.bytesReceived>0);}));
       return received.filter(Boolean).length;
     }),{timeout:20000}).toBe(3);
-    await pages[0].getByRole('button',{name:'Mute microphone',exact:true}).click();
+    await pages[0].locator('.voice-panel').getByRole('button',{name:'Mute',exact:true}).click();
     expect(await pages[0].evaluate(()=>((window as any).__roomioPeers as RTCPeerConnection[]).flatMap(p=>p.getSenders()).filter(s=>s.track?.kind==='audio').every(s=>!s.track!.enabled))).toBe(true);
     if(process.env.ROOMIO_TEST_RELAY==='1') {
       expect(await pages[0].evaluate(async()=>{
