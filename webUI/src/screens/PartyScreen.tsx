@@ -120,7 +120,8 @@ export function PartyScreen({
   const partyCode = party.code || party.id;
   const voiceMuted = live ? live.voice.muted : micMuted;
   const voiceLabel = live?.voice.status === 'off' || live?.voice.status === 'error' ? 'Join voice (muted)' : live?.voice.status === 'connecting' ? 'Connecting voice' : voiceMuted ? 'Unmute microphone' : 'Mute microphone';
-  const isOwner = party.role === 'owner' && party.ownerPresent;
+  // Ownership is stable while realtime presence is still connecting or recovering.
+  const isOwner = party.role === 'owner';
   const inviteLink = useMemo(() => {
     const url = new URL(window.location.href);
     url.search = '';
@@ -224,7 +225,7 @@ export function PartyScreen({
 
       <main className="party-layout">
         <section className="cinema-column" aria-label="Cinema">
-          {!party.ownerPresent ? (
+          {!isOwner && !party.ownerPresent ? (
             <div className="owner-away-banner" role="status">
               <LockKeyhole size={24} aria-hidden="true" />
               <div>
