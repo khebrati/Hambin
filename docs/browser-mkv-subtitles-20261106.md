@@ -1,6 +1,6 @@
 # Browser MKV playback and subtitle evaluation
 
-Date: 2026-11-06. Accepted decision: DD-037. Local implementation and verification; no deployment.
+Date: 2026-11-06. Accepted decision: DD-037. Implementation, local verification, and subsequently authorized browser deployment.
 
 ## Result
 
@@ -65,3 +65,37 @@ Override `CHROME_PATH` or `MKV_PROBE_BASE_URL` if needed. It writes JSON and a s
 ## Superseded extraction experiment (DD-036)
 
 Before selecting the integrated engine, the separate extractor read 24,015 bytes for metadata, then 650,704 / 4,279,875 / 3,274,516 / 4,731,906 / 2,001,517 additional bytes at the five sampled positions above. Total: 14,962,533 extra bytes and 48 completed ranges. These were extraction-only samples, in addition to native-video traffic, not a whole-movie measurement. The integrated engine replaces that duplicate-read design. Its previous implementation and test counts are historical, not the current shipping architecture.
+
+
+## Authorized production deployment
+
+The stakeholder requested commit and deployment after local acceptance. Browser
+commit `051b31c7d8f3b149b668c7054c9705ef4306b372` is deployed at
+`https://watchparty.top`. Existing unrelated Android edits were excluded.
+
+- Uploaded archive SHA-256: `74776aaf2be336ab666ed03ca3525fae3daa3d2d401a273a7eecc3849b546b36`.
+- All 56 staged browser files were checked on the server. Public index,
+  AVPlayer runtime, polyfill and notice bytes matched the local manifest.
+- Browser index SHA-256: `429868bc2d0ae0891578c646d5bef262554f8481715dce8303d7ad2d9f31a339`.
+- Static assets were added before atomically replacing the index. Previous hashed
+  assets were retained for open clients. No API, database, voice service or
+  container restart was required; all existing services retained their uptime.
+- Active release directory: `/opt/hambin/releases/20261106-active-party-f04516c`.
+  Browser manifest: `web-integrated-player-release.json` in that directory.
+- Protected rollback: `/opt/hambin/backups/web-before-integrated-player-051b31c/web`.
+  Restore its index atomically to roll back this browser update; no database restore
+  is needed.
+- External and server-local readiness checks returned ready/database/dispatcher/voice true.
+
+Actual production UI verification created an isolated temporary party, started the
+exact stakeholder URL, decoded frames, rendered the Persian cue, sought while
+paused to 600 seconds, confirmed English audio selection, returned to 3 seconds
+with the cue restored, and hid it with Off. The passing run had no page errors or
+player alerts. The temporary party was left and its guest session revoked. One
+initial attempt timed out waiting for startup; the subsequent complete run passed.
+The cause of that first timeout was not established. This is a bounded functional
+check, not a source-throughput or full-movie reliability guarantee.
+
+Local production evidence: `/tmp/hambin-production-integrated.json` and
+`/tmp/hambin-production-integrated.png`. No tokens or passwords were persisted in
+those evidence files.
