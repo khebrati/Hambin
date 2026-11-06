@@ -627,7 +627,7 @@ strong {
   gap: var(--md-sys-spacing-xs);
   margin-inline: auto;
   padding: 4px 4px 4px 16px;
-  border-radius: var(--md-sys-shape-corner-small);
+  border-radius: var(--md-sys-shape-corner-extra-small);
   background: var(--md-sys-color-inverse-surface);
   color: var(--md-sys-color-inverse-on-surface);
   font-size: var(--md-sys-typescale-body-medium-size);
@@ -639,6 +639,7 @@ strong {
 .md-snackbar > span {
   flex: 1;
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .md-snackbar__action {
@@ -666,6 +667,73 @@ strong {
     transform: translateY(0);
   }
 }
+
+/* Persistent feedback: Material tonal cards with supporting text and actions. */
+.md-status-card {
+  min-width: 0;
+  padding: var(--md-sys-spacing-sm);
+  border-radius: var(--md-sys-shape-corner-medium);
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+  text-align: start;
+}
+
+.md-status-card--error {
+  background: var(--md-sys-color-error-container);
+  color: var(--md-sys-color-on-error-container);
+}
+
+.md-status-card__message {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--md-sys-spacing-sm);
+}
+
+.md-status-card__message > svg,
+.md-status-card__message > .md-loading__shape { flex-shrink: 0; }
+.md-status-card__message > div { min-width: 0; }
+.md-status-card strong {
+  display: block;
+  font-size: var(--md-sys-typescale-title-medium-size);
+  line-height: var(--md-sys-typescale-title-medium-line-height);
+  font-weight: var(--md-sys-typescale-title-medium-weight);
+}
+
+.md-status-card__supporting {
+  margin-block-start: var(--md-sys-spacing-xxs);
+  font-size: var(--md-sys-typescale-body-medium-size);
+  line-height: var(--md-sys-typescale-body-medium-line-height);
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+
+.md-status-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--md-sys-spacing-xs);
+  margin-block-start: var(--md-sys-spacing-xs);
+}
+
+.md-status-card__actions .md-button--text { color: inherit; }
+.md-status-card__actions .md-button { white-space: normal; height: auto; min-height: 48px; }
+.md-status-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--md-sys-color-surface-container);
+  border-radius: var(--md-sys-shape-corner-medium);
+}
+.md-status-list li {
+  display: grid;
+  gap: var(--md-sys-spacing-xxs);
+  min-height: 64px;
+  padding: var(--md-sys-spacing-sm);
+  overflow-wrap: anywhere;
+}
+.md-status-list li + li { border-top: 1px solid var(--md-sys-color-outline-variant); }
+.md-status-list strong { font-size: var(--md-sys-typescale-body-large-size); }
+.md-status-list span { color: var(--md-sys-color-on-surface-variant); font-size: var(--md-sys-typescale-body-medium-size); }
 
 .md-loading {
   min-height: 52px;
@@ -1903,13 +1971,7 @@ input[type="range"]::-moz-range-thumb {
   background: var(--md-sys-color-surface-container-lowest);
 }
 
-.copy-error {
-  padding: 12px 16px;
-  border-radius: var(--md-sys-shape-corner-medium);
-  background: var(--md-sys-color-error-container);
-  color: var(--md-sys-color-on-error-container);
-  font-size: var(--md-sys-typescale-body-medium-size);
-}
+
 
 @media (max-width: 460px) {
   .party-screen .theme-toggle {

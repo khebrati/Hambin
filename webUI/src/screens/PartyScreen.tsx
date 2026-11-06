@@ -27,6 +27,7 @@ import {
   Dialog,
   IconButton,
   LoadingIndicator,
+  StatusCard,
   TextField,
 } from '../components/Material';
 import { VideoPlayer } from '../components/VideoPlayer';
@@ -114,6 +115,14 @@ export function PartyScreen({
   const [inviteCopyState, setInviteCopyState] = useState<
     'idle' | 'code' | 'link' | 'error'
   >('idle');
+
+  const connected = live?.connected ?? true;
+  const [showConnectionStatus, setShowConnectionStatus] = useState(false);
+  useEffect(() => {
+    if (connected) return;
+    const timer = window.setTimeout(() => setShowConnectionStatus(true), 800);
+    return () => { window.clearTimeout(timer); setShowConnectionStatus(false); };
+  }, [connected]);
 
   const activeUrl = party.streamUrl || sampleVideoUrl;
   const hasPlayer = live ? !!party.streamUrl : ['playing', 'paused', 'buffering'].includes(streamStatus);
@@ -225,6 +234,9 @@ export function PartyScreen({
 
       <main className="party-layout">
         <section className="cinema-column" aria-label="Cinema">
+          {!connected && showConnectionStatus && <StatusCard title="Reconnecting to room…" loading>
+            Your playback stays local. Room controls will return when the connection is restored.
+          </StatusCard>}
           {!isOwner && !party.ownerPresent ? (
             <div className="owner-away-banner" role="status">
               <LockKeyhole size={24} aria-hidden="true" />
@@ -314,8 +326,20 @@ export function PartyScreen({
             />
           </section>
 
-          {live && ['degraded', 'reconnecting'].includes(live.voice.status) && <><Button onClick={live.onRetryVoice}>Retry voice connections</Button><ul aria-label="Voice connections">{party.participants.map(member => { const link = live.voice.members[member.id]; return link?.connection && <li key={member.id}>{member.name}: {link.connection}</li>; })}</ul></>}
-          {live?.voice.error?.includes('playback was blocked') && <Button onClick={live.onResumeVoice}>Resume voice audio</Button>}
+          {live && (live.voice.error || ['connecting', 'degraded', 'reconnecting'].includes(live.voice.status)) && <StatusCard
+            title={live.voice.status === 'connecting' ? 'Connecting voice…' : live.voice.status === 'reconnecting' ? 'Reconnecting voice…' : 'Voice needs attention'}
+            loading={['connecting', 'reconnecting'].includes(live.voice.status)}
+            tone={live.voice.status === 'error' ? 'error' : 'info'}
+            actions={<>
+              {['error', 'degraded', 'reconnecting'].includes(live.voice.status) && <Button variant="text" onClick={live.voice.status === 'error' ? () => void live.onToggleVoice() : live.onRetryVoice}>Retry voice connections</Button>}
+              {live.voice.error?.includes('playback was blocked') && <Button variant="text" onClick={live.onResumeVoice}>Resume voice audio</Button>}
+            </>}
+          >{live.voice.error || 'You can keep watching while voice connects.'}</StatusCard>}
+          {live && ['degraded', 'reconnecting'].includes(live.voice.status) && <ul className="md-status-list" aria-label="Voice connections">{party.participants.map(member => {
+            const connection = live.voice.members[member.id]?.connection;
+            const labels = { connected: 'Connected', reconnecting: 'Reconnecting…', unavailable: 'Connection unavailable' };
+            return connection && <li key={member.id}><strong>{member.name}</strong><span>{labels[connection]}</span></li>;
+          })}</ul>}
           {live && live.voice.status !== 'off' && <Button variant="text" onClick={live.onDisconnectVoice}>Disconnect voice</Button>}
           <Button
             variant="outlined"
@@ -406,9 +430,9 @@ export function PartyScreen({
           </Button>
         </section>
         {inviteCopyState === 'error' ? (
-          <p className="copy-error" role="status">
-            Copy is unavailable here. Select the code or link above to share it manually.
-          </p>
+          <StatusCard title="Unable to copy" tone="error">
+            Select the code or link above to share it manually.
+          </StatusCard>
         ) : null}
       </Dialog>
 

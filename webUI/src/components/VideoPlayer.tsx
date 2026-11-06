@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import Hls from 'hls.js';
 import { AudioLines, FastForward, Fullscreen, Mic, MicOff, Minimize2, Pause, Play, RefreshCw, Rewind, Subtitles, Volume2, VolumeX } from 'lucide-react';
-import { Button, Dialog, IconButton } from './Material';
+import { Button, Dialog, IconButton, LoadingIndicator, StatusCard } from './Material';
 import type { StreamStatus } from '../types';
 import { subtitleFileToVtt } from './subtitles';
 
@@ -319,12 +319,12 @@ function MediaPlayer({ url, onReport, onNotify, onState, syncTarget, onSync, syn
       <video ref={videoRef} playsInline preload="auto" aria-label="Room video" style={{ width: '100%', height: '100%', objectFit: 'contain' }}>
         {localSubtitle && <track ref={element => { localTrackRef.current = element; if (element) element.track.mode = subtitleSelection.current === 'local' ? 'showing' : 'disabled'; }} key={localSubtitle.url} kind="subtitles" src={localSubtitle.url} label={localSubtitle.name} onLoad={(event) => { event.currentTarget.track.mode = subtitleSelection.current === 'local' ? 'showing' : 'disabled'; }} onError={() => { setSubtitleError('Unable to display that subtitle file. Choose another file.'); setTrackDialog('subtitles'); selectSubtitle('off'); }} />}
       </video>
-      {error ? <div className="player-buffering" role="alert"><span>{error}</span><Button onClick={() => setRetry(value => value + 1)}>Retry video</Button></div>
-        : status === 'loading' || status === 'buffering' ? <div className="player-buffering" role="status"><span className="md-loading__shape" aria-hidden="true" /><span>{status === 'loading' ? 'Loading video' : 'Buffering'}</span>{slowLoading && <><p className="player-loading-help">{slowLoadingMessage(ready ? '' : url, navigator.userAgent)}</p><Button onClick={() => setRetry(value => value + 1)}>Retry video</Button></>}</div>
+      {error ? <div className="player-buffering"><StatusCard title="Unable to play video" tone="error" actions={<Button onClick={() => setRetry(value => value + 1)}>Retry video</Button>}>{error}</StatusCard></div>
+        : status === 'loading' || status === 'buffering' ? <div className="player-buffering"><LoadingIndicator label={status === 'loading' ? 'Loading video' : 'Buffering'} />{slowLoading && <><p className="player-loading-help">{slowLoadingMessage(ready ? '' : url, navigator.userAgent)}</p><Button onClick={() => setRetry(value => value + 1)}>Retry video</Button></>}</div>
         : paused ? <button className="player-big-play" aria-label="Play video" onClick={event => { event.stopPropagation(); void play(); }}><Play size={38} aria-hidden="true" /></button> : null}
     </div>
     <div ref={controlsRef} className="player-controls" onPointerDown={() => { pointerActive.current = true; revealControls(); }} onPointerUp={() => { pointerActive.current = false; revealControls(); }} onPointerCancel={() => { pointerActive.current = false; revealControls(); }} onBlur={revealControls}>
-      {blocked && <p role="status">Select Play to start the video on this device.</p>}
+      {blocked && <StatusCard title="Ready to play">Select Play to start the video on this device.</StatusCard>}
       {live ? <span className="player-live"><span aria-hidden="true">●</span> Live</span> : <label className="player-progress"><span className="sr-only">Playback position</span><input type="range" min={0} max={seekable ? duration : 1} step="0.1" value={seekable ? Math.min(position, duration) : 0} disabled={!seekable} onChange={event => seek(Number(event.target.value))} aria-valuetext={time(position)} style={{ '--range-progress': `${seekable ? position / duration * 100 : 0}%` } as CSSProperties} /></label>}
       <div className="player-controls__row">
         <span className="player-time">{time(position)} {!live && <span>/ {time(duration)}</span>}<span className="sr-only"> Buffered to {time(buffered)}</span></span>
@@ -351,7 +351,7 @@ function MediaPlayer({ url, onReport, onNotify, onState, syncTarget, onSync, syn
         {[{ id: 'off', name: 'Off' }, ...subtitles, ...(localSubtitle ? [{ id: 'local', name: localSubtitle.name }] : [])].map(track => <label key={track.id} className="player-track-choice"><input type="radio" name="subtitle-track" value={track.id} checked={subtitleId === track.id} onChange={() => { selectSubtitle(track.id); setTrackDialog(null); }} /><span>{track.name}</span></label>)}
       </div>
       <p className="player-subtitle-help">SRT, VTT, SSA/ASS or TTML files · Up to 5 MB. Advanced subtitle styling may look different.</p>
-      {subtitleError && <p role="alert" className="copy-error">{subtitleError}</p>}
+      {subtitleError && <StatusCard title="Unable to load subtitles" tone="error">{subtitleError}</StatusCard>}
     </Dialog>
     <Dialog open={trackDialog === 'audio'} title="Audio tracks" onClose={() => setTrackDialog(null)} actions={<Button variant="text" onClick={() => setTrackDialog(null)}>Done</Button>}>
       {audio.length === 0 ? <p>No selectable audio tracks are available in this browser.</p> : <div className="player-track-choices" role="radiogroup" aria-label="Audio track">

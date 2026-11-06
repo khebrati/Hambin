@@ -8,11 +8,12 @@ import {
   Users,
 } from 'lucide-react';
 import { AppBar } from '../components/AppBar';
-import { Button, LoadingIndicator } from '../components/Material';
+import { Button, LoadingIndicator, StatusCard } from '../components/Material';
 import type { JoinStatus, PartyPreview } from '../types';
 
 interface RoomPreviewScreenProps {
   preview: PartyPreview;
+  errorMessage?: string;
   joinStatus: JoinStatus;
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
@@ -22,6 +23,7 @@ interface RoomPreviewScreenProps {
 
 export function RoomPreviewScreen({
   preview,
+  errorMessage,
   joinStatus,
   theme,
   onToggleTheme,
@@ -106,6 +108,8 @@ export function RoomPreviewScreen({
               </div>
             </div>
           ) : null}
+
+          {errorMessage && <StatusCard title="Unable to join the party" tone="error">{errorMessage}</StatusCard>}
 
           <div className="room-preview-actions">
             <Button variant="text" onClick={onBack} disabled={joinStatus === 'loading'}>

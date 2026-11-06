@@ -279,3 +279,10 @@
 - **Status:** Approved by the stakeholder on 2026-11-06.
 - **Decision:** Both browser and native clients ship the twelve existing avatars as 512 × 512 WebP images, encoded at quality 80. Preserve avatar identities, artwork, and selection behavior.
 - **Assets:** Browser imports reference WebP derivatives; its original PNGs remain unreferenced source artwork and are excluded from the Vite output. Native Compose drawable resources use WebP in place of PNG, retaining the same generated resource names. Native originals remain available in Git history.
+
+## DD-034: Browser Status Feedback Components
+
+- **Status:** Approved for browser implementation by the stakeholder on 2026-11-06.
+- **Decision:** Use shared Material 3 styled tonal cards for persistent connection and error feedback, circular progress indicators for ongoing work, and inverse-surface snackbars for brief confirmations. Field validation stays attached to its text field. Recovery actions belong alongside the message.
+- **Room continuity:** Place room reconnection feedback below the app bar in the cinema column. Show it only after 800 ms of uninterrupted disconnection and remove it on recovery, avoiding a status flash during quick reloads. Voice feedback lives in the voice pane with readable per-person connection labels and existing retry/resume actions.
+- **Accessibility and states:** Status text uses polite live announcements; errors use alerts. Cards reflow for large text, compact screens, and RTL, use light/dark semantic color pairs, and respect reduced motion. Healthy connections add no notice. Persistent failures retain recovery controls; brief confirmations remain dismissible. Selected/pressed/disabled states belong to their existing action components; empty status is represented by absence. Connection loss uses the same reconnecting card, while media offline errors retain Retry video. This changes browser presentation only.

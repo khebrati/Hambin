@@ -1,7 +1,7 @@
 import { DoorOpen, Plus, Ticket } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { AppBar } from '../components/AppBar';
-import { Button, LoadingIndicator, TextField } from '../components/Material';
+import { Button, LoadingIndicator, StatusCard, TextField } from '../components/Material';
 import type { JoinStatus } from '../types';
 
 export type ManagerMode = 'create' | 'join';
@@ -79,7 +79,7 @@ export function PartyManagerScreen({
           </button>
         </div>
 
-        {errorMessage && mode === 'create' && <p role="alert">{errorMessage}</p>}
+        {errorMessage && mode === 'create' && <StatusCard title="Unable to create the party" tone="error">{errorMessage}</StatusCard>}
         {mode === 'create' ? (
           <section className="manager-panel" aria-labelledby="create-title">
             <div className="manager-visual manager-visual--create" aria-hidden="true">

@@ -5,7 +5,7 @@ import {
   type ButtonHTMLAttributes,
   type ReactNode,
 } from 'react';
-import { X, type LucideIcon } from 'lucide-react';
+import { CircleAlert, Info, X, type LucideIcon } from 'lucide-react';
 
 type ButtonVariant = 'filled' | 'tonal' | 'outlined' | 'text' | 'danger';
 
@@ -170,6 +170,29 @@ export function Snackbar({ message, onDismiss, action }: SnackbarProps) {
       <span>{message}</span>
       {action && <Button variant="text" className="md-snackbar__action" onClick={action.onClick} disabled={action.disabled}>{action.label}</Button>}
       <IconButton icon={X} label="Dismiss" onClick={onDismiss} />
+    </div>
+  );
+}
+
+interface StatusCardProps {
+  title: string;
+  children?: ReactNode;
+  tone?: 'info' | 'error';
+  loading?: boolean;
+  actions?: ReactNode;
+  className?: string;
+}
+
+/** Persistent feedback uses a tonal M3 card; brief confirmations use Snackbar. */
+export function StatusCard({ title, children, tone = 'info', loading = false, actions, className = '' }: StatusCardProps) {
+  const Icon = tone === 'error' ? CircleAlert : Info;
+  return (
+    <div className={`md-status-card md-status-card--${tone} ${className}`}>
+      <div className="md-status-card__message" role={tone === 'error' ? 'alert' : 'status'} aria-live={tone === 'error' ? 'assertive' : 'polite'} aria-atomic="true">
+        {loading ? <span className="md-loading__shape" aria-hidden="true" /> : <Icon size={24} aria-hidden="true" />}
+        <div><strong>{title}</strong>{children && <div className="md-status-card__supporting">{children}</div>}</div>
+      </div>
+      {actions && <div className="md-status-card__actions">{actions}</div>}
     </div>
   );
 }

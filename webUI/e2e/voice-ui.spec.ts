@@ -4,8 +4,8 @@ for (const variant of [{ theme: 'light', dir: 'ltr', width: 1280, height: 900, l
     await page.setViewportSize(variant);
     await page.goto(`/e2e/voice.html?${new URLSearchParams({ theme: variant.theme, dir: variant.dir, large: variant.large })}`);
     await expect(page.getByRole('heading', { name: 'Some voice links need attention' })).toBeVisible();
-    await expect(page.getByRole('list', { name: 'Voice connections' })).toContainText('Mira: reconnecting');
-    await expect(page.getByRole('list', { name: 'Voice connections' })).toContainText('Jo: unavailable');
+    await expect(page.getByRole('list', { name: 'Voice connections' })).toContainText('Reconnecting…');
+    await expect(page.getByRole('list', { name: 'Voice connections' })).toContainText('Connection unavailable');
     const retry = page.getByRole('button', { name: 'Retry voice connections' });
     await retry.focus(); await page.keyboard.press('Enter');
     await expect(page.locator('html')).toHaveAttribute('data-retried', 'true');
