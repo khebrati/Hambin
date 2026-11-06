@@ -266,3 +266,10 @@
 - **Relay:** Add TURN TLS 443 through TCP SNI routing alongside UDP/TCP 3478 and TLS 5349, with configurable capacity ceilings. Capacity and reliable audio require the [physical, relay, recovery, soak, and load acceptance gates](voice-stability-acceptance.md); signaling tests alone do not establish them.
 
 - **DD-031 explicit peer repair:** A user retry by the non-offerer first creates a new local peer epoch, then sends authenticated `requestOffer: true` to the designated offerer. A missing remote epoch uses target epoch zero. Both voice generations and a requester-epoch high-water mark fence stale or duplicate requests. A newer requester epoch proves that remote peer disposal occurred and repairs that addressed pair even if its local ICE state still appears connected; other healthy links stay intact. Automatic restart keeps its strict negotiated-epoch fence.
+
+## DD-032: Browser Active-party Recovery
+
+- **Status:** Approved for browser implementation
+- **Decision:** When create or join is blocked by an existing active membership, show a dismissible snackbar with a “Return to party” action. Keep the action visible until used, dismissed, or superseded.
+- **Contract:** The authenticated 409 `ALREADY_IN_ROOM` response supplies optional `activePartyCode`. Return uses normal join validation; a failed return shows the relevant recovery error.
+- **Boundary:** Preserve one active party per identity. Returning resumes the existing membership; it does not leave the party or create a new one. Native recovery UI is outside this browser change.

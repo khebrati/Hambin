@@ -41,7 +41,7 @@ export default function LiveApp() {
   const [aborting, setAborting] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [snackbar, setSnackbar] = useState('');
+  const [snackbar, setSnackbar] = useState<{ message: string; partyCode?: string } | null>(null);
   const [returnableParty, setReturnableParty] = useState<Party | null>(null);
   const [voiceState, setVoiceState] = useState<VoiceState>(voiceOff);
   const [syncTarget, setSyncTarget] = useState<{requestId: string;positionMs: number}>();
@@ -52,7 +52,7 @@ export default function LiveApp() {
   const voice = useRef<MeshVoice | null>(null);
   const playback = useRef({ positionMs: 0, playing: false });
   const streamSession = useRef('');
-  const notify = useCallback((message: string) => setSnackbar(message), []);
+  const notify = useCallback((message: string) => setSnackbar({ message }), []);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -60,7 +60,7 @@ export default function LiveApp() {
     document.documentElement.dir = new URLSearchParams(location.search).get('dir') === 'rtl' ? 'rtl' : 'ltr';
     localStorage.setItem('roomio-theme', theme);
   }, [theme]);
-  useEffect(() => { if (!snackbar) return; const t = setTimeout(() => setSnackbar(''), 5000); return () => clearTimeout(t); }, [snackbar]);
+  useEffect(() => { if (!snackbar || snackbar.partyCode) return; const t = setTimeout(() => setSnackbar(null), 5000); return () => clearTimeout(t); }, [snackbar]);
 
   const loadPreview = async (code: string) => {
     setCodeDraft(code); setJoinStatus('loading'); setJoinError('');
@@ -131,8 +131,8 @@ export default function LiveApp() {
       setSnapshot(value); setRoomId(admission.room.id); setScreen('party'); setJoinStatus('idle'); setVoiceState(voiceOff);
       setStreamStatus(value.stream.state === 'ACTIVE' ? 'loading' : 'empty');
       if (admission.membership.isOwner) localStorage.setItem(savedCodeKey, admission.room.code);
-      setReturnableParty(null);
-    } catch (error) { setJoinStatus('error'); setJoinError(errorMessage(error)); notify(errorMessage(error)); if(error instanceof ApiError && ['ROOM_ENDED','ROOM_NOT_FOUND'].includes(error.code)) sessionStorage.removeItem(activeCodeKey); }
+      setReturnableParty(null); setSnackbar(null);
+    } catch (error) { setJoinStatus('error'); setJoinError(errorMessage(error)); setSnackbar({ message: errorMessage(error), partyCode: error instanceof ApiError ? error.activePartyCode : undefined }); if(error instanceof ApiError && ['ROOM_ENDED','ROOM_NOT_FOUND'].includes(error.code)) sessionStorage.removeItem(activeCodeKey); }
     finally { entering.current = false; }
   };
   const saveProfile = async (value: Identity) => {
@@ -210,6 +210,6 @@ export default function LiveApp() {
       {screen === 'room-preview' && roomPreview && <><RoomPreviewScreen preview={roomPreview} joinStatus={joinStatus} theme={theme} onToggleTheme={toggleTheme} onBack={() => {setScreen('party-manager');setManagerMode('join');setJoinStatus('idle');}} onJoin={() => void enterRoom(`/v1/rooms/${roomPreview.id}/join`)} />{joinError && <p role="alert" className="room-notice">{joinError}</p>}</>}
       {screen === 'party' && party && <>{(!connected || voiceState.error) && <div className="connection-status" role="status">{[!connected && 'Reconnecting to room…', voiceState.error].filter(Boolean).join(' · ')}</div>}<PartyScreen key={roomId} party={party} streamStatus={streamStatus} theme={theme} aborting={aborting} onToggleTheme={toggleTheme} onStartStream={startStream} onSetStreamStatus={setStreamStatus} onAbort={abortStream} onLeave={leave} onNotify={notify} live={{ connected, leaving, voice: voiceState, onToggleVoice: toggleVoice, onRetryVoice: () => voice.current?.retryConnections(), onResumeVoice: () => { void voice.current?.resumeAudio().catch(e => notify(e.message)); }, onDisconnectVoice: () => {voice.current?.disconnect();voice.current=null;setVoiceState(voiceOff);}, onSync: sync, syncing, syncTarget, onReport: (positionMs, playing) => { playback.current = {positionMs,playing}; realtime.current?.report(positionMs, playing); } }} /></>}
     </>}
-    <Snackbar message={snackbar} onDismiss={() => setSnackbar('')} />
+    <Snackbar message={snackbar?.message || ''} onDismiss={() => setSnackbar(null)} action={snackbar?.partyCode ? { label: 'Return to party', disabled: joinStatus === 'loading', onClick: () => { void enterRoom(`/v1/rooms/${encodeURIComponent(snackbar.partyCode!)}/join`); } } : undefined} />
   </div>;
 }

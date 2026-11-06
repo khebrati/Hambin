@@ -22,6 +22,18 @@ describe('authenticated HTTP boundary', () => {
     await expect(request('/v1/capabilities')).rejects.toMatchObject({code:'SESSION_REVOKED'});
     expect(auth.token).toHaveBeenCalledTimes(1);expect(fetch).toHaveBeenCalledTimes(1);
   });
+  it('preserves only a valid active-party destination on membership conflicts', async () => {
+    auth.token.mockResolvedValue('token');
+    for (const [code, activePartyCode, expected] of [
+      ['ALREADY_IN_ROOM', 'ABCD2345', 'ABCD2345'],
+      ['ALREADY_IN_ROOM', '../elsewhere', undefined],
+      ['ROOM_FULL', 'ABCD2345', undefined],
+      ['ALREADY_IN_ROOM', undefined, undefined],
+    ]) {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ code, activePartyCode }), { status: 409 })));
+      await expect(request('/v1/rooms', {})).rejects.toMatchObject({ code, activePartyCode: expected });
+    }
+  });
   it('normalizes transport failures and refuses non-API destinations', async () => {
     auth.token.mockResolvedValue('token');vi.stubGlobal('fetch',vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
     await expect(request('/v1/capabilities')).rejects.toBeInstanceOf(ApiError);

@@ -159,14 +159,16 @@ export function Dialog({ open, title, children, actions, onClose }: DialogProps)
 
 interface SnackbarProps {
   message: string;
+  action?: { label: string; onClick: () => void; disabled?: boolean };
   onDismiss: () => void;
 }
 
-export function Snackbar({ message, onDismiss }: SnackbarProps) {
+export function Snackbar({ message, onDismiss, action }: SnackbarProps) {
   if (!message) return null;
   return (
     <div className="md-snackbar" role="status" aria-live="polite">
       <span>{message}</span>
+      {action && <Button variant="text" className="md-snackbar__action" onClick={action.onClick} disabled={action.disabled}>{action.label}</Button>}
       <IconButton icon={X} label="Dismiss" onClick={onDismiss} />
     </div>
   );

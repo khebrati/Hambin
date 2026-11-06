@@ -18,7 +18,7 @@ export async function request<T>(path: string, body?: unknown, method = body ===
   }
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new ApiError(error.code || 'UNAVAILABLE', response.status);
+    throw new ApiError(error.code || 'UNAVAILABLE', response.status, error.code === 'ALREADY_IN_ROOM' && typeof error.activePartyCode === 'string' && /^[0-9A-HJKMNP-TV-Z]{8}$/.test(error.activePartyCode) ? error.activePartyCode : undefined);
   }
   return response.status === 204 ? undefined as T : response.json();
 }

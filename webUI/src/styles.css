@@ -638,6 +638,18 @@ strong {
 
 .md-snackbar > span {
   flex: 1;
+  min-width: 0;
+}
+
+.md-snackbar__action {
+  color: var(--md-sys-color-inverse-primary);
+  flex-shrink: 0;
+}
+
+@media (max-width: 480px) {
+  .md-snackbar:has(.md-snackbar__action) { flex-wrap: wrap; }
+  .md-snackbar:has(.md-snackbar__action) > span { flex-basis: 100%; }
+  .md-snackbar__action { margin-inline-start: auto; }
 }
 
 .md-snackbar .md-icon-button {

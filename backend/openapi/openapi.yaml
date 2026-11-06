@@ -834,6 +834,9 @@ components:
           - VOICE_SESSION_EXPIRED
         message:
           type: string
+        activePartyCode:
+          type: string
+          description: Present on ALREADY_IN_ROOM; the authenticated identity’s current party code for explicit return through the join endpoint.
     MeshConfiguration:
       type: object
       required:

@@ -160,3 +160,7 @@ The plan is complete only when the evidence matrix accounts for every row above.
 ### Voice v4 manual recovery (DD-031)
 
 Explicit failed-link retry is distinct from automatic restart. The higher membership creates a fresh peer epoch and sends `requestOffer: true` to the lower membership with the ordinary voice-generation envelope and a stable negotiation ID. Target peer epoch zero permits recovery before any answer was received. The offerer rejects stale requester epochs using a high-water mark scoped to both voice generations. A fresh requester epoch repairs only that pair, including asymmetric failure where local ICE still appears connected; other healthy pairs remain. The matching OpenAPI/AsyncAPI contracts are authoritative.
+
+### Active-party error recovery (browser)
+
+An authenticated create/join rejection with HTTP 409 `ALREADY_IN_ROOM` includes optional `activePartyCode` for the requesting identity’s existing membership. The browser offers a persistent, dismissible “Return to party” snackbar action that calls the normal join endpoint for that code. Normal membership, expiry, and room-ended checks still apply. Other errors omit this field; older clients may ignore it.
