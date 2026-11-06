@@ -116,14 +116,6 @@ export function PartyScreen({
     'idle' | 'code' | 'link' | 'error'
   >('idle');
 
-  const connected = live?.connected ?? true;
-  const [showConnectionStatus, setShowConnectionStatus] = useState(false);
-  useEffect(() => {
-    if (connected) return;
-    const timer = window.setTimeout(() => setShowConnectionStatus(true), 800);
-    return () => { window.clearTimeout(timer); setShowConnectionStatus(false); };
-  }, [connected]);
-
   const activeUrl = party.streamUrl || sampleVideoUrl;
   const hasPlayer = live ? !!party.streamUrl : ['playing', 'paused', 'buffering'].includes(streamStatus);
   const partyCode = party.code || party.id;
@@ -234,9 +226,6 @@ export function PartyScreen({
 
       <main className="party-layout">
         <section className="cinema-column" aria-label="Cinema">
-          {!connected && showConnectionStatus && <StatusCard title="Reconnecting to room…" loading>
-            Your playback stays local. Room controls will return when the connection is restored.
-          </StatusCard>}
           {!isOwner && !party.ownerPresent ? (
             <div className="owner-away-banner" role="status">
               <LockKeyhole size={24} aria-hidden="true" />

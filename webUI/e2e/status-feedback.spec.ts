@@ -4,7 +4,7 @@ for (const variant of [
   { name: 'desktop light', width: 1280, height: 900, query: '' },
   { name: 'mobile dark large RTL', width: 360, height: 800, query: '?theme=dark&largeText=1&dir=rtl' },
 ]) {
-  test(`reload presents room recovery in a Material card: ${variant.name}`, async ({ page }, testInfo) => {
+  test(`reload keeps room reconnection silent: ${variant.name}`, async ({ page }, testInfo) => {
     await page.setViewportSize(variant);
     const room = { id: 'room', code: 'ABCD2345', title: 'Friday screening', ownerIdentityId: 'owner' };
     await page.route('**/v1/**', async route => {
@@ -19,12 +19,13 @@ for (const variant of [
     await page.getByRole('button', { name: 'Create party', exact: true }).click();
     await expect(page.getByRole('textbox', { name: 'Direct video URL' })).toBeVisible();
     await page.reload();
-    const card = page.locator('.cinema-column > .md-status-card').filter({ hasText: 'Reconnecting to room…' });
-    await expect(card).toBeVisible();
-    await expect(card.locator('.md-loading__shape')).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'Direct video URL' })).toBeVisible();
+    // Keep the transport unavailable beyond the former notice delay.
+    await page.waitForTimeout(1200);
+    await expect(page.getByText('Reconnecting to room', { exact: false })).toHaveCount(0);
+    await expect(page.locator('.cinema-column > .md-status-card')).toHaveCount(0);
     await expect(page.locator('.connection-status')).toHaveCount(0);
     await expect(page.getByRole('textbox', { name: 'Direct video URL' })).toBeVisible();
-    expect(await card.evaluate(el => el.getBoundingClientRect().top >= document.querySelector('.app-bar')!.getBoundingClientRect().bottom)).toBe(true);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath('reconnect.png'), fullPage: true });
   });
