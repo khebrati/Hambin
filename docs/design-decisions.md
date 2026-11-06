@@ -273,3 +273,9 @@
 - **Decision:** When create or join is blocked by an existing active membership, show a dismissible snackbar with a “Return to party” action. Keep the action visible until used, dismissed, or superseded.
 - **Contract:** The authenticated 409 `ALREADY_IN_ROOM` response supplies optional `activePartyCode`. Return uses normal join validation; a failed return shows the relevant recovery error.
 - **Boundary:** Preserve one active party per identity. Returning resumes the existing membership; it does not leave the party or create a new one. Native recovery UI is outside this browser change.
+
+## DD-033: Compressed Local Avatar Artwork
+
+- **Status:** Approved by the stakeholder on 2026-11-06.
+- **Decision:** Both browser and native clients ship the twelve existing avatars as 512 × 512 WebP images, encoded at quality 80. Preserve avatar identities, artwork, and selection behavior.
+- **Assets:** Browser imports reference WebP derivatives; its original PNGs remain unreferenced source artwork and are excluded from the Vite output. Native Compose drawable resources use WebP in place of PNG, retaining the same generated resource names. Native originals remain available in Git history.
