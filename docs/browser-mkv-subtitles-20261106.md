@@ -99,3 +99,27 @@ check, not a source-throughput or full-movie reliability guarantee.
 Local production evidence: `/tmp/hambin-production-integrated.json` and
 `/tmp/hambin-production-integrated.png`. No tokens or passwords were persisted in
 those evidence files.
+
+## Seek-bar follow-up (2026-11-11, local fix)
+
+Dragging the playback slider queued every intermediate asynchronous seek and
+reset the slider to the previous native position while buffering. The adapter
+now skips superseded queued targets, and the slider keeps the requested position
+until playback catches up. An in-progress seek still finishes before the newest
+target is processed; it is not cancelled. Separately, the requested MKV
+`preLoadTime` target increases from 10 to 30 seconds. This is a demux preload
+target, not a strict guarantee of 30 playable seconds or a download-byte cap.
+
+The new drag regression fails against the previous code (14 engine seeks) and
+passes with the fix (the initial seek plus the final requested target). Skip
+buttons are also covered during playback and while paused. In installed Chrome
+154, the stakeholder's `The.Odyssey.2026.1080p.BluRay.Farsi.3Dubbed.Film2Media.mkv`
+URL completed repeated forward seeks to 600 and 1800 seconds and a backward seek
+to 300 seconds in approximately 5.5, 2.3 and 3.5 seconds, with playback continuing
+and no player alerts. A single seek on the previous code also succeeded, so
+this confirms the queue defect rather than proving every reported stall has
+the same cause. These checks used the local player, not a production deployment.
+
+All 77 unit tests and the production build passed. The autoplay-recovery browser
+test had intermittent failures during verification; a baseline rerun passed.
+The final full integrated-player rerun passed all nine browser tests.

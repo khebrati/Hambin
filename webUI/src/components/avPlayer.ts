@@ -80,6 +80,7 @@ export class AvMedia implements PlayerMedia {
   private durationValue = NaN;
   private previewing = false;
   private pendingSeeks = 0;
+  private seekRevision = 0;
   private nativeVideo: HTMLVideoElement | null = null;
   private removeNativeListeners: (() => void) | null = null;
   private container: HTMLDivElement;
@@ -137,7 +138,7 @@ export class AvMedia implements PlayerMedia {
     if (this.closed) return;
     const player = this.player = new Constructor({
       container: this.container, enableWorker: false, checkUseMSE: () => true,
-      preLoadTime: 10, getWasm: () => null,
+      preLoadTime: 30, getWasm: () => null,
     });
     const listen = (name: string, action: () => void) => player.on(name, () => { if (!this.closed) action(); });
     listen('played', () => { this.attachNativeVideo(); if (this.previewing) return; this.pausedValue = false; this.endedValue = false; this.seekingValue = false; this.callbacks.state('playing'); this.callbacks.update(); });
@@ -183,8 +184,12 @@ export class AvMedia implements PlayerMedia {
   }
   get currentTime() { return this.loaded ? this.video()?.currentTime ?? Number(this.player?.currentTime ?? 0n) / 1000 : 0; }
   set currentTime(value: number) {
+    const revision = ++this.seekRevision;
     this.seekingValue = true; this.pendingSeeks++;
     void this.enqueue(async player => {
+      // Range inputs emit repeatedly during a drag. Only the newest queued
+      // target matters; replaying every intermediate position stalls seeking.
+      if (revision !== this.seekRevision) return;
       const paused = this.pausedValue || !!this.video()?.paused;
       this.callbacks.state('buffering');
       this.previewing = paused; player.setVolume(0);
@@ -221,7 +226,7 @@ export class AvMedia implements PlayerMedia {
       }
     }).catch(() => this.fail('Unable to seek this video. Retry the video.')).finally(() => {
       this.pendingSeeks--; this.seekingValue = false;
-      if (!this.closed) { this.callbacks.state(this.pausedValue ? 'paused' : 'playing'); this.callbacks.update(); }
+      if (!this.closed && !this.pendingSeeks) { this.callbacks.state(this.pausedValue ? 'paused' : 'playing'); this.callbacks.update(); }
     });
   }
   get duration() { return this.durationValue; }

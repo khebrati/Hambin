@@ -285,7 +285,7 @@ function MediaPlayer({ url, onReport, onNotify, onState, syncTarget, onSync, syn
   const seek = (value: number) => {
     const video = media();
     if (!video || !ready || !Number.isFinite(video.duration) || live) return;
-    try { video.currentTime = Math.max(0, Math.min(value, video.duration)); setPosition(video.currentTime); }
+    try { const target = Math.max(0, Math.min(value, video.duration)); video.currentTime = target; setPosition(target); }
     catch { callbacks.current.onNotify('Seeking is unavailable for this video.'); }
   };
   const selectSubtitle = (value: string) => {

@@ -32,6 +32,53 @@ async function seek(page: Page, value: number) {
   }, value);
 }
 
+test('skip buttons seek forward and backward during playback and while paused', async ({ page }) => {
+  await mediaSource(page);
+  await openPlayer(page);
+  const video = page.locator('.integrated-player video');
+  await page.getByRole('button', { name: 'Fast-forward 15 seconds', exact: true }).click();
+  await expect.poll(() => video.evaluate(v => v.currentTime)).toBeGreaterThan(15);
+  await page.getByRole('button', { name: 'Rewind 15 seconds', exact: true }).click();
+  await expect.poll(() => video.evaluate(v => v.currentTime)).toBeLessThan(8);
+  await page.getByRole('button', { name: 'Pause', exact: true }).click();
+  await expect.poll(() => video.evaluate(v => v.paused)).toBe(true);
+  await page.getByRole('button', { name: 'Fast-forward 15 seconds', exact: true }).click();
+  await expect.poll(() => video.evaluate(v => v.currentTime)).toBeGreaterThan(15);
+  await expect.poll(() => video.evaluate(v => v.paused)).toBe(true);
+  await page.getByRole('button', { name: 'Rewind 15 seconds', exact: true }).click();
+  await expect.poll(() => video.evaluate(v => v.currentTime)).toBeLessThan(8);
+  await expect.poll(() => video.evaluate(v => v.paused)).toBe(true);
+  await expect(page.getByRole('alert')).toHaveCount(0);
+});
+
+test('dragging the seek bar discards intermediate queued seeks', async ({ page }) => {
+  await mediaSource(page);
+  await openPlayer(page);
+  await page.getByRole('button', { name: 'Pause', exact: true }).click();
+  await page.evaluate(() => {
+    const player = (window as any).AVPlayer.Instances[0];
+    const seek = player.seek.bind(player);
+    (window as any).seekRequests = [];
+    player.seek = async (time: bigint) => {
+      (window as any).seekRequests.push(Number(time));
+      await new Promise(resolve => setTimeout(resolve, 100));
+      return seek(time);
+    };
+  });
+  await seek(page, 10);
+  await expect.poll(() => page.evaluate(() => (window as any).seekRequests.length)).toBe(1);
+  await page.getByRole('slider', { name: 'Playback position', exact: true }).evaluate(element => {
+    for (let value = 11; value <= 23; value++) {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(element, String(value));
+      element.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  });
+  await expect.poll(() => page.locator('.integrated-player video').evaluate(v => v.currentTime)).toBeGreaterThan(22.9);
+  expect(await page.evaluate(() => (window as any).seekRequests)).toEqual([10000, 23000]);
+  await expect.poll(() => page.locator('.integrated-player video').evaluate(v => v.paused)).toBe(true);
+  await expect(page.getByRole('alert')).toHaveCount(0);
+});
+
 for (const settings of [
   { name: 'desktop light', query: '&theme=light', viewport: { width: 1280, height: 900 } },
   { name: 'mobile dark large RTL', query: '&theme=dark&largeText=1&dir=rtl', viewport: { width: 390, height: 844 } },
