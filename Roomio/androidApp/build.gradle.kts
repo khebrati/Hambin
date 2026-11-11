@@ -27,7 +27,7 @@ android {
         minSdk = 23
         targetSdk = 36
 
-        applicationId = "top.roomio.app.androidApp"
+        applicationId = "top.watchparty.app"
         versionCode = 8
         versionName = "1.1.2"
     }
