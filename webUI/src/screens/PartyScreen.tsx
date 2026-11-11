@@ -1,3 +1,5 @@
+import { Bug } from 'lucide-react';
+import { BugReportDialog } from '../components/BugReportDialog';
 import {
   Clipboard,
   ClipboardCheck,
@@ -99,6 +101,7 @@ export function PartyScreen({
   onNotify,
   live,
 }: PartyScreenProps) {
+  const [bugReportOpen, setBugReportOpen] = useState(false);
   const [urlDraft, setUrlDraft] = useState(
     streamStatus === 'error' ? 'not-a-complete-link' : '',
   );
@@ -237,6 +240,7 @@ export function PartyScreen({
                 setInviteOpen(true);
               }}
             />
+            <IconButton icon={Bug} label="Report a bug" onClick={() => setBugReportOpen(true)} />
             {hasPlayer ? (
               <IconButton icon={Link2} label="View video link" onClick={() => setUrlOpen(true)} />
             ) : null}
@@ -375,6 +379,7 @@ export function PartyScreen({
         </aside>
       </main>
 
+      <BugReportDialog open={bugReportOpen} roomId={party.id} enabled={!!live} onClose={() => setBugReportOpen(false)} onSent={() => onNotify("Bug report sent. Thank you.")} />
       <Dialog
         open={inviteOpen}
         title="Invite friends"

@@ -39,6 +39,28 @@ class KtorRoomRepository(
     private val sessions: SessionRepository,
     private val lastRooms: LastRoomStore,
 ) : RoomRepository {
+    @kotlinx.serialization.Serializable
+    private data class BugReportRequest(val reportId: String, val description: String, val clientInfo: Map<String, String>, val sessionStartedAt: String, val log: String)
+    private var pendingReport: Pair<String, BugReportRequest>? = null
+
+    override suspend fun reportBug(roomId: String, description: String) {
+        val text = description.trim()
+        val previous = pendingReport?.takeIf { it.first == roomId && it.second.description == text }?.second
+        val payload = previous ?: BugReportRequest(newReportId(), text, reportDeviceInfo(), AppSessionLog.startedAt, AppSessionLog.snapshot())
+        pendingReport = roomId to payload
+        val sent = kotlinx.coroutines.withTimeoutOrNull(30_000) {
+            authed {
+                http.post("${config.baseUrl}/v1/rooms/$roomId/bug-reports") {
+                    contentType(ContentType.Application.Json)
+                    setBody(payload)
+                }.bodyOrThrow<kotlinx.serialization.json.JsonObject>()
+            }
+            true
+        } ?: false
+        if (!sent) throw PartyException(PARTY_CODE_NETWORK, "Report request timed out")
+        pendingReport = null
+    }
+
     override suspend fun lastRoom(): Room? = sessions.currentSession()?.identity?.id?.let {
         lastRooms.read(config.baseUrl, it)
     }

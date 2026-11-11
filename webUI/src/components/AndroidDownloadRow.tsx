@@ -1,7 +1,7 @@
 import { ArrowDownToLine, Smartphone } from 'lucide-react';
 import './android-download-row.css';
 
-export const androidDownloadUrl = 'https://watchparty.top/downloads/roomio-1.1.1-7.apk';
+export const androidDownloadUrl = 'https://watchparty.top/downloads/roomio-1.1.2-8.apk';
 
 export function AndroidDownloadRow() {
   return (
@@ -11,7 +11,7 @@ export function AndroidDownloadRow() {
         <strong>Native Android app</strong>
         <p>Background voice party</p>
       </div>
-      <a className="md-icon-button md-icon-button--tonal" href={androidDownloadUrl} download="roomio-1.1.1-7.apk" aria-label="Download native Android app" title="Download native Android app" data-tooltip="Download for Android">
+      <a className="md-icon-button md-icon-button--tonal" href={androidDownloadUrl} download="roomio-1.1.2-8.apk" aria-label="Download native Android app" title="Download native Android app" data-tooltip="Download for Android">
         <ArrowDownToLine size={22} aria-hidden="true" />
       </a>
     </aside>

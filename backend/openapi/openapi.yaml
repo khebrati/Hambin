@@ -484,6 +484,53 @@ paths:
           description: VOICE_SESSION_EXPIRED; obtain a fresh join and reconcile peer generations
         '503':
           description: VOICE_DISABLED or AUTH_UNAVAILABLE
+  /v1/rooms/{roomId}/bug-reports:
+    post:
+      tags: [Rooms]
+      operationId: submitBugReport
+      summary: Save a private bug report with device details and the current app session log
+      security:
+      - bearerAuth: []
+      parameters:
+      - in: path
+        name: roomId
+        required: true
+        schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reportId, description, clientInfo, sessionStartedAt, log]
+              properties:
+                reportId: {type: string, format: uuid, description: Stable across retries of this payload}
+                description: {type: string, minLength: 1, maxLength: 8000}
+                clientInfo:
+                  type: object
+                  minProperties: 1
+                  maxProperties: 32
+                  propertyNames: {maxLength: 64}
+                  additionalProperties: {type: string, maxLength: 2048}
+                sessionStartedAt: {type: string, format: date-time}
+                log: {type: string, description: Complete captured application log; maximum 8 MiB UTF-8}
+      responses:
+        '201':
+          description: Durably stored, or identical report previously stored by this identity
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [reportId]
+                properties:
+                  reportId: {type: string, format: uuid}
+        '400': {description: INVALID_REPORT}
+        '401': {description: Authentication required}
+        '403': {description: Active room membership required}
+        '409': {description: REPORT_CONFLICT}
+        '413': {description: REPORT_TOO_LARGE}
+        '429': {description: RATE_LIMITED}
+        '503': {description: Service unavailable; retry with the same report ID}
 components:
   securitySchemes:
     bearerAuth:

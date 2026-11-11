@@ -1,3 +1,4 @@
+import { appLog } from './sessionLog';
 import { token } from './auth';
 import { ApiError } from './errors';
 import { backendUrl } from './config';
@@ -16,6 +17,7 @@ export async function request<T>(path: string, body?: unknown, method = body ===
     const failure = await response.clone().json().catch(() => ({}));
     if (['SESSION_EXPIRED', 'INVALID_TOKEN', 'UNAUTHENTICATED'].includes(failure.code)) response = await send(true);
   }
+  appLog(`HTTP ${method} ${path.replace(/\/rooms\/[^/]+/, '/rooms/[room]')} status=${response.status}`);
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
     throw new ApiError(error.code || 'UNAVAILABLE', response.status, error.code === 'ALREADY_IN_ROOM' && typeof error.activePartyCode === 'string' && /^[0-9A-HJKMNP-TV-Z]{8}$/.test(error.activePartyCode) ? error.activePartyCode : undefined);
@@ -23,6 +25,7 @@ export async function request<T>(path: string, body?: unknown, method = body ===
   return response.status === 204 ? undefined as T : response.json();
 }
 const messages: Record<string, string> = {
+  REPORT_TOO_LARGE: 'The session log is too large to send. Copy your description, then reload the page to begin a new log.', INVALID_REPORT: 'Check your description (up to 8,000 characters).', REPORT_CONFLICT: 'This report changed. Edit your description and send again.',
   INVALID_STREAM_URL: 'Enter a valid HTTPS video URL.', FORBIDDEN: 'Only the room owner can change the stream.', OWNER_ABSENT: 'The owner must be present to change the stream.', ALREADY_IN_ROOM: 'You already have an active party. Return to it and leave before opening another.', STREAM_ACTIVE: 'End the current stream before starting another.', STALE_STREAM_REVISION: 'The stream changed. Refresh the room and try again.',
   NETWORK: "You're offline. Check your connection and try again.", ROOM_NOT_FOUND: 'That party could not be found. Check the code and try again.', ROOM_FULL: 'This room is full.', ROOM_ENDED: 'This party has ended.', NOT_A_MEMBER: 'Your room session has ended. Join the party again.', OWNER_REQUIRED: 'Only the present owner can change the stream.', INVALID_URL: 'Enter a valid HTTPS video URL.', INVALID_PROFILE: 'Use a name of 1–48 characters.', RATE_LIMITED: 'Too many requests. Wait a moment and try again.', AUTH_UNAVAILABLE: 'Identity service is unavailable. Your saved identity is kept; try again.', SESSION_REVOKED: 'This session was revoked. Reset your guest identity to start again.', SESSION_EXPIRED: 'Your saved guest session has expired. Reset your guest identity to start again.', INVALID_TOKEN: 'Your saved guest session is unavailable. Reset your guest identity to start again.', UNAUTHENTICATED: 'Your saved guest session is unavailable. Reset your guest identity to start again.', VOICE_DISABLED: 'Voice is unavailable on this server.', UNAVAILABLE: 'The service is unavailable. Try again.'
 };

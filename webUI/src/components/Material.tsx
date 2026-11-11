@@ -118,6 +118,7 @@ export function TextField({
 }
 
 interface DialogProps {
+  className?: string;
   open: boolean;
   title: string;
   children: ReactNode;
@@ -125,7 +126,7 @@ interface DialogProps {
   onClose: () => void;
 }
 
-export function Dialog({ open, title, children, actions, onClose }: DialogProps) {
+export function Dialog({ open, title, children, actions, onClose, className = '' }: DialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const titleId = useId();
 
@@ -139,7 +140,7 @@ export function Dialog({ open, title, children, actions, onClose }: DialogProps)
   return (
     <dialog
       ref={dialogRef}
-      className="md-dialog"
+      className={`md-dialog ${className}`}
       aria-labelledby={titleId}
       onCancel={(event) => {
         event.preventDefault();

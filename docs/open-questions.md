@@ -149,3 +149,8 @@ Resolved questions are preserved with their answers for traceability.
 - [Resolved, DD-031] Retain Node/PostgreSQL/private Coturn peer mesh and preserve healthy links during individual peer failure.
 - Physical two/four/eight-person mixed Android/browser audio, headset/Bluetooth and network-switch/background acceptance remain unverified.
 - Production TURN TLS443 DNS/certificates/firewall activation, the two-hour eight-person soak, and 100 simultaneous eight-person rooms require measured acceptance before a stability/capacity claim. See [voice stability acceptance](voice-stability-acceptance.md).
+
+## Bug-report action concepts (2026-11-11)
+
+- [Resolved, DD-041] Use a bug icon next to Share/Invite in the room app bar with one large description field.
+- [Resolved, DD-041] Send description, device/browser details and application session logs to private backend storage; see [contract](bug-report-contract.md). Retention defaults to 30 days. A staff triage UI or notifications remain outside this feature.

@@ -1,3 +1,4 @@
+import { appLog } from './data/sessionLog';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button, LoadingIndicator, Snackbar, StatusCard } from './components/Material';
 import { errorMessage, request, ApiError, MutationRequests } from './data/api';
@@ -48,6 +49,7 @@ export default function LiveApp() {
   const [voiceState, setVoiceState] = useState<VoiceState>(voiceOff);
   const [syncTarget, setSyncTarget] = useState<{requestId: string;positionMs: number}>();
   const [syncing, setSyncing] = useState(false);
+  useEffect(() => { appLog(`Screen ${screen}; stream=${streamStatus}; realtime=${connected}; voice=${voiceState.status}; micMuted=${voiceState.muted}`); }, [screen, streamStatus, connected, voiceState.status, voiceState.muted]);
   const mutations = useRef(new MutationRequests());
   const entering = useRef(false);
   const realtime = useRef<RoomConnection | null>(null);

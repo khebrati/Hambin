@@ -180,6 +180,7 @@ private class MeshVoiceSession(
     private var factory: PeerConnectionFactory? = null
     private var audioDevice: AudioDeviceModule? = null
     private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    private val audioRoute = VoiceAudioRoute(audioManager)
     private val routeCallback = object : AudioDeviceCallback() {
         override fun onAudioDevicesAdded(devices: Array<out AudioDeviceInfo>) = routeChanged()
         override fun onAudioDevicesRemoved(devices: Array<out AudioDeviceInfo>) = routeChanged()
@@ -192,6 +193,7 @@ private class MeshVoiceSession(
     suspend fun open() {
         voiceLog.i("Opening voice signaling")
         ensureRtc()
+        eventMutex.withLock { audioRoute.start() }
         audioManager.registerAudioDeviceCallback(routeCallback, Handler(Looper.getMainLooper()))
         routeChanged()
         val socket = http.webSocketSession(socketIoUrl(backend.baseUrl))
@@ -239,11 +241,10 @@ private class MeshVoiceSession(
     private fun routeChanged() {
         scope.launch { eventMutex.withLock {
             if (closed) return@withLock
-            val inputs = audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS)
-            val preferred = inputs.firstOrNull { it.type in setOf(AudioDeviceInfo.TYPE_WIRED_HEADSET, AudioDeviceInfo.TYPE_USB_HEADSET, AudioDeviceInfo.TYPE_BLUETOOTH_SCO) }
-            (audioDevice as? JavaAudioDeviceModule)?.setPreferredInputDevice(preferred)
-            // Android owns playout routing; no exclusive audio focus is requested from the movie.
-            voiceLog.i("Voice audio route changed inputType=${preferred?.type ?: 0}")
+            // Let Android pair the microphone with the selected communication output.
+            (audioDevice as? JavaAudioDeviceModule)?.setPreferredInputDevice(null)
+            runCatching { audioRoute.update() }
+                .onFailure { voiceLog.w("Voice output route update failed", it) }
         } }
     }
 
@@ -846,11 +847,15 @@ private class MeshVoiceSession(
         scope.cancel()
         audioManager.unregisterAudioDeviceCallback(routeCallback)
         eventMutex.withLock {
-            peers.keys.toList().forEach(::removePeer)
-            track?.dispose(); track = null
-            source?.dispose(); source = null
-            factory?.dispose(); factory = null
-            audioDevice?.release(); audioDevice = null
+            try {
+                peers.keys.toList().forEach(::removePeer)
+                track?.dispose(); track = null
+                source?.dispose(); source = null
+                factory?.dispose(); factory = null
+                audioDevice?.release(); audioDevice = null
+            } finally {
+                audioRoute.close()
+            }
         }
         withTimeoutOrNull(1_000L) { runCatching {
             namespace?.emit("voice.leave", buildJsonObject {})?.let { validateVoiceAcknowledgement("voice.leave", it) }

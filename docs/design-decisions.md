@@ -46,6 +46,7 @@
 
 - **Status:** Approved for the Compose implementation
 - **Decision:** The room invite action opens a responsive Material dialog with a selectable party code and mock invite link. Each option has its own copy action, visible copied feedback, snackbar confirmation, and a manual-selection recovery message when clipboard access fails.
+- **Android update (2026-11-11):** Replace the invite-link Copy link action with Share and a share icon. Open the Android Sharesheet with the public invite URL as plain text; retain Copy code and selectable fields. Dismissing the sheet leaves the dialog available, without claiming the invite was sent. If launch fails, show retry/manual-selection recovery. Other clients retain their current link action.
 - **Rationale:** Showing both options preserves the prototype flow and lets users share the most convenient identifier without bypassing the required pre-join room preview.
 - **Responsive consequence:** Share fields and actions sit side by side when the dialog has at least 400dp of content width and stack at narrower widths or under equivalent layout pressure. All actions retain at least 48dp touch targets.
 
@@ -347,3 +348,18 @@ Deployments do not create database dumps or file snapshots. Preserve live
 PostgreSQL data, protected runtime configuration, public APKs, and TURN renewal.
 Retained application releases do not provide database recovery. Historical
 deployment evidence remains historical.
+
+## DD-040: Stable Android Voice Output
+
+- **Date:** 2026-11-11
+- **Decision:** Android voice defaults to the loudspeaker as soon as voice is joined, including before a movie starts. Prefer wired/USB headphones or an available Bluetooth communication device over the loudspeaker. Retain the current Bluetooth choice when several are available. Starting, pausing, or stopping the movie does not select the voice route.
+- **Lifecycle:** Manage communication routing for the voice session, respond to connected/disconnected audio devices, and release the route and restore the preceding audio mode when voice ends or joining fails. Let Android pair the input with the communication output.
+- **Audio:** Keep voice and movie playback concurrent, with separate call and media volume categories. Do not request exclusive audio focus or change microphone opt-in/mute behavior. Bluetooth uses communication-capable routes; headset capabilities and Android policy determine the available routes and media quality.
+- **Validation:** Data JVM tests passed (69 tests, including five output-policy cases); Android debug build passed. Physical speaker, headset/Bluetooth transitions, and simultaneous audible movie/voice playback remain unverified on hardware for this change.
+
+## DD-041: Room Bug Reports with Session Diagnostics
+
+- **Date:** 2026-11-11
+- **Decision:** Stakeholder selected a bug icon next to Share/Invite in the room top app bar, one large description field and Send for browser/native. This supersedes the entry-point alternatives in `bug-report-designs.md`.
+- **Delivery:** Send description, device/browser metadata and the current application session log to authenticated private PostgreSQL report storage. Disclose the automatic diagnostic attachment in the dialog, redact credentials/URLs in retained logs, retain drafts on failure, and acknowledge only durable server acceptance.
+- **Implementation defaults:** See [shared contract](bug-report-contract.md) for schema, retry/idempotency, limits, 30-day retention and operational access. Captured application logs reset at page/process restart. Logs above the upload limit fail explicitly without silent truncation.

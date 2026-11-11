@@ -42,6 +42,9 @@ interface SessionRepository {
 
 /** Room lifecycle, shared stream control, and voice credentials. */
 interface RoomRepository {
+    /** Submit diagnostics captured through this action; retry unchanged descriptions idempotently. */
+    suspend fun reportBug(roomId: String, description: String) { throw PartyException("UNAVAILABLE", "Reports unavailable") }
+
     /** Last successful admission for the current identity on this device. */
     suspend fun lastRoom(): Room? = null
 

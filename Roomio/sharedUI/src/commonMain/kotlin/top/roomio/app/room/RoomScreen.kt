@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Check
@@ -42,6 +43,7 @@ import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Pause
@@ -388,6 +390,7 @@ internal fun RoomScreen(
                     showLink = state.hasPlayer,
                     showTheme = true,
                     onInvite = { onAction(RoomAction.InviteClicked) },
+                    onReportBug = { onAction(RoomAction.BugReportClicked) },
                     onShowLink = { onAction(RoomAction.LinkClicked) },
                     onLeave = { onAction(RoomAction.LeaveClicked) },
                     onToggleTheme = { isDark = !isDark },
@@ -518,6 +521,7 @@ internal fun RoomScreen(
     }
     }
 
+    if (state.bugReportOpen) BugReportDialog(state, onAction)
     if (state.inviteOpen) {
         InviteFriendsDialog(
             partyCode = state.model.partyCode,
@@ -612,6 +616,7 @@ private fun RoomTopBar(
     showLink: Boolean,
     showTheme: Boolean,
     onInvite: () -> Unit,
+    onReportBug: () -> Unit,
     onShowLink: () -> Unit,
     onLeave: () -> Unit,
     onToggleTheme: () -> Unit,
@@ -648,6 +653,7 @@ private fun RoomTopBar(
                         }
                     }
                     MaterialIconButton(Icons.Filled.PersonAdd, stringResource(Res.string.invite_friends), tonal = true, onClick = onInvite)
+                    MaterialIconButton(Icons.Filled.BugReport, stringResource(Res.string.report_bug), onClick = onReportBug)
                     if (showLink) MaterialIconButton(Icons.Filled.Link, stringResource(Res.string.current_video_link), onClick = onShowLink)
                     MaterialIconButton(Icons.AutoMirrored.Filled.Logout, stringResource(Res.string.leave), onClick = onLeave)
                     if (showTheme && !compactBar) {
@@ -1930,6 +1936,8 @@ private fun InviteFriendsDialog(
     onCopyFailed: () -> Unit,
 ) {
     val clipboard = LocalClipboardManager.current
+    val shareLink = rememberPlatformInviteShare()
+    var shareFailed by remember(inviteLink) { mutableStateOf(false) }
 
     fun copy(value: String, target: InviteCopyTarget) {
         runCatching { clipboard.setText(AnnotatedString(value)) }
@@ -1957,6 +1965,10 @@ private fun InviteFriendsDialog(
                 copyState = copyState,
                 onCopyCode = { copy(partyCode, InviteCopyTarget.CODE) },
                 onCopyLink = { copy(inviteLink, InviteCopyTarget.LINK) },
+                onShareLink = shareLink?.let { share ->
+                    { shareFailed = !share(inviteLink) }
+                },
+                shareFailed = shareFailed,
                 onDismiss = onDismiss,
             )
         }
@@ -1971,6 +1983,8 @@ private fun InviteFriendsDialogCard(
     onCopyCode: () -> Unit,
     onCopyLink: () -> Unit,
     onDismiss: () -> Unit,
+    onShareLink: (() -> Unit)? = null,
+    shareFailed: Boolean = false,
 ) {
     Surface(
         modifier = Modifier
@@ -2028,20 +2042,24 @@ private fun InviteFriendsDialogCard(
                     label = stringResource(Res.string.prototype_invite_link),
                     value = inviteLink,
                     buttonLabel = stringResource(
-                        if (copyState == InviteCopyState.LINK) Res.string.link_copied else Res.string.copy_link,
+                        if (onShareLink != null) Res.string.share_invite
+                        else if (copyState == InviteCopyState.LINK) Res.string.link_copied else Res.string.copy_link,
                     ),
-                    copied = copyState == InviteCopyState.LINK,
+                    copied = onShareLink == null && copyState == InviteCopyState.LINK,
                     tonal = false,
-                    onCopy = onCopyLink,
+                    share = onShareLink != null,
+                    onCopy = onShareLink ?: onCopyLink,
                 )
-                if (copyState == InviteCopyState.ERROR) {
+                if (copyState == InviteCopyState.ERROR || shareFailed) {
                     Surface(
                         shape = MaterialTheme.shapes.medium,
                         color = MaterialTheme.colorScheme.errorContainer,
                         contentColor = MaterialTheme.colorScheme.onErrorContainer,
                     ) {
                         Text(
-                            text = stringResource(Res.string.copy_unavailable_details),
+                            text = stringResource(
+                                if (shareFailed) Res.string.share_unavailable_details else Res.string.copy_unavailable_details,
+                            ),
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                             style = MaterialTheme.typography.bodyMedium,
                         )
@@ -2070,6 +2088,7 @@ private fun InviteShareOption(
     buttonLabel: String,
     copied: Boolean,
     tonal: Boolean,
+    share: Boolean = false,
     onCopy: () -> Unit,
 ) {
     Surface(
@@ -2093,6 +2112,8 @@ private fun InviteShareOption(
             val action: @Composable () -> Unit = {
                 val icon = if (copied) {
                     Icons.Filled.Check
+                } else if (share) {
+                    Icons.Filled.Share
                 } else if (tonal) {
                     Icons.Filled.ContentCopy
                 } else {
@@ -2301,5 +2322,46 @@ private fun OwnerAwayDesktopPreview() = AppTheme(onThemeChanged = {}) {
             ),
         ),
         playerContent = PreviewPlayer,
+    )
+}
+
+@Composable
+private fun BugReportDialog(state: RoomUiState, onAction: (RoomAction) -> Unit) {
+    AlertDialog(
+        onDismissRequest = { onAction(RoomAction.BugReportDismissed) },
+        icon = { Icon(Icons.Filled.BugReport, contentDescription = null) },
+        title = { Text(stringResource(Res.string.report_bug)) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                if (state.bugSent) {
+                    Text(stringResource(Res.string.bug_report_sent))
+                } else {
+                    Text(stringResource(Res.string.bug_report_context))
+                    OutlinedTextField(
+                        value = state.bugDescription,
+                        onValueChange = { onAction(RoomAction.BugDescriptionChanged(it)) },
+                        label = { Text(stringResource(Res.string.bug_report_description)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 6, maxLines = 10, enabled = !state.bugSending,
+                    )
+                    if (state.bugError != null) {
+                        Text(stringResource(when (state.bugError) {
+                            "REPORT_TOO_LARGE" -> Res.string.bug_report_too_large
+                            "RATE_LIMITED" -> Res.string.bug_report_rate_limited
+                            else -> Res.string.bug_report_failed
+                        }), color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (state.bugSent) TextButton(onClick = { onAction(RoomAction.BugReportDismissed) }) { Text(stringResource(Res.string.done)) }
+            else Button(onClick = { onAction(RoomAction.BugReportSend) }, enabled = !state.bugSending && state.bugDescription.isNotBlank()) {
+                Text(stringResource(if (state.bugSending) Res.string.bug_report_sending else Res.string.bug_report_send))
+            }
+        },
+        dismissButton = {
+            if (!state.bugSent) TextButton(onClick = { onAction(RoomAction.BugReportDismissed) }, enabled = !state.bugSending) { Text(stringResource(Res.string.cancel)) }
+        },
     )
 }

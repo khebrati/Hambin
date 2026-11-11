@@ -28,8 +28,8 @@ android {
         targetSdk = 36
 
         applicationId = "top.roomio.app.androidApp"
-        versionCode = 7
-        versionName = "1.1.1"
+        versionCode = 8
+        versionName = "1.1.2"
     }
 
     signingConfigs {

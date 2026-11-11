@@ -91,6 +91,9 @@ interface PartyDataBindings {
             install(ContentNegotiation) { json(json) }
             install(WebSockets)
             install(Logging) {
+                logger = object : io.ktor.client.plugins.logging.Logger {
+                    override fun log(message: String) { co.touchlab.kermit.Logger.withTag("HTTP").i(message) }
+                }
                 level = LogLevel.INFO
                 sanitizeHeader { header -> header == HttpHeaders.Authorization }
                 filter { request -> shouldLogHttpRequest(request.url.build()) }

@@ -34,7 +34,7 @@ internal interface RoomioAppGraph {
 fun App(
     onThemeChanged: @Composable (isDark: Boolean) -> Unit = {},
 ) {
-    val graph = remember { createGraph<RoomioAppGraph>() }
+    val graph = remember { top.roomio.data.party.initializeAppLogging(); createGraph<RoomioAppGraph>() }
     RoomioUi(
         profileRepository = graph.profileRepository,
         sessionRepository = graph.sessionRepository,

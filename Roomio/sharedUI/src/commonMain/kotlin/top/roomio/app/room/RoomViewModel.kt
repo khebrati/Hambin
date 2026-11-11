@@ -68,6 +68,11 @@ internal data class RoomUiState(
     val linkOpen: Boolean = false,
     val leaveOpen: Boolean = false,
     val abortOpen: Boolean = false,
+    val bugReportOpen: Boolean = false,
+    val bugDescription: String = "",
+    val bugSending: Boolean = false,
+    val bugError: String? = null,
+    val bugSent: Boolean = false,
 ) {
     val isOwner: Boolean
         get() = model.role == RoomRole.OWNER && model.ownerPresent
@@ -81,6 +86,10 @@ internal data class RoomUiState(
 }
 
 internal sealed interface RoomAction {
+    data object BugReportClicked : RoomAction
+    data object BugReportDismissed : RoomAction
+    data class BugDescriptionChanged(val description: String) : RoomAction
+    data object BugReportSend : RoomAction
     data class VideoUrlChanged(val url: String) : RoomAction
     data class VideoUrlPasted(val url: String) : RoomAction
     data class PlaybackPositionChanged(val positionMs: Long) : RoomAction
@@ -184,6 +193,10 @@ internal class RoomViewModel(
 
     fun onAction(action: RoomAction) {
         when (action) {
+            RoomAction.BugReportClicked -> mutableState.update { it.copy(bugReportOpen = true, bugSent = false) }
+            RoomAction.BugReportDismissed -> if (!state.value.bugSending) mutableState.update { it.copy(bugReportOpen = false) }
+            is RoomAction.BugDescriptionChanged -> if (!state.value.bugSending) mutableState.update { it.copy(bugDescription = action.description.take(8000), bugError = null, bugSent = false) }
+            RoomAction.BugReportSend -> sendBugReport()
             is RoomAction.VideoUrlChanged -> mutableState.update { it.copy(videoUrl = action.url) }
             is RoomAction.VideoUrlPasted -> mutableState.update { it.copy(videoUrl = action.url) }
             is RoomAction.PlaybackPositionChanged -> mutableState.update { it.copy(positionMs = it.clamp(action.positionMs)) }
@@ -251,6 +264,21 @@ internal class RoomViewModel(
             RoomAction.EndStreamConfirmed -> {
                 mutableState.update { it.copy(abortOpen = false, playback = RoomPlaybackState.ABORTED, fullscreenMode = false) }
                 abortStream()
+            }
+        }
+    }
+
+    private fun sendBugReport() {
+        val current = state.value
+        if (current.bugSending || current.bugDescription.isBlank() || current.bugSent) return
+        mutableState.update { it.copy(bugSending = true, bugError = null) }
+        viewModelScope.launch {
+            try {
+                roomRepository.reportBug(roomId, current.bugDescription)
+                mutableState.update { it.copy(bugSending = false, bugDescription = "", bugSent = true) }
+            } catch (cancelled: CancellationException) { throw cancelled
+            } catch (error: Throwable) {
+                mutableState.update { it.copy(bugSending = false, bugError = (error as? PartyException)?.code ?: "UNAVAILABLE") }
             }
         }
     }

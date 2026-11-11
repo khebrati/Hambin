@@ -26,7 +26,7 @@ Other notes:
 2. Video playback has play/pause forware/backward and volume set capabilities. 
 
 Confirmed additions:
-1. Party members can invite others by copying the party ID or a shareable prototype link.
+1. Party members can invite others by copying the party ID or sharing an invite link. Android provides a Share button in the Invite friends dialog that opens the Android share sheet with the invite link.
 2. Before joining, users see a room preview with the party title, owner status, participant count, and current stream status, then confirm or cancel joining.
 3. If the room owner leaves, the room stays active without an owner. Remaining users keep their local playback controls but cannot start, replace, or abort the shared video. Ownership does not transfer; owner controls return only when the same owner rejoins.
 4. Android viewers can select soft subtitle tracks provided by a video URL or choose a local subtitle file for their own playback. Hardcoded subtitles remain part of the video image. Subtitle selection is local to each viewer and does not change other participants’ playback.
@@ -43,3 +43,11 @@ Confirmed last-room shortcut (2026-11-11):
 1. Home shows a Last room card for every viewer, whether they created the room or joined as a guest. Remember the most recently successfully joined or created room for the current guest identity on that device/browser, including across app restarts or browser sessions.
 2. Returning opens the existing room preview and normal join flow without retyping the code. The backend determines availability and restores the original owner's permissions; the shortcut does not bypass admission rules.
 3. Keep the shortcut after leaving a room that remains open. Hide it when no room has been saved or the saved room is confirmed ended/unavailable. Temporary network/service failures retain it and offer retry through the normal preview flow.
+
+Confirmed Android voice routing (2026-11-11):
+1. Voice uses the loudspeaker by default from joining voice, including before movie playback. Prefer connected headphones or a Bluetooth communication device when available, and respond to device connection/removal.
+2. Starting or pausing a movie preserves the voice output choice. Voice and movie play concurrently with separate call and media volume controls. Release voice routing settings when the voice session ends.
+
+Confirmed room bug reports (2026-11-11):
+1. Both clients show a bug icon button beside Share/Invite in the room top app bar. It opens a simple dialog with one large description input and Send.
+2. Sending includes the description, available device/browser information, and the saved application log from this app session's startup through submission. Reports go to our backend; show success only after durable acceptance and retain the draft on failure for retry.
