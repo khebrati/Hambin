@@ -401,3 +401,13 @@ deployment evidence remains historical.
 - **Scope:** Provide adaptive/legacy vector resources, stable launcher aliases, and a graph-owned selection API. Leave the theme picker, theme persistence and automatic theme/icon association to the separate integration. Keep app invite links on the always-enabled activity.
 - **Behavior:** Android persists the enabled alias; updates are atomic on API 33+, replacement-first on older versions, idempotent, and expose recoverable failures. Android themed icons may override palette colors. Other native platforms explicitly report unsupported.
 - **Validation:** Android debug assembly, app JVM graph compilation and data JVM tests passed, including eight switching tests. Catalog validation verifies all 24 colors and aliases. Palette preview reviewed; device/OEM launcher refresh, shortcuts and upgrade acceptance remain unverified because no Android device is connected. See [implementation and integration notes](android-launcher-icons.md).
+
+
+## DD-046: Android Launcher Icon Follows Theme Color
+
+- **Date:** 2026-11-12
+- **Decision:** Connect the Shared Screen launcher icon to the saved named theme choice on Android. Each of the 24 named themes selects the matching exact-seed icon; Roomio default selects Basil. This completes the deferred theme integration in DD-045. Light/dark mode does not select another alias.
+- **Lifecycle:** Apply the saved choice at app startup and subsequent successful theme changes independently of profile Save, navigation and connectivity. Keep the observer above navigation and use the application graph's controller. No separate icon preference is introduced.
+- **Recovery:** Preserve the saved theme if launcher switching fails and show a Retry/dismiss snackbar. A new theme cancels an obsolete pending retry; reopening the app reconciles the saved color again. Failed theme storage leaves the preceding theme/icon selected. Unsupported platforms skip synchronization.
+- **Limits:** Launcher refresh timing, OEM behavior and themed-icon overrides retain the limits documented in [Android launcher icons](android-launcher-icons.md).
+- **Validation:** Android debug assembly and app JVM graph compilation passed. Nine focused tests passed, including Compose checks for restored/live color changes, dark-mode recomposition without switching, and snackbar Retry, plus mapping/failure/cancellation cases. Physical Android launcher refresh remains unverified; no device is connected.

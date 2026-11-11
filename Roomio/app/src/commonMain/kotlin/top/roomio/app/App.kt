@@ -38,9 +38,11 @@ fun App(
 ) {
     val graph = remember { top.roomio.data.party.initializeAppLogging(); createGraph<RoomioAppGraph>() }
     val themePreferences = remember(graph) { graph.themePreferencesRepository }
+    val launcherIconController = remember(graph) { graph.launcherIconController }
     RoomioUi(
         profileRepository = graph.profileRepository,
         themePreferencesRepository = themePreferences,
+        launcherIconController = launcherIconController,
         sessionRepository = graph.sessionRepository,
         roomRepository = graph.roomRepository,
         realtimeClient = graph.realtimeClient,

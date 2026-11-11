@@ -59,4 +59,4 @@ Confirmed speaking-indicator semantics (2026-11-11):
 
 Confirmed Android launcher icon foundation (2026-11-11):
 1. Use the approved Shared Screen app icon, with bundled variants for all 24 named theme seed colors. Each background uses the exact supplied seed color with a contrasting foreground.
-2. Provide Android launcher-icon switching foundations now; associate icon color with the selected theme in a later integration after the theme picker is complete. The initial icon is Shared Screen in Basil, matching the approved concept.
+2. Android launcher icon color follows the selected named theme, including restoration at app launch. Roomio default uses Shared Screen in Basil, matching the approved concept. Light/dark mode does not change the chosen icon color. Keep the saved theme if switching fails and offer Retry.

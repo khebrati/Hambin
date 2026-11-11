@@ -7,6 +7,10 @@ import top.roomio.domain.profile.ThemeColor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import top.roomio.domain.launcher.LauncherIconController
+import top.roomio.app.theme.ThemeLauncherIcon
 import androidx.compose.ui.tooling.preview.Preview
 import dev.zacsweers.metro.DependencyGraph
 import dev.zacsweers.metro.Provides
@@ -92,6 +96,7 @@ fun RoomioUi(
     voiceCoordinator: VoiceCoordinator = PreviewVoiceCoordinator,
     sessionKeeper: SessionKeeper = PreviewSessionKeeper,
     onThemeChanged: @Composable (isDark: Boolean) -> Unit = {},
+    launcherIconController: LauncherIconController? = null,
 ) {
     val presentationGraph = remember(themePreferencesRepository, profileRepository, sessionRepository, roomRepository, realtimeClient, voiceCoordinator, sessionKeeper) {
         createGraphFactory<PresentationGraph.Factory>().create(
@@ -107,10 +112,15 @@ fun RoomioUi(
 
     val themeColor by themePreferencesRepository.color.collectAsState()
     AppTheme(onThemeChanged, themeColor = themeColor) {
-        RoomioNavigation(
-            presentationGraph = presentationGraph,
-            modifier = Modifier,
-        )
+        Box(Modifier.fillMaxSize()) {
+            RoomioNavigation(
+                presentationGraph = presentationGraph,
+                modifier = Modifier,
+            )
+            if (launcherIconController != null && launcherIconController.isSupported) {
+                ThemeLauncherIcon(themeColor, launcherIconController)
+            }
+        }
     }
 }
 
