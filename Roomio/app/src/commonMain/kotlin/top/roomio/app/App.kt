@@ -18,9 +18,10 @@ import top.roomio.domain.profile.ProfileRepository
 
 @DependencyGraph(
     AppScope::class,
-    bindingContainers = [ProfileDataBindings::class, PartyDataBindings::class],
+    bindingContainers = [ProfileDataBindings::class, PartyDataBindings::class, top.roomio.data.launcher.LauncherIconDataBindings::class],
 )
 internal interface RoomioAppGraph {
+    val launcherIconController: top.roomio.domain.launcher.LauncherIconController
     val themePreferencesRepository: top.roomio.domain.profile.ThemePreferencesRepository
     val profileRepository: ProfileRepository
     val sessionRepository: SessionRepository
