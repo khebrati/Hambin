@@ -312,3 +312,9 @@
 - **Experience:** Subtitles start Off. Offer embedded text tracks and audio choices, preserve Unicode, normalize common SubRip markup, and retain local subtitle-file recovery. Retry failed media/assets and offer explicit browser playback when enhanced playback fails. Browser playback may lose embedded track access. Source changes dispose the old engine; autoplay denial offers Play. Seeks preserve paused state and align to the requested timestamp within available samples; reports exclude seeks.
 - **Distribution:** Load versioned, self-hosted assets only on MKV use. Distribute upstream licenses, the pinned source reference, and Hambin's version-checked subtitle seek-order patch. The patch resets old cues before seeking so newly fetched cues survive.
 - **Evidence and limits:** See [browser player evaluation](browser-mkv-subtitles-20261106.md). Bitmap subtitles, advanced subtitle layout parity, universal codec support, physical-device acceptance, and full-movie soak remain unverified or unsupported.
+
+## DD-039: Marvel and DC Default Guest Names
+
+- **Date:** 2026-11-11
+- **Decision:** New browser and native guests receive a random name from the same curated list of 120 Marvel and DC characters (60 from each), such as “Spider-Man,” “Batman,” or “Harley Quinn.” Keep every name digit-free; use “Laura Kinney” rather than the numeric alias. Do not append numbers or enforce uniqueness.
+- **Continuity:** Generate the default for initial profile creation and keep it through retries and restarts. Backend profiles remain authoritative; preserve existing names, including previous defaults, and allow editing in Settings. No identity reset or migration is needed.

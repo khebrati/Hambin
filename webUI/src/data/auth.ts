@@ -1,3 +1,4 @@
+import { randomGuestName } from './guestName';
 import type { IdentityDto } from './contracts';
 import { backendUrl } from './config';
 import { ApiError } from './errors';
@@ -85,8 +86,8 @@ async function obtain(force: boolean): Promise<GuestSession> {
     : run()).finally(() => { pending = undefined; });
   return pending;
 }
-export function ensureSession(profile: Profile): Promise<GuestSession> {
-  initialProfile = profile;
+export function ensureSession(profile?: Profile): Promise<GuestSession> {
+  initialProfile = profile ?? initialProfile ?? { name: randomGuestName(), avatar: 'COMET', language: 'en' };
   return obtain(false);
 }
 export async function token(force = false): Promise<string> {
@@ -107,6 +108,7 @@ export async function resetIdentity(): Promise<void> {
   await sessionRequest('/reset', {});
   clearTimeout(timer);
   current = undefined;
+  initialProfile = undefined;
   localStorage.removeItem(establishedKey);
   localStorage.removeItem('roomio-last-owned-code');
   sessionStorage.removeItem('roomio-active-code');

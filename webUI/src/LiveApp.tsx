@@ -73,7 +73,7 @@ export default function LiveApp() {
     let active = true;
     setInitialError('');
     setResetAllowed(false);
-    void ensureSession(profileBody(defaultIdentity)).then(async value => {
+    void ensureSession().then(async value => {
       if (!active) return;
       setIdentity(identityModel(value.identity)); setIdentityId(value.identity.id); setReady(true);
       const savedCode = localStorage.getItem(savedCodeKey);

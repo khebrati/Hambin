@@ -25,14 +25,12 @@ class PreferencesProfileRepository(
     }
 
     private fun readProfile(): UserProfile {
-        val storedName = settings
-            .getString(NAME_KEY, DEFAULT_PROFILE.name)
-            .trim()
-            .ifEmpty { DEFAULT_PROFILE.name }
-        val storedAvatar = settings.getString(AVATAR_KEY, DEFAULT_PROFILE.avatar.name)
+        val storedName = settings.getStringOrNull(NAME_KEY)?.trim()?.takeIf { it.isNotEmpty() }
+            ?: randomGuestName().also { settings.putString(NAME_KEY, it) }
+        val storedAvatar = settings.getString(AVATAR_KEY, ProfileAvatarId.COMET.name)
         val avatar = ProfileAvatarId.entries
             .firstOrNull { it.name == storedAvatar }
-            ?: DEFAULT_PROFILE.avatar
+            ?: ProfileAvatarId.COMET
 
         return UserProfile(
             name = storedName,
@@ -44,9 +42,5 @@ class PreferencesProfileRepository(
         const val NAME_KEY = "profile.name"
         const val AVATAR_KEY = "profile.avatar"
 
-        val DEFAULT_PROFILE = UserProfile(
-            name = "Nika",
-            avatar = ProfileAvatarId.COMET,
-        )
     }
 }

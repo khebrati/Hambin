@@ -1,3 +1,4 @@
+import { guestNames } from './guestName';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const profile = { name: 'Host', avatar: 'comet', language: 'en' };
@@ -20,6 +21,20 @@ beforeEach(() => {
 });
 afterEach(() => { vi.clearAllTimers(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 describe('backend-owned browser identity', () => {
+  it('issues a character name without digits and restores the saved profile on reload', async () => {
+    fetchMock.mockResolvedValueOnce(reply({ code: 'UNAUTHENTICATED' }, 401)).mockImplementationOnce(async (_url, options) => reply({ ...session(), identity: { ...JSON.parse(options.body), id: 'identity-1' } }));
+    const { ensureSession } = await import('./auth');
+    const first = await ensureSession();
+    expect(guestNames).toContain(first.identity.name);
+    expect(first.identity.name).not.toMatch(/\d/);
+    expect(first.identity.name.length).toBeLessThanOrEqual(48);
+    vi.resetModules();
+    fetchMock.mockResolvedValueOnce(reply({ ...session(), identity: first.identity }));
+    const reloaded = await import('./auth');
+    expect((await reloaded.ensureSession()).identity.name).toBe(first.identity.name);
+    expect(fetchMock.mock.calls.map(call => call[0])).toEqual(['/v1/guest-sessions/refresh', '/v1/guest-sessions', '/v1/guest-sessions/refresh']);
+  });
+
   it('recovers the cookie before issuing a guest and stores no credentials in web storage', async () => {
     fetchMock.mockResolvedValue(reply(session()));
     const { ensureSession } = await import('./auth');

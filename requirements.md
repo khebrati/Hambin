@@ -36,4 +36,5 @@ Confirmed additions:
 Confirmed guest identity requirements (2026-10-23):
 1. Users receive an automatic durable guest identity from our own backend, without registration or login screens. All authentication, credential refresh, verification, and revocation are owned by our backend; neither client requires Firebase or Google authentication services.
 2. A saved guest identity restores the same profile and room ownership after refresh or restart. Temporary connection or service failures retain the saved identity and offer retry; they must not create a replacement guest. Permanently unusable credentials have an explicit, confirmed identity-reset recovery action.
-3. The Firebase-removal release starts with fresh backend guest identities. Existing identities and room ownership are not migrated; local non-secret preferences remain.
+3. New guests receive a random display name from a curated list of at least 100 Marvel and DC characters, without numbers. Names do not need to be unique, persist with the profile, and remain editable in Settings. Existing saved names are preserved.
+4. The Firebase-removal release starts with fresh backend guest identities. Existing identities and room ownership are not migrated; local non-secret preferences remain.
