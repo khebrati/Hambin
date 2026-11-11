@@ -9,7 +9,7 @@ export function AndroidDownloadRow() {
       <Smartphone size={24} aria-hidden="true" />
       <div>
         <strong>Native Android app</strong>
-        <p>Background voice party</p>
+        <p>Background voice party · v1.1.2</p>
       </div>
       <a className="md-icon-button md-icon-button--tonal" href={androidDownloadUrl} download="roomio-1.1.2-8.apk" aria-label="Download native Android app" title="Download native Android app" data-tooltip="Download for Android">
         <ArrowDownToLine size={22} aria-hidden="true" />
