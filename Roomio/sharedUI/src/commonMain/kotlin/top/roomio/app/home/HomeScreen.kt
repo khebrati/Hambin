@@ -72,6 +72,7 @@ import roomio.sharedui.generated.resources.friends_no_owner
 import roomio.sharedui.generated.resources.friends_count
 import roomio.sharedui.generated.resources.home_supporting_copy
 import roomio.sharedui.generated.resources.join_with_code
+import roomio.sharedui.generated.resources.return_to_last_room
 import roomio.sharedui.generated.resources.last_room
 import roomio.sharedui.generated.resources.movie_night_tagline
 import roomio.sharedui.generated.resources.open_party_manager
@@ -88,13 +89,12 @@ import top.roomio.app.theme.RoomioDesignSystem
 import top.roomio.app.theme.RoomioTheme
 import top.roomio.app.profile.ProfileAvatar
 
-private const val ShowRoomPreview = false
-
 @Immutable
 internal data class HomeRoomPreview(
     val title: String,
     val friendCount: Int,
     val returnable: Boolean,
+    val code: String = "",
 )
 
 internal val returnableHomeRoom = HomeRoomPreview(
@@ -164,7 +164,7 @@ internal fun HomeScreen(
                         onJoin = { onAction(HomeAction.JoinPartyClicked) },
                         modifier = Modifier.weight(1.45f),
                     )
-                    if (ShowRoomPreview && state.roomPreview != null) {
+                    if (state.roomPreview != null) {
                         HomeRoomCard(
                             room = state.roomPreview,
                             expanded = true,
@@ -190,7 +190,7 @@ internal fun HomeScreen(
                         onCreate = { onAction(HomeAction.CreatePartyClicked) },
                         onJoin = { onAction(HomeAction.JoinPartyClicked) },
                     )
-                    if (ShowRoomPreview && state.roomPreview != null) {
+                    if (state.roomPreview != null) {
                         HomeRoomCard(
                             room = state.roomPreview,
                             expanded = false,
@@ -484,11 +484,7 @@ private fun RoomCardDetails(
     ) {
         Column(Modifier.weight(1f)) {
             Text(
-                text = if (room.returnable) {
-                    stringResource(Res.string.your_room_is_waiting).uppercase()
-                } else {
-                    stringResource(Res.string.last_room).uppercase()
-                },
+                text = stringResource(Res.string.last_room).uppercase(),
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold,
                 color = if (room.returnable) {
@@ -505,7 +501,9 @@ private fun RoomCardDetails(
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = if (room.returnable) {
+                text = if (room.code.isNotBlank()) {
+                    room.code
+                } else if (room.returnable) {
                     stringResource(Res.string.friends_no_owner, room.friendCount)
                 } else {
                     stringResource(Res.string.friends_count, room.friendCount)
@@ -513,26 +511,11 @@ private fun RoomCardDetails(
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
-        if (room.returnable) {
-            FilledIconButton(
-                onClick = onClick,
-                modifier = Modifier.size(48.dp),
-                colors = IconButtonDefaults.filledIconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                ),
-            ) {
-                CrownIcon(
-                    contentDescription = stringResource(Res.string.rejoin_as_owner),
-                )
-            }
-        } else {
-            IconButton(onClick = onClick, modifier = Modifier.size(48.dp)) {
-                Icon(
-                    Icons.AutoMirrored.Filled.ArrowForward,
-                    contentDescription = stringResource(Res.string.open_party_manager),
-                )
-            }
+        IconButton(onClick = onClick, modifier = Modifier.size(48.dp)) {
+            Icon(
+                Icons.AutoMirrored.Filled.ArrowForward,
+                contentDescription = stringResource(Res.string.return_to_last_room),
+            )
         }
     }
 }

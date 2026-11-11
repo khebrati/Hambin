@@ -5,7 +5,13 @@ import androidx.lifecycle.viewModelScope
 import dev.zacsweers.metro.Inject
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import top.roomio.domain.party.RoomRepository
+import top.roomio.domain.party.RoomAvailability
+import top.roomio.domain.party.PartyException
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import top.roomio.app.profile.ProfileAvatar
@@ -16,7 +22,7 @@ import top.roomio.domain.profile.ProfileRepository
 internal data class HomeUiState(
     val identityName: String = "Nika",
     val identityAvatar: ProfileAvatar = ProfileAvatar.COMET,
-    val roomPreview: HomeRoomPreview? = returnableHomeRoom,
+    val roomPreview: HomeRoomPreview? = null,
 )
 
 internal sealed interface HomeAction {
@@ -28,29 +34,39 @@ internal sealed interface HomeAction {
 
 @Inject
 internal class HomeViewModel(
-    profileRepository: ProfileRepository,
-    sessionRepository: SessionRepository,
+    private val profileRepository: ProfileRepository,
+    private val sessionRepository: SessionRepository,
+    private val roomRepository: RoomRepository,
 ) : ViewModel() {
-    init {
-        // Register the guest identity as soon as the app opens so rooms can be
-        // created or joined without a separate sign-in step.
-        viewModelScope.launch {
-            val profile = profileRepository.currentProfile()
-            runCatching {
-                sessionRepository.ensureSession(
-                    name = profile.name,
-                    avatar = profile.avatar.name,
-                )
+    private val lastRoom = MutableStateFlow<HomeRoomPreview?>(null)
+    private var refreshJob: Job? = null
+
+    fun refreshLastRoom() {
+        refreshJob?.cancel()
+        refreshJob = viewModelScope.launch {
+            try {
+                fun top.roomio.domain.party.Room.toCard() = HomeRoomPreview(title, 0, true, code)
+                lastRoom.value = roomRepository.lastRoom()?.toCard()
+                val profile = profileRepository.currentProfile()
+                sessionRepository.ensureSession(profile.name, profile.avatar.name)
+                val saved = roomRepository.lastRoom() ?: return@launch
+                lastRoom.value = saved.toCard()
+                val preview = roomRepository.preview(saved.code)
+                lastRoom.value = if (preview.availability == RoomAvailability.ENDED) null else saved.toCard().copy(title = preview.title)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                if (error is PartyException && error.code in setOf("ROOM_ENDED", "ROOM_NOT_FOUND")) lastRoom.value = null
+                // Keep the cached card offline; opening it offers preview retry.
             }
         }
     }
 
-    val state: StateFlow<HomeUiState> = profileRepository
-        .observeProfile()
-        .map { profile ->
+    val state: StateFlow<HomeUiState> = combine(profileRepository.observeProfile(), lastRoom) { profile, room ->
             HomeUiState(
                 identityName = profile.name,
                 identityAvatar = profile.avatar.toPresentationAvatar(),
+                roomPreview = room,
             )
         }
         .stateIn(

@@ -38,3 +38,8 @@ Confirmed guest identity requirements (2026-10-23):
 2. A saved guest identity restores the same profile and room ownership after refresh or restart. Temporary connection or service failures retain the saved identity and offer retry; they must not create a replacement guest. Permanently unusable credentials have an explicit, confirmed identity-reset recovery action.
 3. New guests receive a random display name from a curated list of at least 100 Marvel and DC characters, without numbers. Names do not need to be unique, persist with the profile, and remain editable in Settings. Existing saved names are preserved.
 4. The Firebase-removal release starts with fresh backend guest identities. Existing identities and room ownership are not migrated; local non-secret preferences remain.
+
+Confirmed last-room shortcut (2026-11-11):
+1. Home shows a Last room card for every viewer, whether they created the room or joined as a guest. Remember the most recently successfully joined or created room for the current guest identity on that device/browser, including across app restarts or browser sessions.
+2. Returning opens the existing room preview and normal join flow without retyping the code. The backend determines availability and restores the original owner's permissions; the shortcut does not bypass admission rules.
+3. Keep the shortcut after leaving a room that remains open. Hide it when no room has been saved or the saved room is confirmed ended/unavailable. Temporary network/service failures retain it and offer retry through the normal preview flow.

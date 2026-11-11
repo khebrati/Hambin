@@ -205,7 +205,7 @@ export function PreviewApp() {
           onCreate={() => openManager('create')}
           onJoin={() => openManager('join')}
           returnableParty={returnableParty}
-          onRejoinOwnedParty={rejoinOwnedParty}
+          onReturnToParty={rejoinOwnedParty}
         />
       ) : null}
 

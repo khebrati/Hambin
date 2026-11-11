@@ -3,7 +3,7 @@ import { ApiError, backendUrl, request } from './api';
 import type { RoomEvent, Snapshot, SyncResult } from './contracts';
 import { reduceEvent } from './contracts';
 
-interface Options { roomId: string; onSnapshot(value: Snapshot): void; onConnection(connected: boolean): void; onError(error: unknown): void; onClosed(): void }
+interface Options { roomId: string; onSnapshot(value: Snapshot): void; onConnection(connected: boolean): void; onError(error: unknown): void; onClosed(reason?: string): void }
 export class RoomConnection {
   private socket?: Socket;
   private closed = false;
@@ -35,7 +35,7 @@ export class RoomConnection {
       socket.on('event', (event: RoomEvent) => {
         if (generation !== this.generation || this.closed) return;
         socket.emit('ack', { eventId: event.eventId });
-        if (event.topic === 'room.closed') { this.options.onClosed(); this.close(); return; }
+        if (event.topic === 'room.closed') { this.options.onClosed('ROOM_ENDED'); this.close(); return; }
         if (this.recovery) {
           this.pendingEvents.push(event);
           if (this.pendingEvents.length > 256) { socket.disconnect(); this.schedule(); }
@@ -60,7 +60,7 @@ export class RoomConnection {
     } catch (error) {
       if (this.closed || generation !== this.generation) return;
       this.options.onError(error);
-      if (error instanceof ApiError && ['NOT_A_MEMBER', 'ROOM_ENDED', 'ROOM_NOT_FOUND', 'SESSION_REVOKED'].includes(error.code)) { this.options.onClosed(); this.close(); } else this.schedule();
+      if (error instanceof ApiError && ['NOT_A_MEMBER', 'ROOM_ENDED', 'ROOM_NOT_FOUND', 'SESSION_REVOKED'].includes(error.code)) { this.options.onClosed(error.code); this.close(); } else this.schedule();
     }
   }
   private schedule() {

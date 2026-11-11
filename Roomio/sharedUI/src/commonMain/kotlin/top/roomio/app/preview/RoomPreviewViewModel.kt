@@ -38,7 +38,7 @@ internal sealed interface RoomPreviewAction {
 }
 
 internal sealed interface RoomPreviewEffect {
-    data class Joined(val roomId: String) : RoomPreviewEffect
+    data class Joined(val roomId: String, val asOwner: Boolean = false) : RoomPreviewEffect
     data class Error(val connectivity: Boolean) : RoomPreviewEffect
 }
 
@@ -103,7 +103,7 @@ internal class RoomPreviewViewModel(
                 }
                 val room = roomRepository.join(partyCode)
                 mutableState.update { it.copy(isLoading = false) }
-                mutableEffects.tryEmit(RoomPreviewEffect.Joined(room.id))
+                mutableEffects.tryEmit(RoomPreviewEffect.Joined(room.id, room.ownerIdentityId == sessionRepository.currentSession()?.identity?.id))
             } catch (error: PartyException) {
                 log.w("join failed: ${error.code} ${error.message}")
                 mutableState.update { it.copy(isLoading = false, errorMessage = error.code, isOffline = error.isConnectivity()) }

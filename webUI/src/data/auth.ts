@@ -24,6 +24,7 @@ function prepareStorage() {
   if (localStorage.getItem(formatKey) === 'backend-v1') return;
   localStorage.removeItem('roomio-auth-established');
   localStorage.removeItem('roomio-last-owned-code');
+  localStorage.removeItem('roomio-last-room');
   sessionStorage.removeItem('roomio-active-code');
   if (typeof indexedDB !== 'undefined') indexedDB.deleteDatabase('firebaseLocalStorageDb');
   localStorage.setItem(formatKey, 'backend-v1');
@@ -111,5 +112,6 @@ export async function resetIdentity(): Promise<void> {
   initialProfile = undefined;
   localStorage.removeItem(establishedKey);
   localStorage.removeItem('roomio-last-owned-code');
+  localStorage.removeItem('roomio-last-room');
   sessionStorage.removeItem('roomio-active-code');
 }

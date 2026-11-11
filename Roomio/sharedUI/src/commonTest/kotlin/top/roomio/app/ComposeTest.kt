@@ -71,6 +71,25 @@ class ComposeTest {
     }
 
     @Test
+    fun lastRoomCardShowsRealRoomAndOffersReturn() = runComposeUiTest {
+        var action: top.roomio.app.home.HomeAction? = null
+        setContent {
+            AppTheme(onThemeChanged = {}) {
+                top.roomio.app.home.HomeScreen(
+                    state = top.roomio.app.home.HomeUiState(
+                        roomPreview = top.roomio.app.home.HomeRoomPreview("Movie night", 0, true, "ABCD2345"),
+                    ),
+                    onAction = { action = it },
+                )
+            }
+        }
+        onNodeWithText("Movie night").assertExists()
+        onNodeWithText("ABCD2345").assertExists()
+        onNodeWithContentDescription("Return to last room").performClick()
+        kotlin.test.assertEquals(top.roomio.app.home.HomeAction.OpenRoomClicked, action)
+    }
+
+    @Test
     fun homeShowsIdentityAndActionsWithoutRoomCard() = runComposeUiTest {
         setContent {
             RoomioUi(TestProfileRepository())

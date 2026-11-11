@@ -132,6 +132,9 @@ internal fun RoomioNavigation(
         entryProvider = entryProvider {
             entry<HomeRoute> {
                 val viewModel = viewModel { presentationGraph.homeViewModel }
+                androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                    viewModel.refreshLastRoom()
+                }
                 val state by viewModel.state.collectAsStateWithLifecycle()
                 HomeScreen(
                     state = state,
@@ -144,9 +147,9 @@ internal fun RoomioNavigation(
                             HomeAction.JoinPartyClicked -> navigate(
                                 PartyManagerRoute(PartyManagerMode.JOIN),
                             )
-                            HomeAction.OpenRoomClicked -> navigate(
-                                PartyManagerRoute(PartyManagerMode.JOIN),
-                            )
+                            HomeAction.OpenRoomClicked -> state.roomPreview?.code?.takeIf { it.isNotBlank() }?.let {
+                                navigate(RoomPreviewRoute(it))
+                            }
                         }
                     },
                 )
@@ -219,7 +222,7 @@ internal fun RoomioNavigation(
                     viewModel.effects.collect { effect ->
                         when (effect) {
                             is RoomPreviewEffect.Joined ->
-                                navigate(RoomRoute(roomId = effect.roomId, asOwner = false))
+                                navigate(RoomRoute(roomId = effect.roomId, asOwner = effect.asOwner))
                             // Connectivity and generic failures are shown by the screen.
                             else -> Unit
                         }

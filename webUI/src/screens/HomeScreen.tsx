@@ -1,4 +1,4 @@
-import { ArrowRight, Crown, Plus, Settings, Ticket } from 'lucide-react';
+import { ArrowRight, Plus, Settings, Ticket } from 'lucide-react';
 import type { Identity, Party } from '../types';
 import { AppBar } from '../components/AppBar';
 import { Avatar } from '../components/Avatar';
@@ -14,7 +14,7 @@ interface HomeScreenProps {
   onCreate: () => void;
   onJoin: () => void;
   returnableParty: Party | null;
-  onRejoinOwnedParty: () => void;
+  onReturnToParty: () => void;
 }
 
 export function HomeScreen({
@@ -27,7 +27,7 @@ export function HomeScreen({
   onCreate,
   onJoin,
   returnableParty,
-  onRejoinOwnedParty,
+  onReturnToParty,
 }: HomeScreenProps) {
   return (
     <div className="screen home-screen screen-enter">
@@ -84,7 +84,7 @@ export function HomeScreen({
 
         {(!live || returnableParty) && <section
           className={`home-room-preview ${returnableParty ? 'home-room-preview--returnable' : ''}`}
-          aria-label={returnableParty ? 'Your ownerless room' : 'Recent room'}
+          aria-label="Last room"
         >
           <div className="home-room-preview__scene" aria-hidden="true">
             <span className="mini-scene__moon" />
@@ -93,20 +93,20 @@ export function HomeScreen({
           </div>
           <div className="home-room-preview__copy">
             <span className="eyebrow">
-              {returnableParty ? 'Your room is waiting' : 'Last room'}
+              Last room
             </span>
             <strong>{returnableParty?.title || "Mira's late show"}</strong>
-            <span>
+            <span role={busy && live ? 'status' : undefined}>
               {returnableParty
-                ? live ? 'Return with your original owner permissions' : `${returnableParty.participants.length} friends · No owner`
+                ? live ? busy ? 'Checking room…' : returnableParty.code : `${returnableParty.participants.length} friends`
                 : '4 friends'}
             </span>
           </div>
           <IconButton
-            icon={returnableParty ? Crown : ArrowRight}
-            label={returnableParty ? 'Rejoin as owner' : 'Open party manager'}
+            icon={ArrowRight}
+            label={returnableParty ? 'Return to last room' : 'Open party manager'}
             variant={returnableParty ? 'tonal' : 'standard'}
-            onClick={returnableParty ? onRejoinOwnedParty : onJoin}
+            onClick={returnableParty ? onReturnToParty : onJoin}
             disabled={busy}
           />
         </section>}

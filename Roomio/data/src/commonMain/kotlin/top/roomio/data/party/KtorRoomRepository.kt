@@ -37,21 +37,46 @@ class KtorRoomRepository(
     private val http: HttpClient,
     private val config: BackendConfig,
     private val sessions: SessionRepository,
+    private val lastRooms: LastRoomStore,
 ) : RoomRepository {
+    override suspend fun lastRoom(): Room? = sessions.currentSession()?.identity?.id?.let {
+        lastRooms.read(config.baseUrl, it)
+    }
+
+    private suspend fun remember(room: Room): Room {
+        sessions.currentSession()?.identity?.id?.let { lastRooms.remember(config.baseUrl, it, room) }
+        return room
+    }
+
+    private suspend fun forget(codeOrId: String) {
+        sessions.currentSession()?.identity?.id?.let { lastRooms.forget(config.baseUrl, it, codeOrId) }
+    }
 
     override suspend fun createRoom(title: String): Room = authed {
         http.post("${config.baseUrl}/v1/rooms") {
             contentType(ContentType.Application.Json)
             setBody(CreateRoomRequest(title = title))
-        }.bodyOrThrow<RoomAndMembershipDto>().room.toDomain()
+        }.bodyOrThrow<RoomAndMembershipDto>().room.toDomain().let { remember(it) }
     }
 
     override suspend fun preview(code: String): RoomPreview = authed {
-        http.get("${config.baseUrl}/v1/rooms/$code/preview").bodyOrThrow<RoomPreviewDto>().toDomain()
+        try {
+            http.get("${config.baseUrl}/v1/rooms/$code/preview").bodyOrThrow<RoomPreviewDto>().toDomain().also {
+                if (it.availability == top.roomio.domain.party.RoomAvailability.ENDED) forget(code)
+            }
+        } catch (error: PartyException) {
+            if (error.code in setOf("ROOM_ENDED", "ROOM_NOT_FOUND")) forget(code)
+            throw error
+        }
     }
 
     override suspend fun join(code: String): Room = authed {
-        http.post("${config.baseUrl}/v1/rooms/$code/join").bodyOrThrow<RoomAndMembershipDto>().room.toDomain()
+        try {
+            http.post("${config.baseUrl}/v1/rooms/$code/join").bodyOrThrow<RoomAndMembershipDto>().room.toDomain().let { remember(it) }
+        } catch (error: PartyException) {
+            if (error.code in setOf("ROOM_ENDED", "ROOM_NOT_FOUND")) forget(code)
+            throw error
+        }
     }
 
     override suspend fun snapshot(roomId: String): RoomSnapshot = authed {
@@ -59,7 +84,7 @@ class KtorRoomRepository(
     }
 
     override suspend fun leave(roomId: String): Boolean = authed {
-        http.post("${config.baseUrl}/v1/rooms/$roomId/leave").bodyOrThrow<LeaveResponseDto>().roomClosed
+        http.post("${config.baseUrl}/v1/rooms/$roomId/leave").bodyOrThrow<LeaveResponseDto>().roomClosed.also { if (it) forget(roomId) }
     }
 
     override suspend fun startStream(roomId: String, url: String): StreamInfo = authed {

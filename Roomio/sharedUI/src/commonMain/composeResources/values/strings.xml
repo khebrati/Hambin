@@ -118,6 +118,7 @@
     <string name="home_supporting_copy">Your next watch party is one room away.</string>
     <string name="join_with_code">Join with code</string>
     <string name="last_room">Last room</string>
+    <string name="return_to_last_room">Return to last room</string>
     <string name="movie_night_tagline">Movie night, in your room</string>
     <string name="open_party_manager">Open party manager</string>
     <string name="ready_when_everyone_is">Ready when everyone is</string>

@@ -42,6 +42,9 @@ interface SessionRepository {
 
 /** Room lifecycle, shared stream control, and voice credentials. */
 interface RoomRepository {
+    /** Last successful admission for the current identity on this device. */
+    suspend fun lastRoom(): Room? = null
+
     suspend fun createRoom(title: String): Room
 
     suspend fun preview(code: String): RoomPreview
