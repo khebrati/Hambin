@@ -3,7 +3,7 @@
 ## Android download discovery (2026-11-11)
 
 - [Resolved, DD-038] The stakeholder selected the minimal home download row from the [placement concepts](android-download-designs.md), with “Native Android app” and “Background voice party”.
-- [Resolved, DD-038] The stakeholder authorized public hosting of the signed Android release and linking the row to it. Use `https://watchparty.top/downloads/roomio-1.1.0-6.apk`; keep the explicitly labeled row visible to all visitors.
+- [Resolved, DD-038] The stakeholder authorized public hosting of the signed Android release and linking the row to it. The current follow-up release is `https://watchparty.top/downloads/roomio-1.1.1-7.apk`; keep the explicitly labeled row visible to all visitors.
 
 Only questions whose answers could materially change user flow, screen structure, navigation, or visual direction are listed.
 

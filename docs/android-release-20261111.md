@@ -42,3 +42,37 @@ Published on 2026-11-11 to the existing static host, using release manifest `and
 All 56 staged/installed/public HTTPS browser files matched the build checksums. The real public browser download action saved `roomio-1.1.0-6.apk` with exactly 23,564,836 bytes and SHA-256 `651218bd03cbdbb89dcb65ce524b7c465ef28b55d2d064a323407c4d4ca82652`, identical to the signed local artifact. The host serves `application/vnd.android.package-archive`, supports byte ranges, and exposes the matching `.sha256` file. Public desktop and mobile dark/large-text/RTL row checks passed without horizontal overflow or page errors. Readiness remained ready/database/dispatcher/voice true.
 
 Public verification evidence: `/tmp/android-public-download-verification.json`, `/tmp/android-public-assets-verification.json`, `/tmp/production-android-download-verified-rtl.png`. Public APKs must be preserved across future full-release deployments; see `backend/deploy/README.md`. No Git commit or push was requested or performed.
+
+
+## Follow-up: Android 1.1.1 and full current deployment
+
+The stakeholder subsequently requested that all changes be committed and deployed.
+The published 1.1.0/code 6 snapshot predates the Marvel/DC guest names and persistent
+last-room features, so 1.1.1/code 7 includes both without replacing the immutable
+1.1.0 URL. The current home download row targets
+`https://watchparty.top/downloads/roomio-1.1.1-7.apk`.
+
+Runtime source is commit `aaaf271bf21ea66392762ca043c4d9354b309ca9` on
+`feat/random-character-names`; deployment tooling is commit `334715a`. The backend
+submodule is `ffe003c11e9f33462cbcc0ad165c8708149f64aa`, already published on
+its `hambin-migration` branch. All source changes are pushed.
+
+Fresh validation passed: 79 browser unit tests; seven last-room browser tests;
+three active-party recovery browser tests; backend typecheck and eight unit tests
+(six real-service integration cases skipped); 64 native data tests and 55 native
+UI tests (one UI test skipped). Deployment packaging/routing smoke checks and
+shell syntax checks passed.
+
+The signed 1.1.1 APK is 23,573,273 bytes with SHA-256
+`f95b6a5f33f30d8392cb5b32a24a3e5a50776c6cb71385b82364830b585b43d5`.
+It retains all four ABIs, release shrinking/native compression, and the same
+signing certificate as 1.1.0. Signature, package/version, non-debuggable status,
+16 KiB ZIP alignment, and R8 9.1.29 mapping checks passed. The APK and mapping
+are also saved locally in Downloads.
+
+At the stakeholder's request, verification switched from a temporary emulator
+to the connected Redmi 2207117BPG. The emulator was stopped. The signed release
+installed, launched with a generated character name, and created a production
+room successfully. The stakeholder then explicitly stopped further verification
+and requested upload/deployment only; phone room reopening, new public download
+checks, and additional browser/audio acceptance were not performed.
