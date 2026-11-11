@@ -496,3 +496,77 @@ it('ignores credential HTTP results from before a same-run fresh voice generatio
   await vi.advanceTimersByTimeAsync(30000)
   expect(request).toHaveBeenLastCalledWith('/v1/rooms/room/voice/config', { operation: 'refresh', voiceSessionId: 'g2' })
 })
+
+describe('local microphone speaking indicator', () => {
+  function meter() {
+    let level = 0.1
+    const source = { connect: vi.fn(), disconnect: vi.fn() }
+    const analyser = { fftSize: 2048, getFloatTimeDomainData: (samples: Float32Array) => samples.fill(level), disconnect: vi.fn() }
+    const context = { state: 'suspended', createMediaStreamSource: vi.fn(() => source), createAnalyser: () => analyser,
+      resume: vi.fn(async () => { context.state = 'running' }), close: vi.fn(async () => { context.state = 'closed' }) }
+    vi.stubGlobal('AudioContext', class { constructor() { return context } })
+    return { context, source, analyser, silence: () => { level = 0 } }
+  }
+  async function alone() {
+    const result = setup()
+    const joining = result.client.join(); await flush()
+    sockets[0].deliver('voice.roster', { members: [{ membershipId: 'a', voiceSessionId: 'g1', muted: true }] })
+    await joining; await flush()
+    return result
+  }
+  it('detects speech alone, releases after silence, clears immediately on mute and releases the meter on leave', async () => {
+    vi.useFakeTimers()
+    const audio = meter()
+    const { client, states } = await alone()
+    await vi.advanceTimersByTimeAsync(600)
+    expect(states.at(-1)?.members.a.speaking).toBe(false)
+    await client.setMuted(false)
+    expect(states.at(-1)?.members.a.muted).toBe(false)
+    await vi.advanceTimersByTimeAsync(200)
+    expect(states.at(-1)?.members.a.speaking).toBe(false)
+    await vi.advanceTimersByTimeAsync(200)
+    expect(states.at(-1)?.members.a.speaking).toBe(true)
+    audio.silence()
+    await vi.advanceTimersByTimeAsync(400)
+    expect(states.at(-1)?.members.a.speaking).toBe(true)
+    await vi.advanceTimersByTimeAsync(200)
+    expect(states.at(-1)?.members.a.speaking).toBe(false)
+    audio.analyser.getFloatTimeDomainData = samples => samples.fill(0.1)
+    await vi.advanceTimersByTimeAsync(400)
+    expect(states.at(-1)?.members.a.speaking).toBe(true)
+    await client.setMuted(true)
+    expect(states.at(-1)?.members.a.speaking).toBe(false)
+    client.disconnect()
+    expect(audio.source.disconnect).toHaveBeenCalledOnce()
+    expect(audio.analyser.disconnect).toHaveBeenCalledOnce()
+    expect(audio.context.close).toHaveBeenCalledOnce()
+  })
+  it('resumes during the unmute gesture without enabling capture before authorization', async () => {
+    const audio = meter()
+    const { client, track } = await alone()
+    audio.context.state = 'suspended'; audio.context.resume.mockClear()
+    let ack!: () => void
+    sockets[0].acknowledger = (_, __, callback) => { ack = () => callback(null, { ok: true }) }
+    const unmute = client.setMuted(false)
+    expect(audio.context.resume).toHaveBeenCalledOnce()
+    expect(track.enabled).toBe(false)
+    await flush(); ack(); await unmute
+    expect(track.enabled).toBe(true)
+  })
+  it('keeps local speech detection working when a connected peer rejects stats', async () => {
+    vi.useFakeTimers(); meter()
+    const { client, states } = await joinedPeer()
+    FakePeer.peers[0].connect()
+    FakePeer.peers[0].getStats = async () => { throw new Error('peer closed during stats') }
+    await client.setMuted(false)
+    await vi.advanceTimersByTimeAsync(400)
+    expect(states.at(-1)?.members.a.speaking).toBe(true)
+  })
+  it('keeps voice usable when optional Web Audio initialization fails', async () => {
+    vi.stubGlobal('AudioContext', class { constructor() { throw new Error('unavailable') } })
+    const { client, track, states } = await alone()
+    await client.setMuted(false)
+    expect(track.enabled).toBe(true)
+    expect(states.at(-1)?.status).toBe('connected')
+  })
+})

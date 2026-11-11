@@ -164,6 +164,11 @@ private class MeshVoiceSession(
     private val memberStates = linkedMapOf<String, VoiceMember>()
     private val peerEpochs = mutableMapOf<String, Long>()
     private val activityTracker = VoiceActivityTracker()
+    private val localMicrophoneMeter = LocalMicrophoneMeter(
+        createCapture = ::AndroidMicrophoneCapture,
+        nowMillis = android.os.SystemClock::elapsedRealtime,
+        onFailure = { voiceLog.w("Local microphone activity meter unavailable; voice remains enabled") },
+    )
     private val speakingLock = Any()
     private val eventMutex = Mutex()
     private val outboundMutex = Mutex()
@@ -210,6 +215,7 @@ private class MeshVoiceSession(
         scope.launch { receiveEvents() }
         scope.launch { refreshCredentials() }
         scope.launch { publishSpeakingLevels() }
+        scope.launch { publishLocalSpeakingLevels() }
         withTimeout(MESH_CONNECT_TIMEOUT_MS) { ready.await() }
     }
 
@@ -220,6 +226,8 @@ private class MeshVoiceSession(
                 PeerConnectionFactory.InitializationOptions.builder(context).createInitializationOptions(),
             )
             audioDevice = JavaAudioDeviceModule.builder(context)
+                .setAudioFormat(android.media.AudioFormat.ENCODING_PCM_16BIT)
+                .setSamplesReadyCallback { samples -> localMicrophoneMeter.onWebRtcSamples(samples.data) }
                 .setAudioRecordErrorCallback(object : JavaAudioDeviceModule.AudioRecordErrorCallback {
                     override fun onWebRtcAudioRecordInitError(message: String) = audioFailure(true)
                     override fun onWebRtcAudioRecordStartError(code: JavaAudioDeviceModule.AudioRecordStartErrorCode, message: String) = audioFailure(true)
@@ -392,6 +400,7 @@ private class MeshVoiceSession(
 
     private fun createPeer(member: VoiceMember, retries: Int = 0) {
         if (peers.size >= MAX_REMOTE_PEERS) throw PartyException("VOICE_CAPACITY_EXCEEDED", "This voice room has too many participants")
+        localMicrophoneMeter.setPeerCaptureRequired(true)
         val rtc = factory ?: throw PartyException("VOICE_UNAVAILABLE", "Voice is unavailable")
         val rtcConfig = rtcConfiguration()
         var state: PeerState? = null
@@ -680,10 +689,13 @@ private class MeshVoiceSession(
             state.peer.dispose()
             state.pendingIce.clear()
         }
+        if (peers.isEmpty()) localMicrophoneMeter.setPeerCaptureRequired(false)
     }
 
     private fun applyCapture(enabled: Boolean) {
         microphoneEnabled = enabled
+        localMicrophoneMeter.setEnabled(enabled)
+        if (!enabled) clearSpeaking(descriptor.membershipId)
         (audioDevice as? JavaAudioDeviceModule)?.setMicrophoneMute(!enabled)
         track?.setEnabled(enabled)
     }
@@ -815,20 +827,28 @@ private class MeshVoiceSession(
                     ?: AudioLevels()
                 if (samples % 100 == 0) voiceLog.i("Voice RTP received=${levels.received} lost=${levels.lost} sent=${levels.sent} candidate=${levels.candidateType}")
                 observed[membershipId] = levels.remote >= SPEAKING_LEVEL_THRESHOLD
-                if (microphoneEnabled) {
-                    observed[descriptor.membershipId] = observed[descriptor.membershipId] == true ||
-                        levels.local >= SPEAKING_LEVEL_THRESHOLD
-                }
             }
-            if (!microphoneEnabled) clearSpeaking(descriptor.membershipId)
-            val ids = synchronized(speakingLock) { (observed.keys + activityTracker.speakers()).toSet() }
+            val ids = synchronized(speakingLock) {
+                (observed.keys + activityTracker.speakers()).filter { it != descriptor.membershipId }.toSet()
+            }
             ids.forEach { updateSpeaking(it, observed[it] == true) }
             }
         }
     }
 
+    private suspend fun publishLocalSpeakingLevels() {
+        while (scope.isActive && !closed) {
+            delay(SPEAKING_POLL_MS)
+            val level = localMicrophoneMeter.poll()
+            if (!closed) updateSpeaking(descriptor.membershipId, level >= SPEAKING_LEVEL_THRESHOLD)
+        }
+    }
+
     private fun updateSpeaking(membershipId: String, aboveThreshold: Boolean) = synchronized(speakingLock) {
-        if (activityTracker.sample(membershipId, aboveThreshold, nowMs()))
+        val changed = if (membershipId == descriptor.membershipId && (!microphoneEnabled || closed)) {
+            activityTracker.clear(membershipId)
+        } else activityTracker.sample(membershipId, aboveThreshold, nowMs())
+        if (changed)
             output.trySend(VoiceEvent.SpeakersChanged(activityTracker.speakers()))
     }
 

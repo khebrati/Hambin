@@ -17,8 +17,10 @@ An expired generation rejoins fresh and reconciles its peers.
 Muting disables capture immediately. Unmuting requires a successful server
 acknowledgement; stale or rejected acknowledgements cannot enable capture. The
 latest intent is replayed after reconnect. Movie playback stays independent.
-Local microphone activity indicates capture only; inbound RTP/activity indicates
-received audio and does not prove every listener received a speaker.
+Local microphone activity indicates capture only, including while alone in voice;
+inbound RTP/activity indicates received audio and does not prove every listener
+received a speaker. Verify Android alone-to-peer capture handoff, silence release,
+immediate mute/leave clearing, and speaker/headset transitions on a physical device.
 
 ## Coordinated release
 

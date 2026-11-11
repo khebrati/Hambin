@@ -60,6 +60,7 @@ export class MeshVoice {
   private descriptor?: Descriptor
   private socket?: Socket
   private stream?: MediaStream
+  private localMeter?: { context: AudioContext; source: MediaStreamAudioSourceNode; analyser: AnalyserNode; samples: Float32Array<ArrayBuffer> }
   private peers = new Map<string, Peer>()
   private epochs = new Map<string, number>()
   private timers = new Set<ReturnType<typeof setTimeout>>()
@@ -103,6 +104,7 @@ export class MeshVoice {
       stream.getAudioTracks().forEach(track => { track.enabled = false })
       if (!this.current(run)) { if (!discarded) stream.getTracks().forEach(track => track.stop()); return }
       this.stream = stream
+      this.prepareLocalMeter()
       await this.open(run, false)
       if (!this.current(run)) return
       this.later(() => void this.refreshCredentials(run), 5 * 60_000)
@@ -113,6 +115,8 @@ export class MeshVoice {
 
   async setMuted(muted: boolean) {
     if (!this.active) return
+    // Resume during the button gesture, before waiting for server authorization.
+    if (!muted) this.prepareLocalMeter()
     this.muteIntent = muted
     const revision = ++this.muteRevision
     if (muted) {
@@ -207,6 +211,7 @@ export class MeshVoice {
       } else socket.disconnect()
     }
     this.peers.forEach(peer => this.closePeer(peer)); this.peers.clear()
+    this.closeLocalMeter()
     this.stream?.getTracks().forEach(track => track.stop()); this.stream = undefined
     this.pollBusy = false
     this.serial = Promise.resolve(); this.signalQueue = Promise.resolve(); this.muteSerial = Promise.resolve()
@@ -217,6 +222,12 @@ export class MeshVoice {
 
   private current(run: number) { return this.active && this.run === run }
   private publish() {
+    const selfId = this.descriptor?.membershipId
+    const self = selfId ? this.state.members[selfId] : undefined
+    if (self && selfId) {
+      self.muted = this.state.muted
+      if (self.muted) { self.speaking = false; this.activity.delete(selfId) }
+    }
     const members = Object.fromEntries(Object.entries(this.state.members).map(([id, value]) => [id, { ...value }]))
     this.options.onState({ ...this.state, members })
   }
@@ -556,13 +567,37 @@ export class MeshVoice {
     }
   }
 
+  private prepareLocalMeter() {
+    try {
+      if (!this.localMeter && this.stream && typeof AudioContext !== 'undefined') {
+        const context = new AudioContext()
+        try {
+          const source = context.createMediaStreamSource(this.stream)
+          const analyser = context.createAnalyser()
+          analyser.fftSize = 2048
+          source.connect(analyser) // No speaker connection: never monitor the mic audibly.
+          this.localMeter = { context, source, analyser, samples: new Float32Array(analyser.fftSize) }
+        } catch (error) { void context.close().catch(() => {}); throw error }
+      }
+      if (this.localMeter?.context.state === 'suspended') void this.localMeter.context.resume().catch(() => {})
+    } catch { /* Optional metering must never prevent voice capture or transmission. */ }
+  }
+
+  private closeLocalMeter() {
+    const meter = this.localMeter
+    this.localMeter = undefined
+    if (!meter) return
+    meter.source.disconnect(); meter.analyser.disconnect()
+    void meter.context.close().catch(() => {})
+  }
+
   private async poll(run: number) {
     if (!this.current(run)) return
     if (!this.pollBusy) {
       this.pollBusy = true
       const levels = new Map<string, number>()
       try {
-        await Promise.all([...this.peers.values()].map(async peer => {
+        await Promise.allSettled([...this.peers.values()].map(async peer => {
           if (peer.pc.connectionState !== 'connected') return
           const stats = await peer.pc.getStats()
           if (!this.live(peer)) return
@@ -585,6 +620,12 @@ export class MeshVoice {
           })
         }))
         if (!this.current(run)) return
+        const meter = this.localMeter
+        if (meter?.context.state === 'running' && this.descriptor) {
+          meter.analyser.getFloatTimeDomainData(meter.samples)
+          const rms = Math.sqrt(meter.samples.reduce((sum, value) => sum + value * value, 0) / meter.samples.length)
+          levels.set(this.descriptor.membershipId, rms)
+        }
         for (const [id, member] of Object.entries(this.state.members)) {
           const item = this.activity.get(id) ?? { hits: 0, last: 0 }
           const muted = member.muted || (id === this.descriptor?.membershipId && this.state.muted)
