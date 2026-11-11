@@ -102,7 +102,8 @@
     <string name="join_voice">Join voice</string>
     <string name="joining_voice">Joining voice…</string>
     <string name="voice_idle_copy">Talk with the room</string>
-    <string name="voice_unavailable">Voice is unavailable on this device</string>
+    <string name="voice_connection_failed">Could not join voice. Try again.</string>
+    <string name="voice_network_failed">Could not reach voice. Check your connection and try again.</string>
     <string name="waiting_for_next_stream">Waiting for the next video</string>
     <string name="waiting_room">Waiting room</string>
     <string name="you_left_party">You left the party</string>

@@ -1720,7 +1720,7 @@ private fun RoomSupportPanel(
         ) {
             ParticipantSection(participants, micMuted)
             HorizontalDivider(color = DividerDefaults.color)
-            VoicePanel(voiceState, micMuted, onJoinVoice, onToggleMic)
+            VoicePanel(voiceState, voiceFailureCode, micMuted, onJoinVoice, onToggleMic)
             if (voiceState == VoiceConnectionState.DEGRADED || participants.any { it.voiceStatus == VoicePeerStatus.UNAVAILABLE }) {
                 OutlinedButton(onClick = onRetryVoice, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(Res.string.voice_retry_connections))
@@ -1861,6 +1861,7 @@ private fun ParticipantAvatar(participant: RoomParticipant, speaking: Boolean) {
 @Composable
 private fun VoicePanel(
     voiceState: VoiceConnectionState,
+    voiceFailureCode: String?,
     micMuted: Boolean,
     onJoinVoice: () -> Unit,
     onToggleMic: () -> Unit,
@@ -1874,7 +1875,9 @@ private fun VoicePanel(
                     VoiceConnectionState.CONNECTING -> stringResource(Res.string.joining_voice)
                     VoiceConnectionState.DEGRADED -> stringResource(Res.string.voice_degraded)
                     VoiceConnectionState.RECONNECTING -> stringResource(Res.string.voice_reconnecting)
-                    VoiceConnectionState.FAILED -> stringResource(Res.string.voice_unavailable)
+                    VoiceConnectionState.FAILED -> stringResource(
+                        if (voiceFailureCode == "NETWORK") Res.string.voice_network_failed else Res.string.voice_connection_failed,
+                    )
                     VoiceConnectionState.CONNECTED -> stringResource(if (micMuted) Res.string.your_mic_is_muted else Res.string.your_mic_is_on)
                 },
                 style = MaterialTheme.typography.titleMedium,

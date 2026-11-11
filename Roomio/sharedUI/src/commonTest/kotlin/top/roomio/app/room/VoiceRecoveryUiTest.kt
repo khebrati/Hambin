@@ -21,6 +21,48 @@ import top.roomio.domain.party.VoicePeerStatus
 @OptIn(ExperimentalTestApi::class)
 class VoiceRecoveryUiTest {
     @Test
+    fun failedJoinExplainsNetworkFailureAndKeepsRetryAccessible() = runComposeUiTest {
+        val failureCode = mutableStateOf<String?>("NETWORK")
+        val dark = mutableStateOf(false)
+        var joins = 0
+        setContent {
+            val density = LocalDensity.current
+            CompositionLocalProvider(
+                LocalThemeIsDark provides dark,
+                LocalLayoutDirection provides if (dark.value) LayoutDirection.Rtl else LayoutDirection.Ltr,
+                LocalDensity provides Density(density.density, if (dark.value) 1.8f else 1f),
+            ) {
+                RoomioTheme(darkTheme = dark.value) {
+                    Box(Modifier.width(360.dp).height(900.dp)) {
+                        RoomScreen(
+                            state = RoomUiState(
+                                model = RoomScreenModel("Friday screening", "MOON-42", RoomRole.GUEST,
+                                    "Nika", true, RoomPlaybackState.WAITING_FOR_OWNER, emptyList()),
+                                voiceState = VoiceConnectionState.FAILED,
+                                voiceFailureCode = failureCode.value,
+                                micMuted = true,
+                            ),
+                            onAction = { if (it == RoomAction.JoinVoiceClicked) joins++ },
+                            playerContent = { Box(it) },
+                        )
+                    }
+                }
+            }
+        }
+        val networkMessage = "Could not reach voice. Check your connection and try again."
+        onNodeWithText(networkMessage).performScrollTo().assertIsDisplayed()
+        onNodeWithText("Voice is unavailable on this device").assertDoesNotExist()
+        onNodeWithText("Join voice").performScrollTo().performClick()
+        runOnIdle { dark.value = true }
+        onNodeWithText(networkMessage).performScrollTo().assertIsDisplayed()
+        onNodeWithText("Join voice").performScrollTo().performClick()
+        runOnIdle { failureCode.value = "VOICE_CONNECTION_FAILED" }
+        onNodeWithText("Could not join voice. Try again.").performScrollTo().assertIsDisplayed()
+        onNodeWithText("Join voice").performScrollTo().performClick()
+        runOnIdle { assertEquals(3, joins) }
+    }
+
+    @Test
     fun failedPeerRetryRemainsAccessibleInCompactLightAndDarkRtlLargeText() = runComposeUiTest {
         val dark = mutableStateOf(false)
         var retries = 0
