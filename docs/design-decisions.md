@@ -392,3 +392,12 @@ deployment evidence remains historical.
 - **Lifecycle:** Silence releases the highlight after a short hold; mute, capture suspension, and leaving clear it immediately. Keep initial/muted/loading/failed states inactive. Preserve existing remote-speaker indicators and voice recovery controls. This is a detection change with existing visual/accessibility presentation; themes, large text, RTL and layout remain applicable through the existing components.
 - **Implementation:** Browser meters its existing capture stream without audible monitoring. Android observes WebRTC PCM while peers exist and uses a session-owned local AudioRecord meter while no peers exist, releasing that recorder synchronously before peer creation. Local sampling runs independently of remote statistics. Keep only bounded transient sample buffers and scalar levels; do not persist or upload microphone samples. Capture failure leaves the optional indicator inactive and does not break voice transport.
 - **Scope:** No backend, signaling protocol, or remote delivery receipt changes. Physical microphone, speaker/headset routing transitions and alone-to-peer handoff remain device acceptance checks; build/unit checks do not establish hardware behavior.
+
+
+## DD-045: Shared Screen Android Launcher Icon Foundation
+
+- **Date:** 2026-11-11
+- **Decision:** Stakeholder selected the Shared Screen concept, with bundled variants for all 24 named theme seed colors. Use the exact seed as each background and a contrasting cream or charcoal mark. Basil is the initial icon matching the selected green concept.
+- **Scope:** Provide adaptive/legacy vector resources, stable launcher aliases, and a graph-owned selection API. Leave the theme picker, theme persistence and automatic theme/icon association to the separate integration. Keep app invite links on the always-enabled activity.
+- **Behavior:** Android persists the enabled alias; updates are atomic on API 33+, replacement-first on older versions, idempotent, and expose recoverable failures. Android themed icons may override palette colors. Other native platforms explicitly report unsupported.
+- **Validation:** Android debug assembly, app JVM graph compilation and data JVM tests passed, including eight switching tests. Catalog validation verifies all 24 colors and aliases. Palette preview reviewed; device/OEM launcher refresh, shortcuts and upgrade acceptance remain unverified because no Android device is connected. See [implementation and integration notes](android-launcher-icons.md).

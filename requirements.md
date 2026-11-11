@@ -55,3 +55,8 @@ Confirmed room bug reports (2026-11-11):
 Confirmed speaking-indicator semantics (2026-11-11):
 1. Browser and Android self-profile highlights show local microphone activity while voice is joined and the microphone is authorized and unmuted, including when alone in voice. They do not certify remote delivery or audibility.
 2. Silence releases the highlight after a short hold; mute, capture suspension, and leaving clear it immediately. Microphone samples used for the indicator are transient and are not stored or uploaded.
+
+
+Confirmed Android launcher icon foundation (2026-11-11):
+1. Use the approved Shared Screen app icon, with bundled variants for all 24 named theme seed colors. Each background uses the exact supplied seed color with a contrasting foreground.
+2. Provide Android launcher-icon switching foundations now; associate icon color with the selected theme in a later integration after the theme picker is complete. The initial icon is Shared Screen in Basil, matching the approved concept.
