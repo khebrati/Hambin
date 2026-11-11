@@ -184,12 +184,17 @@ export class AvMedia implements PlayerMedia {
   }
   get currentTime() { return this.loaded ? this.video()?.currentTime ?? Number(this.player?.currentTime ?? 0n) / 1000 : 0; }
   set currentTime(value: number) {
-    const revision = ++this.seekRevision;
+    void this.seekTo(value).catch(() => this.fail('Unable to seek this video. Retry the video.'));
+  }
+  private seekTo(target: number | (() => number), audioId?: number): Promise<unknown> {
+    const revision = audioId === undefined ? ++this.seekRevision : this.seekRevision;
     this.seekingValue = true; this.pendingSeeks++;
-    void this.enqueue(async player => {
+    return this.enqueue(async player => {
       // Range inputs emit repeatedly during a drag. Only the newest queued
       // target matters; replaying every intermediate position stalls seeking.
-      if (revision !== this.seekRevision) return;
+      if (audioId === undefined && revision !== this.seekRevision) return;
+      if (audioId !== undefined && player.getSelectedAudioStreamId() === audioId) return;
+      const value = typeof target === 'function' ? target() : target;
       const paused = this.pausedValue || !!this.video()?.paused;
       this.callbacks.state('buffering');
       this.previewing = paused; player.setVolume(0);
@@ -197,6 +202,10 @@ export class AvMedia implements PlayerMedia {
         // Resume the MSE packet pump before seeking: for an uncached target,
         // afterSeek can otherwise wait for packets from the paused pipeline.
         if (paused) { await player.play(); await this.video()?.play(); }
+        // Same-codec AVPlayer switches only reconnect the demuxer, leaving old
+        // MSE audio buffered. Flush at the local position so the chosen track is
+        // audible immediately, including when returning to Automatic.
+        if (audioId !== undefined) await player.selectAudio(audioId);
         await player.seek(BigInt(Math.round(value * 1000)));
         const video = this.video();
         if (!this.closed && video) {
@@ -224,9 +233,12 @@ export class AvMedia implements PlayerMedia {
         this.previewing = false;
         if (!this.closed) player.setVolume(this.mutedValue || this.pendingSeeks > 1 ? 0 : this.volumeValue);
       }
-    }).catch(() => this.fail('Unable to seek this video. Retry the video.')).finally(() => {
+    }).finally(() => {
       this.pendingSeeks--; this.seekingValue = false;
-      if (!this.closed && !this.pendingSeeks) { this.callbacks.state(this.pausedValue ? 'paused' : 'playing'); this.callbacks.update(); }
+      if (!this.closed && !this.pendingSeeks) {
+        this.player?.setVolume(this.mutedValue ? 0 : this.volumeValue);
+        this.callbacks.state(this.pausedValue ? 'paused' : 'playing'); this.callbacks.update();
+      }
     });
   }
   get duration() { return this.durationValue; }
@@ -251,7 +263,7 @@ export class AvMedia implements PlayerMedia {
     });
   }
   pause() { void this.enqueue(player => player.pause()).catch(() => this.fail('Unable to pause this video. Retry the video.')); }
-  async selectAudio(id: string) { await this.enqueue(player => player.selectAudio(Number(id.slice(3)))); }
+  async selectAudio(id: string) { await this.seekTo(() => this.currentTime, Number(id.slice(3))); }
   async selectSubtitle(id: string) {
     if (this.localTrack) this.localTrack.track.mode = id === 'local' ? 'showing' : 'disabled';
     if (id === 'off') { this.container.dataset.subtitles = 'off'; return; }

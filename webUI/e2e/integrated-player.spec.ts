@@ -51,6 +51,54 @@ test('skip buttons seek forward and backward during playback and while paused', 
   await expect(page.getByRole('alert')).toHaveCount(0);
 });
 
+test('audio selection changes decoded sound without syncing and preserves pause', async ({ page }) => {
+  await mediaSource(page);
+  await openPlayer(page);
+  const video = page.locator('.integrated-player video');
+  // Track IDs alone missed this bug: measure the decoded 440/880 Hz tones.
+  await video.evaluate(async video => {
+    const context = new AudioContext();
+    const analyser = context.createAnalyser();
+    analyser.fftSize = 8192;
+    context.createMediaElementSource(video).connect(analyser);
+    analyser.connect(context.destination);
+    await context.resume();
+    (window as any).audioFrequency = () => {
+      const bins = new Float32Array(analyser.frequencyBinCount);
+      analyser.getFloatFrequencyData(bins);
+      let peak = 0;
+      for (let i = 1; i < bins.length; i++) if (bins[i] > bins[peak]) peak = i;
+      return peak * context.sampleRate / analyser.fftSize;
+    };
+  });
+  const frequency = () => page.evaluate(() => (window as any).audioFrequency() as number);
+  const select = async (name: string) => {
+    await page.getByRole('button', { name: 'Audio tracks', exact: true }).click();
+    await page.getByRole('dialog', { name: 'Audio tracks', exact: true }).getByRole('radio', { name, exact: true }).check();
+  };
+  await expect.poll(frequency).toBeGreaterThan(420);
+  await expect.poll(frequency).toBeLessThan(460);
+  const before = await video.evaluate(v => v.currentTime);
+  await select('English · eng');
+  await expect.poll(frequency).toBeGreaterThan(850);
+  await expect.poll(frequency).toBeLessThan(910);
+  expect(await video.evaluate(v => v.currentTime)).toBeGreaterThanOrEqual(before - 0.1);
+  await page.getByRole('button', { name: 'Pause', exact: true }).click();
+  await expect.poll(() => video.evaluate(v => v.paused)).toBe(true);
+  const pausedAt = await video.evaluate(v => v.currentTime);
+  await select('Automatic');
+  // Observe command completion before testing that local pause was restored.
+  await expect.poll(() => page.evaluate(() => (window as any).AVPlayer.Instances[0].getSelectedAudioStreamId())).toBe(1);
+  await expect.poll(() => video.evaluate(v => v.paused && !v.seeking && v.readyState >= 2)).toBe(true);
+  expect(await video.evaluate(v => v.currentTime)).toBeCloseTo(pausedAt, 0);
+  await page.getByRole('button', { name: 'Play', exact: true }).click();
+  await expect.poll(frequency).toBeGreaterThan(420);
+  await expect.poll(frequency).toBeLessThan(460);
+  expect(await page.evaluate(() => (window as any).playerActions)).toEqual([]);
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await expect(page.getByTestId('player-notice')).toHaveCount(0);
+});
+
 test('dragging the seek bar discards intermediate queued seeks', async ({ page }) => {
   await mediaSource(page);
   await openPlayer(page);
