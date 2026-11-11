@@ -313,6 +313,14 @@
 - **Distribution:** Load versioned, self-hosted assets only on MKV use. Distribute upstream licenses, the pinned source reference, and Hambin's version-checked subtitle seek-order patch. The patch resets old cues before seeking so newly fetched cues survive.
 - **Evidence and limits:** See [browser player evaluation](browser-mkv-subtitles-20261106.md). Bitmap subtitles, advanced subtitle layout parity, universal codec support, physical-device acceptance, and full-movie soak remain unverified or unsupported.
 
+## DD-038: Minimal Android Download Row
+
+- **Status:** Design selected and signed Android release hosting/browser integration authorized by the stakeholder on 2026-11-11.
+- **Decision:** Use the outlined download row below the browser home page's Create/Join actions: a phone icon, “Native Android app”, “Background voice party”, and a download icon action with the accessible name “Download native Android app”. Preserve the existing Material 3 tokens and responsive light/dark, large-text, and RTL behavior.
+- **Scope:** Selects the download-row concept in [Android download designs](android-download-designs.md). No promotional illustration, slogan, or additional paragraph. The stakeholder subsequently authorized a minor Android version bump, signed APK build, public hosting, and integration of its URL into the website. Use a versioned HTTPS URL on the existing host; keep the row visible to all visitors with explicit Android labeling.
+
+- **Release:** The stakeholder explicitly chose a universal APK supporting all four CPU types. Android 1.1.0 (version code 6) uses release code/resource shrinking and compressed native libraries, with all four ABIs preserved. The signed 23.6 MB APK and row are published at `https://watchparty.top/downloads/roomio-1.1.0-6.apk`. See [release verification](android-release-20261111.md).
+
 ## DD-040: Last-room Home Card for Every Viewer
 
 - **Status:** Approved by the stakeholder on 2026-11-11 for browser and native clients.
@@ -323,8 +331,19 @@
 - **Boundary:** Uses existing preview/join APIs and client-local preferences; no backend contract or service changes. Availability displayed by a previous preview is advisory until the server admits the user. Existing same-tab browser active-room restoration and Android notification return behavior remain available.
 - **Validation:** Production browser build and 77 browser unit tests passed; seven last-room browser checks and three active-party recovery checks passed, including owner/guest persistence, fresh previews, full/ended rooms, identity isolation, service retry, cancellation back to Home, and delayed startup responses. Reviewed desktop light and mobile dark/large-text/RTL screenshots. Native data tests: 64 passed; shared UI tests: 55 passed, one skipped; Android debug build passed. Final native verification used isolated test-result directories to avoid concurrent Gradle report collisions. iOS was not validated on this Linux host.
 
+
 ## DD-039: Marvel and DC Default Guest Names
 
 - **Date:** 2026-11-11
 - **Decision:** New browser and native guests receive a random name from the same curated list of 120 Marvel and DC characters (60 from each), such as “Spider-Man,” “Batman,” or “Harley Quinn.” Keep every name digit-free; use “Laura Kinney” rather than the numeric alias. Do not append numbers or enforce uniqueness.
 - **Continuity:** Generate the default for initial profile creation and keep it through retries and restarts. Backend profiles remain authoritative; preserve existing names, including previous defaults, and allow editing in Settings. No identity reset or migration is needed.
+
+
+## Deployment backup policy (2026-11-11)
+
+The stakeholder requested removal of backups entirely. Remove the scheduled
+backup service/timer, backup script, and stored `/opt/hambin/backups` directory.
+Deployments do not create database dumps or file snapshots. Preserve live
+PostgreSQL data, protected runtime configuration, public APKs, and TURN renewal.
+Retained application releases do not provide database recovery. Historical
+deployment evidence remains historical.

@@ -3,6 +3,7 @@ import type { Identity, Party } from '../types';
 import { AppBar } from '../components/AppBar';
 import { Avatar } from '../components/Avatar';
 import { Button, IconButton } from '../components/Material';
+import { AndroidDownloadRow } from '../components/AndroidDownloadRow';
 
 interface HomeScreenProps {
   live?: boolean;
@@ -80,6 +81,7 @@ export function HomeScreen({
               Join with code
             </Button>
           </div>
+          <AndroidDownloadRow />
         </section>
 
         {(!live || returnableParty) && <section

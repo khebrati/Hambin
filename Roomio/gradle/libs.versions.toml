@@ -4,6 +4,7 @@ kotlin = "2.4.0"
 compose-multiplatform = "1.11.1"
 material3 = "1.11.0-alpha07"
 agp = "9.0.0"
+r8 = "9.1.29"
 androidx-activityCompose = "1.12.0"
 kermit = "2.1.0"
 kotlinx-coroutines = "1.11.0"
@@ -21,6 +22,8 @@ media3 = "1.11.1"
 stream-webrtc = "1.3.9"
 
 [libraries]
+
+android-r8 = { module = "com.android.tools:r8", version.ref = "r8" }
 
 compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "compose-multiplatform" }
 compose-ui = { module = "org.jetbrains.compose.ui:ui", version.ref = "compose-multiplatform" }

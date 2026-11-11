@@ -28,8 +28,8 @@ android {
         targetSdk = 36
 
         applicationId = "top.roomio.app.androidApp"
-        versionCode = 5
-        versionName = "1.0.3"
+        versionCode = 7
+        versionName = "1.1.1"
     }
 
     signingConfigs {
@@ -45,8 +45,12 @@ android {
 
     buildTypes {
         getByName("release") {
-            isMinifyEnabled = false
-            isShrinkResources = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
             if (hasReleaseSigning) {
                 signingConfig = signingConfigs.getByName("release")
             }
@@ -56,6 +60,13 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+    }
+}
+
+androidComponents {
+    onVariants(selector().withBuildType("release")) { variant ->
+        // Direct APK distribution: compress .so files; Android extracts them at install.
+        variant.packaging.jniLibs.useLegacyPackaging.set(true)
     }
 }
 

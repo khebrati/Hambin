@@ -1,5 +1,10 @@
 # Open Questions
 
+## Android download discovery (2026-11-11)
+
+- [Resolved, DD-038] The stakeholder selected the minimal home download row from the [placement concepts](android-download-designs.md), with “Native Android app” and “Background voice party”.
+- [Resolved, DD-038] The stakeholder authorized public hosting of the signed Android release and linking the row to it. Use `https://watchparty.top/downloads/roomio-1.1.0-6.apk`; keep the explicitly labeled row visible to all visitors.
+
 Only questions whose answers could materially change user flow, screen structure, navigation, or visual direction are listed.
 
 Resolved questions are preserved with their answers for traceability.
@@ -118,7 +123,7 @@ Resolved questions are preserved with their answers for traceability.
 ## Hosted deployment follow-ups (2026-10-15)
 
 - [Resolved 2026-10-16, DD-025] Make `watchparty.top` primary and keep `watchparty.audiosense.ir` as a live alias for returning browser owners. Browser storage remains origin-scoped and does not transfer; retain the alias while identities stored there are needed.
-- Select an offsite destination and retention policy for VPS database backups. Daily local dumps and a scratch restore are verified; same-host backups do not cover VM loss.
+- [Resolved 2026-11-11] Stakeholder requested removal of backups entirely. No scheduled database dumps or stored server backup directory are maintained; no snapshot-based database recovery is provided. See `backend/deploy/README.md`.
 - Hosted four/eight-peer mesh, physical browser/Android audio, restrictive-network fallback, and sustained load remain acceptance gates; see [deployment evidence](vps-deployment-evidence.md).
 
 ## Browser playback limitation (2026-10-23)
