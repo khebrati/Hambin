@@ -1,5 +1,9 @@
 package top.roomio.app.theme
 
+import com.materialkolor.rememberDynamicColorScheme
+import com.materialkolor.PaletteStyle
+import com.materialkolor.dynamiccolor.ColorSpec
+import top.roomio.domain.profile.ThemeColor
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -51,13 +55,14 @@ internal object RoomioDesignSystem {
 @Composable
 internal fun AppTheme(
     onThemeChanged: @Composable (useDarkSystemBarIcons: Boolean) -> Unit,
+    themeColor: ThemeColor = ThemeColor.ROOMIO,
     content: @Composable () -> Unit,
 ) {
     val systemIsDark = isSystemInDarkTheme()
     val isDarkState = remember(systemIsDark) { mutableStateOf(systemIsDark) }
 
     CompositionLocalProvider(LocalThemeIsDark provides isDarkState) {
-        RoomioTheme(darkTheme = isDarkState.value) {
+        RoomioTheme(darkTheme = isDarkState.value, themeColor = themeColor) {
             onThemeChanged(!isDarkState.value)
             content()
         }
@@ -66,15 +71,23 @@ internal fun AppTheme(
 
 /**
  * Cross-platform Roomio theme based on the approved Immersive Cinema direction.
- * A static scheme is intentional so the product identity is consistent across
- * Android, iOS, and desktop; dynamic color can be added later as an explicit
- * product option rather than silently replacing the approved palette.
+ * The default retains the cinema palette; named seeds generate Material Tonal Spot schemes.
  */
 @Composable
 internal fun RoomioTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
+    themeColor: ThemeColor = ThemeColor.ROOMIO,
     content: @Composable () -> Unit,
 ) {
+    val seed = themeColor.seed
+    val colorScheme = if (seed == null) {
+        if (darkTheme) RoomioDarkColorScheme else RoomioLightColorScheme
+    } else {
+        rememberDynamicColorScheme(
+            seedColor = seed, isDark = darkTheme, style = PaletteStyle.TonalSpot,
+            contrastLevel = 0.0, specVersion = ColorSpec.SpecVersion.SPEC_2021,
+        )
+    }
     val extendedColors = if (darkTheme) {
         RoomioDarkExtendedColors
     } else {
@@ -88,7 +101,7 @@ internal fun RoomioTheme(
         LocalRoomioMotion provides DefaultRoomioMotion,
     ) {
         MaterialTheme(
-            colorScheme = if (darkTheme) RoomioDarkColorScheme else RoomioLightColorScheme,
+            colorScheme = colorScheme,
             typography = RoomioTypography,
             shapes = RoomioMaterialShapes,
         ) {

@@ -1,4 +1,6 @@
 import { Check } from 'lucide-react';
+import { themeColors, type useThemePalette } from '../theme';
+import type { CSSProperties } from 'react';
 import { useState } from 'react';
 import { avatarOptions } from '../data/avatarCatalog';
 import type { Identity } from '../types';
@@ -7,6 +9,7 @@ import { Avatar } from '../components/Avatar';
 import { Button, TextField } from '../components/Material';
 
 interface SettingsScreenProps {
+  palette: ReturnType<typeof useThemePalette>;
   identity: Identity;
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
@@ -17,6 +20,7 @@ interface SettingsScreenProps {
 
 export function SettingsScreen({
   identity,
+  palette,
   theme,
   onToggleTheme,
   onBack,
@@ -98,9 +102,29 @@ export function SettingsScreen({
           </div>
         </section>
 
-        <section className="form-section" aria-labelledby="language-heading">
+        <section className="form-section" aria-labelledby="color-heading">
           <div className="section-heading">
             <span>03</span>
+            <div><h2 id="color-heading">Color theme</h2><p>Choose a color to make Roomio yours. Applies immediately.</p></div>
+          </div>
+          <div className="theme-color-picker" role="group" aria-label="Color theme">
+            {[{ id: 'roomio', name: 'Roomio default', seed: '#8F3B49' }, ...themeColors].map(color => (
+              <button key={color.id} type="button" className="theme-color-choice"
+                aria-pressed={palette.colorId === color.id}
+                style={{ '--seed-color': color.seed } as CSSProperties}
+                onClick={() => palette.selectColor(color.id)}>
+                <span className="theme-color-swatch" aria-hidden="true" />
+                <span>{color.name}</span>
+                {palette.colorId === color.id && <Check size={18} aria-hidden="true" />}
+              </button>
+            ))}
+          </div>
+          {palette.saveFailed && <p role="alert">Color applied for now. Couldn’t remember it on this device. Select it again to retry.</p>}
+        </section>
+
+        <section className="form-section" aria-labelledby="language-heading">
+          <div className="section-heading">
+            <span>04</span>
             <div>
               <h2 id="language-heading">Language</h2>
               <p>English is selected for this design pass.</p>

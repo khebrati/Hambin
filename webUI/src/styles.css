@@ -2342,3 +2342,12 @@ input[type="range"]::-moz-range-thumb {
 .bug-report-dialog[open] { display: flex; flex-direction: column; max-height: min(720px, calc(100dvh - 32px)); }
 .bug-report-dialog .md-dialog__header, .bug-report-dialog .md-dialog__actions { flex-shrink: 0; }
 .bug-report-dialog .md-dialog__content { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+
+/* Seed swatches identify choices; the rest of the picker follows semantic roles. */
+.theme-color-picker { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 8px; }
+.theme-color-choice { display: flex; align-items: center; gap: 8px; min-height: 56px; padding: 12px; text-align: start; border: 1px solid var(--md-sys-color-outline-variant); border-radius: var(--md-sys-shape-corner-medium); background: var(--md-sys-color-surface-container-low); color: var(--md-sys-color-on-surface); cursor: pointer; }
+.theme-color-choice[aria-pressed="true"] { border-color: var(--md-sys-color-primary); background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); }
+.theme-color-choice:hover { box-shadow: inset 0 0 0 2px var(--md-sys-color-outline); }
+.theme-color-choice:active { transform: scale(0.98); }
+.theme-color-choice > span:nth-child(2) { flex: 1; overflow-wrap: anywhere; }
+.theme-color-swatch { flex: 0 0 24px; height: 24px; border-radius: var(--md-sys-shape-corner-full); background: var(--seed-color); border: 1px solid var(--md-sys-color-outline); }

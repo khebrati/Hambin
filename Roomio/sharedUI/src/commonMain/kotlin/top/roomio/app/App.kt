@@ -1,5 +1,9 @@
 package top.roomio.app.ui
 
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import top.roomio.domain.profile.ThemePreferencesRepository
+import top.roomio.domain.profile.ThemeColor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -57,6 +61,7 @@ internal interface PresentationGraph {
     fun interface Factory {
         fun create(
             @Provides profileRepository: ProfileRepository,
+            @Provides themePreferencesRepository: ThemePreferencesRepository,
             @Provides sessionRepository: SessionRepository,
             @Provides roomRepository: RoomRepository,
             @Provides realtimeClient: RealtimeClient,
@@ -80,6 +85,7 @@ private fun AppPreview() = RoomioUi(
 @Composable
 fun RoomioUi(
     profileRepository: ProfileRepository,
+    themePreferencesRepository: ThemePreferencesRepository = PreviewThemePreferencesRepository,
     sessionRepository: SessionRepository = PreviewSessionRepository,
     roomRepository: RoomRepository = PreviewRoomRepository,
     realtimeClient: RealtimeClient = PreviewRealtimeClient,
@@ -87,9 +93,10 @@ fun RoomioUi(
     sessionKeeper: SessionKeeper = PreviewSessionKeeper,
     onThemeChanged: @Composable (isDark: Boolean) -> Unit = {},
 ) {
-    val presentationGraph = remember(profileRepository, sessionRepository, roomRepository, realtimeClient, voiceCoordinator, sessionKeeper) {
+    val presentationGraph = remember(themePreferencesRepository, profileRepository, sessionRepository, roomRepository, realtimeClient, voiceCoordinator, sessionKeeper) {
         createGraphFactory<PresentationGraph.Factory>().create(
             profileRepository,
+            themePreferencesRepository,
             sessionRepository,
             roomRepository,
             realtimeClient,
@@ -98,12 +105,18 @@ fun RoomioUi(
         )
     }
 
-    AppTheme(onThemeChanged) {
+    val themeColor by themePreferencesRepository.color.collectAsState()
+    AppTheme(onThemeChanged, themeColor = themeColor) {
         RoomioNavigation(
             presentationGraph = presentationGraph,
             modifier = Modifier,
         )
     }
+}
+
+private object PreviewThemePreferencesRepository : ThemePreferencesRepository {
+    override val color = MutableStateFlow(ThemeColor.ROOMIO)
+    override fun selectColor(color: ThemeColor): Result<Unit> { this.color.value = color; return Result.success(Unit) }
 }
 
 private val previewProfile = UserProfile("Nika", ProfileAvatarId.COMET)

@@ -1,3 +1,4 @@
+import { useThemePalette } from './theme';
 import { appLog } from './data/sessionLog';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button, LoadingIndicator, Snackbar, StatusCard } from './components/Material';
@@ -23,6 +24,7 @@ export default function LiveApp() {
     const q = new URLSearchParams(location.search).get('theme');
     return q === 'dark' || q === 'light' ? q : localStorage.getItem('roomio-theme') === 'dark' || (!localStorage.getItem('roomio-theme') && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
   });
+  const palette = useThemePalette(theme === 'dark');
   const [identity, setIdentity] = useState<Identity>(defaultIdentity);
   const [identityId, setIdentityId] = useState('');
   const [ready, setReady] = useState(false);
@@ -240,7 +242,7 @@ export default function LiveApp() {
   return <div className="app-shell">
     {!ready ? <main className="form-page">{initialError ? <StatusCard title="Unable to restore your profile" tone="error" actions={<><Button disabled={resetting} onClick={() => setAttempt(v => v + 1)}>Retry connection</Button>{resetAllowed && <Button variant="text" disabled={resetting} onClick={() => void resetGuest()}>{resetting ? 'Resetting identity…' : 'Reset guest identity'}</Button>}</>}>{initialError}</StatusCard> : <LoadingIndicator label="Restoring your profile" />}</main> : <>
       {screen === 'home' && <HomeScreen live busy={joinStatus === 'loading'} identity={identity} theme={theme} onToggleTheme={toggleTheme} onSettings={() => setScreen('settings')} onCreate={() => {setManagerMode('create');setJoinStatus('idle');setJoinError('');setScreen('party-manager');}} onJoin={() => {setManagerMode('join');setJoinStatus('idle');setJoinError('');setScreen('party-manager');}} returnableParty={returnableParty} onReturnToParty={() => returnableParty && void loadPreview(returnableParty.code || returnableParty.id, 'home')} />}
-      {screen === 'settings' && <SettingsScreen identity={identity} theme={theme} onToggleTheme={toggleTheme} onBack={() => setScreen('home')} onSave={saveProfile} saving={saving} />}
+      {screen === 'settings' && <SettingsScreen palette={palette} identity={identity} theme={theme} onToggleTheme={toggleTheme} onBack={() => setScreen('home')} onSave={saveProfile} saving={saving} />}
       {screen === 'party-manager' && <PartyManagerScreen initialMode={managerMode} joinStatus={joinStatus} errorMessage={joinError} codeDraft={codeDraft} onCodeChange={setCodeDraft} theme={theme} onToggleTheme={toggleTheme} onBack={() => setScreen('home')} onCreate={() => void enterRoom('/v1/rooms')} onPreview={loadPreview} onResetError={() => {setJoinStatus('idle');setJoinError('');}} live />}
       {screen === 'room-preview' && roomPreview && <><RoomPreviewScreen preview={roomPreview} joinStatus={joinStatus} theme={theme} onToggleTheme={toggleTheme} onBack={() => {setScreen(previewBackScreen);setManagerMode('join');setJoinStatus('idle');}} onJoin={() => void enterRoom(`/v1/rooms/${roomPreview.id}/join`)} errorMessage={joinError} /></>}
       {screen === 'party' && party && <><PartyScreen key={roomId} party={party} streamStatus={streamStatus} theme={theme} aborting={aborting} onToggleTheme={toggleTheme} onStartStream={startStream} onSetStreamStatus={setStreamStatus} onAbort={abortStream} onLeave={leave} onNotify={notify} live={{ connected, leaving, voice: voiceState, onToggleVoice: toggleVoice, onRetryVoice: () => voice.current?.retryConnections(), onResumeVoice: () => { void voice.current?.resumeAudio().catch(e => notify(e.message)); }, onSync: sync, syncing, syncTarget, onReport: (positionMs, playing) => { playback.current = {positionMs,playing}; realtime.current?.report(positionMs, playing); } }} /></>}

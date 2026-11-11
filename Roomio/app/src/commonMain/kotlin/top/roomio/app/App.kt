@@ -21,6 +21,7 @@ import top.roomio.domain.profile.ProfileRepository
     bindingContainers = [ProfileDataBindings::class, PartyDataBindings::class],
 )
 internal interface RoomioAppGraph {
+    val themePreferencesRepository: top.roomio.domain.profile.ThemePreferencesRepository
     val profileRepository: ProfileRepository
     val sessionRepository: SessionRepository
     val roomRepository: RoomRepository
@@ -35,8 +36,10 @@ fun App(
     onThemeChanged: @Composable (isDark: Boolean) -> Unit = {},
 ) {
     val graph = remember { top.roomio.data.party.initializeAppLogging(); createGraph<RoomioAppGraph>() }
+    val themePreferences = remember(graph) { graph.themePreferencesRepository }
     RoomioUi(
         profileRepository = graph.profileRepository,
+        themePreferencesRepository = themePreferences,
         sessionRepository = graph.sessionRepository,
         roomRepository = graph.roomRepository,
         realtimeClient = graph.realtimeClient,

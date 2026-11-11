@@ -1,5 +1,7 @@
 package top.roomio.app.profile
 
+import top.roomio.domain.profile.ThemeColor
+import top.roomio.domain.profile.ThemePreferencesRepository
 import androidx.lifecycle.ViewModel
 import dev.zacsweers.metro.Inject
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -14,6 +16,8 @@ internal data class SettingsUiState(
     val draftName: String,
     val draftAvatar: ProfileAvatar,
     val saveFailed: Boolean = false,
+    val themeColor: ThemeColor = ThemeColor.ROOMIO,
+    val colorSaveFailed: Boolean = false,
 ) {
     val trimmedName: String
         get() = draftName.trim()
@@ -28,6 +32,7 @@ internal data class SettingsUiState(
 internal sealed interface SettingsAction {
     data class NameChanged(val name: String) : SettingsAction
     data class AvatarSelected(val avatar: ProfileAvatar) : SettingsAction
+    data class ColorSelected(val color: ThemeColor) : SettingsAction
     data object BackClicked : SettingsAction
     data object SaveClicked : SettingsAction
 }
@@ -39,10 +44,12 @@ internal enum class SettingsEffect {
 @Inject
 internal class SettingsViewModel(
     private val profileRepository: ProfileRepository,
+    private val themePreferencesRepository: ThemePreferencesRepository,
 ) : ViewModel() {
     private val initialProfile = profileRepository.currentProfile()
     private val mutableState = MutableStateFlow(
         SettingsUiState(
+            themeColor = themePreferencesRepository.color.value,
             draftName = initialProfile.name,
             draftAvatar = initialProfile.avatar.toPresentationAvatar(),
         ),
@@ -64,6 +71,12 @@ internal class SettingsViewModel(
                 it.copy(
                     draftAvatar = action.avatar,
                     saveFailed = false,
+                )
+            }
+            is SettingsAction.ColorSelected -> {
+                themePreferencesRepository.selectColor(action.color).fold(
+                    onSuccess = { mutableState.update { it.copy(themeColor = action.color, colorSaveFailed = false) } },
+                    onFailure = { mutableState.update { it.copy(colorSaveFailed = true) } },
                 )
             }
             SettingsAction.SaveClicked -> saveProfile()

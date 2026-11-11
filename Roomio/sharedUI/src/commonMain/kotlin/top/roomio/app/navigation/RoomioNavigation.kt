@@ -173,6 +173,7 @@ internal fun RoomioNavigation(
                             SettingsAction.SaveClicked,
                             is SettingsAction.NameChanged,
                             is SettingsAction.AvatarSelected,
+                            is SettingsAction.ColorSelected,
                             -> Unit
                         }
                     },

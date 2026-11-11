@@ -1,6 +1,15 @@
 package top.roomio.app.profile
 
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import top.roomio.domain.profile.ThemeColor
+import top.roomio.app.theme.seed
+import top.roomio.app.theme.label
+import roomio.sharedui.generated.resources.color_theme
+import roomio.sharedui.generated.resources.color_theme_description
+import roomio.sharedui.generated.resources.color_save_error
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -81,6 +90,7 @@ import roomio.sharedui.generated.resources.shown_inside_every_party
 import roomio.sharedui.generated.resources.theme
 import roomio.sharedui.generated.resources.your_avatar
 import roomio.sharedui.generated.resources.your_profile
+import top.roomio.app.theme.RoomioLightColorScheme
 import top.roomio.app.theme.AppTheme
 import top.roomio.app.theme.LocalThemeIsDark
 import top.roomio.app.theme.RoomioDesignSystem
@@ -159,6 +169,34 @@ internal fun SettingsScreen(
                 }
                 ProfileSection(
                     number = "03",
+                    title = stringResource(Res.string.color_theme),
+                    description = stringResource(Res.string.color_theme_description),
+                ) {
+                    Column(modifier = Modifier.selectableGroup()) {
+                        ThemeColor.entries.forEach { color ->
+                            val isSelected = color == state.themeColor
+                            Row(
+                                modifier = Modifier.fillMaxWidth()
+                                    .selectable(selected = isSelected, role = Role.RadioButton,
+                                        onClick = { onAction(SettingsAction.ColorSelected(color)) })
+                                    .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface)
+                                    .heightIn(min = 56.dp).padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                Box(Modifier.size(24.dp).background(color.seed ?: RoomioLightColorScheme.primary, CircleShape)
+                                    .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape))
+                                Text(stringResource(color.label), modifier = Modifier.weight(1f),
+                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface)
+                                if (isSelected) Icon(Icons.Default.Check, contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                            }
+                        }
+                        if (state.colorSaveFailed) Text(stringResource(Res.string.color_save_error), color = MaterialTheme.colorScheme.error)
+                    }
+                }
+                ProfileSection(
+                    number = "04",
                     title = stringResource(Res.string.language),
                     description = stringResource(Res.string.language_description),
                     showDivider = false,

@@ -1,3 +1,4 @@
+import { useThemePalette } from './theme';
 import { useEffect, useMemo, useState } from 'react';
 import { Snackbar } from './components/Material';
 import { fakePartyRepository, getMockPartyPreview } from './data/fakeRepository';
@@ -42,6 +43,7 @@ export function PreviewApp() {
   };
 
   const [theme, setTheme] = useState<Theme>(getInitialTheme);
+  const palette = useThemePalette(theme === 'dark');
   const [screen, setScreen] = useState<Screen>(
     preview?.screen || (inviteCode ? (invitedRoom ? 'room-preview' : 'party-manager') : 'home'),
   );
@@ -211,6 +213,7 @@ export function PreviewApp() {
 
       {screen === 'settings' ? (
         <SettingsScreen
+          palette={palette}
           identity={identity}
           theme={theme}
           onToggleTheme={toggleTheme}

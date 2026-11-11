@@ -51,6 +51,7 @@ class PresentationViewModelTest {
     fun settingsStateDerivesValidationFromActions() {
         val viewModel = SettingsViewModel(
             TestProfileRepository(),
+            TestThemePreferencesRepository(),
         )
 
         viewModel.onAction(SettingsAction.NameChanged("   "))
@@ -288,7 +289,7 @@ class PresentationViewModelTest {
             override fun saveProfile(profile: UserProfile): Result<Unit> =
                 Result.failure(IllegalStateException("Test write failure"))
         }
-        val viewModel = SettingsViewModel(failingRepository)
+        val viewModel = SettingsViewModel(failingRepository, TestThemePreferencesRepository())
 
         viewModel.onAction(SettingsAction.SaveClicked)
 

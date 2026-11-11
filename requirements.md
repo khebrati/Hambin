@@ -4,7 +4,7 @@ A watch party mobile app where users can stream from a direct URL.
 The app has several sections:
 
 In home page, users can either:
-1. Enter setting, where they can choose language, a simple name and a logo.
+1. Enter setting, where they can choose language, a simple name and a logo. Settings also offers the 24 named color seeds listed in docs/theme-palettes.md; selecting one immediately applies its full light/dark Material palette and remembers it on the current device.
 2. A party manager page, where they can either create or join a party (via ID)
 
 after they join or create a party, we have the party screen.

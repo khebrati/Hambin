@@ -13,6 +13,9 @@ interface ProfileDataBindings {
         repository: PreferencesProfileRepository,
     ): ProfileRepository
 
+    @Binds
+    fun bindThemePreferencesRepository(repository: PreferencesThemeRepository): top.roomio.domain.profile.ThemePreferencesRepository
+
     companion object {
         @Provides
         fun provideSettings(): Settings = Settings()
