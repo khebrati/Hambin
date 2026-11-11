@@ -1,14 +1,14 @@
 # Android Shared Screen launcher icons
 
-The approved Shared Screen mark has 24 bundled Android color variants. Each background uses the exact named seed hex supplied by the stakeholder, independently of Material's generated primary color. The foreground uses either cream (`#FFF8E7`) or charcoal (`#18201C`), whichever has higher contrast against the seed. All variants share the same vector silhouette. Basil is the initial launcher icon, matching the selected green concept; it is not an automatic theme choice.
+The approved Shared Screen mark has 24 bundled Android color variants. Each background uses the exact named seed hex supplied by the stakeholder, independently of Material's generated primary color. The foreground uses either cream (`#FFF8E7`) or charcoal (`#18201C`), whichever has higher contrast against the seed. All variants share the same vector silhouette. Basil is the initial launcher icon and the icon for Roomio default.
 
-## Foundation and integration boundary
+## Theme integration
 
-`LauncherIconController` is available from the Metro application graph. It exposes `isSupported`, `currentColor(): Result<LauncherIconColor>`, and `selectColor(LauncherIconColor): Result<Unit>`. Android supports switching; iOS and desktop explicitly report unsupported. No picker, theme observer, or preference migration is wired in this change.
+`LauncherIconController` is available from the Metro application graph. It exposes `isSupported`, `currentColor(): Result<LauncherIconColor>`, and `selectColor(LauncherIconColor): Result<Unit>`. Android supports switching; iOS and desktop explicitly report unsupported. The composition root passes the graph-owned controller to the shared presentation boundary.
 
-The 24 `LauncherIconColor` enum names match the named theme choices (`CHERRY_BLOSSOM` uses that exact spelling). A later integration should explicitly map named theme choices to icon choices and define what the extra `ROOMIO` default means. Do not couple the icon catalog to theme storage or infer an icon from a generated Material primary color. Automatic theme changes, light/dark mode, and dynamic system color are not currently triggers.
+The domain mapping explicitly associates all 24 named `ThemeColor` choices with their matching `LauncherIconColor`; `ROOMIO` maps to `BASIL`. The root presentation effect applies the saved choice on app launch and applies subsequent color changes immediately, independently of profile Save or network connectivity. It remains above navigation, so navigating between screens does not create another observer. Material primary colors, light/dark mode and dynamic system colors do not select another alias.
 
-Use the graph-owned controller from the application boundary when wiring theme selection. Handle `Result` failures separately from saving the theme: a launcher failure must not silently imply success or discard the theme selection. Repeating the same choice is idempotent. A failed update can be retried by selecting the intended color again.
+An icon failure preserves the saved theme and shows an accessible snackbar with Retry and dismissal. Retry applies the current choice again; changing theme cancels an obsolete pending retry. Dismissal stops that attempt; the next app launch reconciles again. Repeating an already applied choice is idempotent at the controller. Unsupported platforms do not attempt switching or show an error. A failed theme-preference write retains the previously saved theme and icon.
 
 ## Android behavior
 
@@ -24,6 +24,6 @@ Use the graph-owned controller from the application boundary when wiring theme s
 
 Run `python3 Roomio/androidApp/tools/verify_launcher_icons.py` from the repository root to verify all enum/manifest/resource colors and defaults. Run data JVM tests for repeated selection, every color, API-specific ordering, partial failure and repair, unsupported platforms, and controller recreation. Build with `./gradlew :androidApp:assembleDebug` from `Roomio/`.
 
-Launcher switching is local and offline. There is no new screen, loading state, empty picker, or selected/pressed UI in this foundation. Future picker states belong to the theme integration. Hardware acceptance should cover at least API 23–32 and API 33+, cold launch, invite links, process restart, app upgrades, pinned shortcuts and themed icons.
+Launcher switching is local and offline. The existing theme picker supplies populated/selected/pressed states; no additional screen or loading/empty picker is introduced. Icon-update errors have Retry and dismissal. Hardware acceptance should cover at least API 23–32 and API 33+, cold launch, invite links, process restart, app upgrades, pinned shortcuts and themed icons.
 
 Android references: [activity aliases](https://developer.android.com/guide/topics/manifest/activity-alias-element), [PackageManager component updates](https://developer.android.com/reference/android/content/pm/PackageManager#setComponentEnabledSettings(java.util.List)).

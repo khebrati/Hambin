@@ -241,4 +241,6 @@
     <string name="color_cocoa">Cocoa</string>
     <string name="color_graphite">Graphite</string>
     <string name="color_birch">Birch</string>
+    <string name="launcher_icon_update_failed">Your theme is saved, but the app icon couldn’t be updated.</string>
+    <string name="launcher_icon_retry">Retry</string>
 </resources>
