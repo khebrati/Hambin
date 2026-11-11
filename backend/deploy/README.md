@@ -1,9 +1,9 @@
 # Migrated VPS deployment
 
 The active stack is Node/PostgreSQL/Caddy/Coturn with backend-owned automatic
-guest sessions (DD-028). Root `deploy.sh`, `backend/docker-compose.yml`, and
-`backend/deploy-aws.md` describe the retired Go/LiveKit stack and must not be used
-for this deployment. The unused stock WatchParty server/UI is retired too.
+guest sessions (DD-028). Root `deploy.sh` builds, packages, deploys, and checks this stack.
+`backend/docker-compose.yml` and `backend/deploy-aws.md` describe the retired
+Go/LiveKit stack and must not be used for this deployment. The unused stock WatchParty server/UI is retired too.
 
 Production site/API: `https://watchparty.top` on the replacement server deployed October 30, 2026.
 The current SSH address and password are stored only in Git-ignored local files
@@ -25,8 +25,7 @@ plus TCP 80/443 and administrative SSH. PostgreSQL/API have no public ports.
   release links `.env` here. Set `SITE_DOMAIN=watchparty.top`,
   `TURN_DOMAIN=relay.watchparty.top`, and `PUBLIC_IP` to the server public IPv4 address.
 - `/opt/hambin/turn-tls/`: exported Caddy certificate and private key.
-- `/opt/hambin/backups/`: PostgreSQL custom-format dumps and protected pre-update
-  configuration snapshots. Local backups do not protect against VPS loss.
+- No backup directory, database dumps, or scheduled snapshots are maintained (stakeholder decision, November 11, 2026).
 
 The API requires `DATABASE_URL` and `AUTH_ALLOWED_ORIGINS`; Compose sets the latter
 to exactly `https://${SITE_DOMAIN}`. Browser session mutations require that Origin
@@ -38,8 +37,9 @@ Admin credential may remain only with retained rollback material; never package
 or mount it in the new release. Do not delete the external cloud project here.
 
 The Compose project remains `hambin`, preserving named volumes. Services restart
-automatically. Existing daily `hambin-backup.timer` and `hambin-turn-tls.timer`
-continue to back up PostgreSQL and synchronize TURN certificates.
+automatically. The daily `hambin-turn-tls.timer` synchronizes TURN certificates.
+Backup automation and stored snapshots are removed by `./deploy.sh remove-backups`
+and by release activation. This does not remove the live PostgreSQL volume.
 
 ## Build and coordinated cutover
 
@@ -48,6 +48,13 @@ Firebase environment variables are needed. Production uses relative API and
 Socket.IO URLs (`VITE_BACKEND_URL` empty). Native clients use
 `https://watchparty.top`. Copy only `webUI/dist/` into the release's `web/`.
 
+Public signed Android APKs live in `web/downloads/`, using versioned filenames
+such as `roomio-1.1.0-6.apk` and matching `.sha256` files. Verify the release
+signature, package/version, and uploaded checksum before linking a new APK.
+Preserve this directory when replacing the browser build or staging a full
+release: it is independent of Vite's generated assets. Published versioned APK
+URLs must retain the same bytes. Never upload signing keys or signing properties.
+
 Stage `package.json`, `package-lock.json`, `server/`, and `sql/` from
 `backend/watchparty` into `api/`. Rename `Dockerfile.api` to `api/Dockerfile`;
 copy Compose, Caddyfile, haproxy.cfg, and TURN scripts alongside it. Exclude credentials,
@@ -55,20 +62,39 @@ copy Compose, Caddyfile, haproxy.cfg, and TURN scripts alongside it. Exclude cre
 every staged file and the exact dirty-source status. Validate those checksums
 after transfer. Build the API image before stopping the existing API.
 
-For this authentication cutover, stop the old API and take a fresh custom-format
-PostgreSQL dump before the new API starts and applies migration 0003. Save the
-current symlink target, effective API image tag, and protected `.env` beside the
-backup. Remove obsolete Firebase configuration from the active `.env`; set
-`RELEASE_ID` to the staged release. Bring up the new API and Caddy together, wait
-for health, then repoint `current`. Do not delete volumes, truncate product data,
-or rewrite already-applied migration files.
+For routine deployments to the existing host:
 
-Migration 0003 drops the old provider UID column and adds backend credential
-storage. Existing product rows remain, but clients start fresh guest identities
-and do not import former ownership. Both clients use Socket.IO room protocol 3 and voice protocol 4, with
-`auth.refresh {accessToken}`; old client binaries are incompatible. Local theme
-and other non-secret preferences remain. This is a coordinated API/frontend
-cutover, not a mixed-auth rollout.
+```sh
+export DEPLOY_RELEASE_ID=20261111-launch  # choose a new unique ID for each release
+./deploy.sh build
+./deploy.sh deploy
+./deploy.sh status
+```
+
+Build runs browser unit tests/build and backend unit tests/typecheck, packages
+only the API source and browser output, and records file checksums and source
+status. It includes current working-tree changes without committing or pushing.
+Real-service integration and Android builds remain separate acceptance checks.
+Node 24.18.1/npm 11.16.0 and Python 3 are required locally; Docker Compose and
+Python 3 are required remotely. SSH uses the known-hosts file, optional
+`DEPLOY_SSH_KEY`, and agent/password authentication. Host defaults to the local
+ignored IP file; user defaults to root. The old `.tools/deploy.conf` is ignored.
+
+Deploy verifies archive and payload checksums, reuses the existing
+`hambin_default` bridge, preserves published downloads and old hashed assets,
+builds the API before changing running services, validates HAProxy, and updates
+API/Caddy/router/Coturn without recreating PostgreSQL. It switches `current`
+after local readiness, then checks public readiness including the voice flag.
+It creates no database or file snapshots. Existing old release directories are
+application artifacts, not database recovery points. Runtime environment remains
+in the protected server-only `.env`.
+
+This command requires an already provisioned host, network, certificates, and
+TURN renewal timer. It does not bootstrap a new VPS. API migrations apply on
+startup: inspect schema compatibility before deploying. A failure can leave
+updated containers running before the symlink switches; inspect `docker compose
+ps` in the attempted release. No automatic schema rollback is attempted.
+Publish compatible Android binaries separately when room/voice protocols change.
 
 Verify readiness and real browser create/restore/reload, room create/preview/join,
 owner return, local playback, private sync, and mesh voice. Block Google/Firebase
@@ -76,43 +102,23 @@ authentication destinations during browser acceptance and confirm no requests to
 them. Compile/test Android and provide the release APK; the stakeholder performs
 physical-device acceptance.
 
-## Operations and rollback
+## Operations and recovery
 
 ```sh
-cd /opt/hambin/current
-docker compose ps
-/opt/hambin/backup.sh
-systemctl list-timers 'hambin-*'
-curl --fail https://watchparty.top/readyz
+./deploy.sh status
+./deploy.sh remove-backups
 ```
 
-Inspect a dump without modifying live data:
+The removal command disables/stops the backup timer/service, removes their unit
+files and `/opt/hambin/backup.sh`, and deletes `/opt/hambin/backups`. It preserves
+TURN renewal, live data, and deployment secrets. Historical deployment documents
+record earlier backup behavior; they are not current operating instructions.
 
-```sh
-cat /opt/hambin/backups/<backup>.dump | docker compose exec -T postgres pg_restore --list
-```
-
-Rollback to a pre-DD-028 release **requires restoring the matching pre-cutover
-database**, because its schema needs the removed provider UID column. Switching
-only the image or frontend is unsafe. Stop API/Caddy, preserve any post-cutover
-dump for investigation, and restore the protected pre-update `.env` before
-loading an old Compose file that requires its former authentication variables.
-Keep PostgreSQL running, then recreate the application database from the administrative
-`postgres` database (`DROP DATABASE hambin WITH (FORCE)`, followed by
-`CREATE DATABASE hambin OWNER hambin`). This removes new credential tables and
-foreign keys absent from the old dump. Restore the selected custom-format dump
-with `pg_restore --no-owner --no-acl --exit-on-error -U hambin -d hambin` through
-`docker compose exec -T postgres`. Then start the retained matching API
-image and frontend with `docker compose up -d --wait api caddy`, verify health,
-and repoint `current`. Restoring the pre-cutover dump discards subsequently
-created backend sessions/rooms, so this procedure is for a failed coordinated
-cutover. Never route these clients to the retired Go/LiveKit stack.
-
-The old VPS remains untouched. See [replacement deployment evidence](../../docs/vps-deployment-20261023.md)
-for historical checks and limitations. Readiness does not establish eight-peer
-capacity, physical Android/browser audio, restrictive-network fallback, offsite
-recovery, or sustained load acceptance.
-
+No database snapshots or automatic database recovery are provided. Retained
+application releases can only be reactivated if compatible with the current
+schema and installed clients. Never reactivate the retired Go/LiveKit stack or a
+pre-DD-028 schema against the current database. Readiness does not establish
+physical audio or sustained load acceptance.
 
 ## Voice v4 and shared TCP 443
 
