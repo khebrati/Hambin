@@ -3,9 +3,11 @@ import { forwardSyncPosition, playbackReport, slowLoadingMessage } from './Video
 import { usesIntegratedPlayer } from './avPlayer';
 
 describe('integrated player routing', () => {
-  it('uses the MKV path while ordinary files and manifests keep their existing engines', () => {
-    for (const url of ['https://media.test/movie.mkv', 'https://media.test/MOVIE.MKV?token=1#part']) expect(usesIntegratedPlayer(url)).toBe(true);
-    for (const url of ['https://media.test/movie.mp4', 'https://media.test/master.m3u8', 'https://media.test/movie.mp4?next=movie.mkv', 'https://media.test/movie.mp4#movie.mkv', 'invalid']) expect(usesIntegratedPlayer(url)).toBe(false);
+  it('defaults to AVPlayer for HTTP media, independent of extension', () => {
+    for (const path of ['movie.mkv', 'movie.mp4', 'movie.webm', 'master.m3u8', 'manifest.mpd', 'stream?token=1']) {
+      expect(usesIntegratedPlayer(`https://media.test/${path}`)).toBe(true);
+    }
+    for (const url of ['invalid', 'javascript:alert(1)', 'file:///movie.mp4']) expect(usesIntegratedPlayer(url)).toBe(false);
   });
 });
 

@@ -14,3 +14,11 @@ ffmpeg -f lavfi -i 'testsrc2=size=320x180:rate=12:duration=32' \
   -metadata:s:a:1 language=eng -metadata:s:a:1 title=English \
   -metadata:s:s:0 language=fas -metadata:s:s:0 title=Persian -shortest movie.mkv
 ```
+
+
+Default-player regression variants use the same synthetic source, with no personal media:
+
+```sh
+ffmpeg -i movie.mkv -map 0:v:0 -map 0:a:0 -c copy -movflags +faststart movie.mp4
+ffmpeg -i movie.mkv -map 0:v:0 -map 0:a:0 -c:v libvpx-vp9 -b:v 80k -c:a libopus movie.webm
+```

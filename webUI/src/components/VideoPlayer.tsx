@@ -110,6 +110,10 @@ function MediaPlayer({ url, onReport, onNotify, onState, syncTarget, onSync, syn
   const [subtitleId, setSubtitleId] = useState('off');
   const [localSubtitle, setLocalSubtitle] = useState<{ url: string; name: string } | null>(null);
   const appliedRequest = useRef<string | undefined>(undefined);
+  const fallbackUsed = useRef(false);
+  const handoff = useRef<{ position: number; playing: boolean; volume: number; muted: boolean; audio?: string; subtitle?: string } | null>(null);
+  const selections = useRef({ audio, subtitles, audioId, subtitleId, blocked, paused, ready });
+  selections.current = { audio, subtitles, audioId, subtitleId, blocked, paused, ready };
 
   useEffect(() => { callbacks.current.onState?.(status); }, [status]);
   useEffect(() => {
@@ -167,21 +171,41 @@ function MediaPlayer({ url, onReport, onNotify, onState, syncTarget, onSync, syn
     const video = videoRef.current!;
     let active = true;
     let failed = false;
+    let startupReady = false;
     importGeneration.current++; setImporting(false); setSubtitleError('');
-    setStatus('loading'); setReady(false); setError(''); setBlocked(false); setPosition(0); setDuration(NaN); setBuffered(0); setLive(false); setAudio([]); setSubtitles([]); setUnsupportedSubtitles(0); setLocalSubtitle(null); automaticAudioId.current = null;
+    setStatus('loading'); setReady(false); setError(''); setBlocked(false); setPosition(0); setDuration(NaN); setBuffered(0); setLive(false); setAudio([]); setSubtitles([]); setUnsupportedSubtitles(0); if (!handoff.current) setLocalSubtitle(null); automaticAudioId.current = null;
     // A local Retry rebuilds the source and returns track selection to its defaults.
     audioSelection.current = 'automatic'; setAudioId('automatic');
-    subtitleSelection.current = 'off'; setSubtitleId('off');
-    const fail = (message: string) => { if (active) { failed = true; setError(message); setStatus('error'); setReady(false); } };
-    const update = () => {
-      if (!active) return;
+    if (!handoff.current || selections.current.subtitleId !== 'local') { subtitleSelection.current = 'off'; setSubtitleId('off'); }
+    const fallback = () => {
+      if (!active || failed || !integrated || fallbackUsed.current || !navigator.onLine) return false;
       const current = media()!;
+      const selection = selections.current;
+      handoff.current = {
+        position: Number.isFinite(current.currentTime) ? current.currentTime : 0,
+        playing: selection.ready ? !selection.paused && !current.ended : !selection.blocked,
+        volume: current.volume, muted: current.muted,
+        audio: selection.audio.find(track => track.id === selection.audioId)?.name,
+        subtitle: selection.subtitles.find(track => track.id === selection.subtitleId)?.name,
+      };
+      fallbackUsed.current = true;
+      failed = true;
+      setBrowserPlayback(true);
+      callbacks.current.onNotify('Switched to browser playback.');
+      return true;
+    };
+    const fail = (message: string) => { if (fallback()) return; if (active && !failed) { failed = true; setError(message); setStatus('error'); setReady(false); } };
+    const update = () => {
+      if (!active || failed) return;
+      const current = media()!;
+      if (current.readyState >= 2) startupReady = true;
       if (!current.seeking) setPosition(current.currentTime);
       setDuration(current.duration); setPaused(current.paused); setVolume(current.volume); setMuted(current.muted);
       if (current.duration === Infinity) setLive(true);
       setBuffered(current.buffered.length ? current.buffered.end(current.buffered.length - 1) : 0);
     };
     const autoplay = () => {
+      if (handoff.current && !handoff.current.playing) return;
       void media()!.play().catch((reason: unknown) => {
         if (!active || failed) return;
         if (reason instanceof DOMException && reason.name === 'AbortError') return;
@@ -189,9 +213,9 @@ function MediaPlayer({ url, onReport, onNotify, onState, syncTarget, onSync, syn
         else fail('This video could not start. Check its format and connection, then retry.');
       });
     };
-    const canplay = () => { if (failed) return; setReady(true); setStatus(media()!.paused ? 'paused' : 'playing'); update(); };
-    const playing = () => { if (failed) return; setBlocked(false); setPaused(false); setStatus('playing'); };
-    const pause = () => { setPaused(true); if (!failed && !video.error) setStatus('paused'); };
+    const canplay = () => { if (!active || failed) return; setReady(true); setStatus(media()!.paused ? 'paused' : 'playing'); update(); };
+    const playing = () => { if (!active || failed) return; setBlocked(false); setPaused(false); setStatus('playing'); };
+    const pause = () => { if (!active || failed) return; setPaused(true); if (!failed && !video.error) setStatus('paused'); };
     const waiting = () => { if (!failed && !video.paused) setStatus(video.readyState ? 'buffering' : 'loading'); };
     const mediaError = () => fail(navigator.onLine ? 'Unable to load video. The link may be unavailable, blocked by cross-origin rules, or use an unsupported format.' : 'You are offline. Reconnect, then retry the video.');
     const nativeTracks = () => {
@@ -204,6 +228,13 @@ function MediaPlayer({ url, onReport, onNotify, onState, syncTarget, onSync, syn
         if (index >= 0) automaticAudioId.current = choices[index].id;
       }
       setAudio(choices);
+      const desiredAudio = choices.find(track => track.name === handoff.current?.audio);
+      if (desiredAudio && list) {
+        for (let index = 0; index < list.length; index++) list[index].enabled = desiredAudio.id === `native:${index}`;
+        audioSelection.current = desiredAudio.id; setAudioId(desiredAudio.id); handoff.current!.audio = undefined;
+      }
+      const desiredSubtitle = Array.from(video.textTracks).findIndex(track => (track.label || track.language) === handoff.current?.subtitle);
+      if (desiredSubtitle >= 0) { subtitleSelection.current = `native:${desiredSubtitle}`; setSubtitleId(subtitleSelection.current); handoff.current!.subtitle = undefined; }
       Array.from(video.textTracks).forEach((track, index) => {
         track.mode = subtitleSelection.current === `native:${index}` || subtitleSelection.current === 'local' && track === localTrackRef.current?.track ? 'showing' : 'disabled';
       });
@@ -213,7 +244,7 @@ function MediaPlayer({ url, onReport, onNotify, onState, syncTarget, onSync, syn
     if (integrated) {
       const engine = new AvMedia(engineSurfaceRef.current!, url, {
         tracks: (audio, subtitles, automatic, unsupported) => {
-          if (!active) return;
+          if (!active || failed) return;
           setAudio(audio); setSubtitles(subtitles); automaticAudioId.current = automatic; setUnsupportedSubtitles(unsupported);
         },
         state: state => {
@@ -225,19 +256,37 @@ function MediaPlayer({ url, onReport, onNotify, onState, syncTarget, onSync, syn
         update, error: fail,
       });
       engineRef.current = engine;
-      void engine.ready.then(() => { if (active) autoplay(); }).catch(() => {
+      void engine.ready.then(() => { if (active && !failed) autoplay(); }).catch(() => {
         if (active) fail(navigator.onLine ? 'Unable to load this video. The source may block access or use an unsupported format. Retry or use browser playback.' : 'You are offline. Reconnect, then retry the video.');
       });
+      const startupTimer = window.setTimeout(() => {
+        if (active && !failed && !startupReady && engine.readyState < 2 && !selections.current.blocked) fallback();
+      }, 30_000);
       const timer = window.setInterval(() => { const report = playbackReport(engine); if (active && !failed && report) callbacks.current.onReport(report.positionMs, report.playing); }, 1000);
-      return () => { active = false; window.clearInterval(timer); engine.destroy(); engineRef.current = null; };
+      return () => { active = false; window.clearTimeout(startupTimer); window.clearInterval(timer); engine.destroy(); engineRef.current = null; };
     }
     video.textTracks.addEventListener('addtrack', nativeTracks);
     video.textTracks.addEventListener('removetrack', nativeTracks);
     const nativeAudio = (video as TrackMedia).audioTracks;
     nativeAudio?.addEventListener('addtrack', nativeTracks);
     nativeAudio?.addEventListener('removetrack', nativeTracks);
+    if (handoff.current) { video.volume = handoff.current.volume; video.muted = handoff.current.muted; }
+    let restored = false;
+    const restore = () => {
+      if (restored || !handoff.current || !active || failed) return;
+      restored = true;
+      const saved = handoff.current;
+      if (saved.position > 0 && Number.isFinite(video.duration)) video.currentTime = Math.min(saved.position, Math.max(0, video.duration - 0.05));
+      if (saved.playing) autoplay();
+      else { video.pause(); canplay(); }
+    };
+    const start = () => {
+      if (!handoff.current) autoplay();
+      else if (handoff.current.position === 0) { restored = true; autoplay(); }
+      else if (video.readyState >= 1) restore();
+    };
     const volumeChange = () => { setVolume(video.volume); setMuted(video.muted); };
-    const listeners: [string, EventListener][] = [['timeupdate', update], ['durationchange', update], ['progress', update], ['canplay', canplay], ['playing', playing], ['pause', pause], ['ended', pause], ['waiting', waiting], ['error', mediaError], ['volumechange', volumeChange], ['loadedmetadata', update], ['loadedmetadata', nativeTracks]];
+    const listeners: [string, EventListener][] = [['timeupdate', update], ['durationchange', update], ['progress', update], ['canplay', canplay], ['playing', playing], ['pause', pause], ['ended', pause], ['waiting', waiting], ['error', mediaError], ['volumechange', volumeChange], ['loadedmetadata', restore], ['loadedmetadata', update], ['loadedmetadata', nativeTracks]];
     listeners.forEach(([event, listener]) => video.addEventListener(event, listener));
     let hls: Hls | null = null;
     const isHls = /\.m3u8(?:$|[?#])/i.test(url);
@@ -245,17 +294,22 @@ function MediaPlayer({ url, onReport, onNotify, onState, syncTarget, onSync, syn
       hls = new Hls(); hlsRef.current = hls;
       hls.on(Hls.Events.ERROR, (_event, data) => { if (data.fatal) fail('Unable to play this HLS stream. Check the connection, cross-origin access, and supported codecs, then retry.'); });
       hls.on(Hls.Events.LEVEL_LOADED, (_event, data) => setLive(data.details.live));
-      const tracks = () => { if (!hls) return; setAudio(hls.audioTracks.map((track, id) => ({ id: `hls:${id}`, name: track.name || track.lang || `Audio ${id + 1}` }))); setSubtitles(hls.subtitleTracks.map((track, id) => ({ id: `hls:${id}`, name: track.name || track.lang || `Subtitles ${id + 1}` }))); if (automaticAudioId.current === null && hls.audioTrack >= 0) automaticAudioId.current = `hls:${hls.audioTrack}`; };
+      const tracks = () => { if (!hls) return; setAudio(hls.audioTracks.map((track, id) => ({ id: `hls:${id}`, name: track.name || track.lang || `Audio ${id + 1}` }))); setSubtitles(hls.subtitleTracks.map((track, id) => ({ id: `hls:${id}`, name: track.name || track.lang || `Subtitles ${id + 1}` }))); if (automaticAudioId.current === null && hls.audioTrack >= 0) automaticAudioId.current = `hls:${hls.audioTrack}`;
+        const audioIndex = hls.audioTracks.findIndex(track => (track.name || track.lang) === handoff.current?.audio);
+        if (handoff.current?.audio && audioIndex >= 0) { handoff.current!.audio = undefined; audioSelection.current = `hls:${audioIndex}`; hls.audioTrack = audioIndex; setAudioId(audioSelection.current); }
+        const subtitleIndex = hls.subtitleTracks.findIndex(track => (track.name || track.lang) === handoff.current?.subtitle);
+        if (handoff.current?.subtitle && subtitleIndex >= 0) { handoff.current!.subtitle = undefined; subtitleSelection.current = `hls:${subtitleIndex}`; hls.subtitleTrack = subtitleIndex; hls.subtitleDisplay = true; setSubtitleId(subtitleSelection.current); }
+      };
       hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, tracks); hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, tracks);
       hls.on(Hls.Events.SUBTITLE_TRACK_SWITCH, (_event, data) => { if (subtitleSelection.current !== 'local') { const id = data.id >= 0 ? `hls:${data.id}` : 'off'; subtitleSelection.current = id; setSubtitleId(id); } });
       hls.on(Hls.Events.AUDIO_TRACK_SWITCHED, (_event, data) => { if (audioSelection.current !== 'automatic') setAudioId(`hls:${data.id}`); });
-      hls.on(Hls.Events.MANIFEST_PARSED, autoplay);
+      hls.on(Hls.Events.MANIFEST_PARSED, start);
       hls.loadSource(url); hls.attachMedia(video);
     } else {
       video.src = url; video.load();
       // Request playback now, so the browser need not finish a metadata-only
       // preload, suspend, and then reopen the source to start buffering.
-      autoplay();
+      start();
     }
     const timer = window.setInterval(() => { const report = playbackReport(video); if (active && !failed && report) callbacks.current.onReport(report.positionMs, report.playing); }, 1000);
     return () => {
@@ -264,7 +318,7 @@ function MediaPlayer({ url, onReport, onNotify, onState, syncTarget, onSync, syn
       nativeAudio?.removeEventListener('addtrack', nativeTracks); nativeAudio?.removeEventListener('removetrack', nativeTracks);
       hls?.destroy(); hlsRef.current = null; video.pause(); video.removeAttribute('src'); video.load();
     };
-  }, [url, retry]);
+  }, [url, retry, integrated]);
 
   useEffect(() => {
     const video = media();
@@ -341,7 +395,7 @@ function MediaPlayer({ url, onReport, onNotify, onState, syncTarget, onSync, syn
       if (engineRef.current) {
         await engineRef.current.importSubtitle(content, file.name);
         if (generation !== importGeneration.current || !engineRef.current) return;
-        setLocalSubtitle({ url: '', name: file.name });
+        setLocalSubtitle({ url: URL.createObjectURL(new Blob([content], { type: 'text/vtt' })), name: file.name });
       } else setLocalSubtitle({ url: URL.createObjectURL(new Blob([content], { type: 'text/vtt' })), name: file.name });
       subtitleSelection.current = 'local'; setSubtitleId('local'); setTrackDialog(null);
     } catch (reason) {
@@ -362,7 +416,7 @@ function MediaPlayer({ url, onReport, onNotify, onState, syncTarget, onSync, syn
     <div className="cinema-player__visual" onClick={() => { if (expanded) setControlsVisible(value => !value); }}>
       <div ref={engineSurfaceRef} className="integrated-player" hidden={!integrated} />
       <video ref={videoRef} hidden={integrated} aria-hidden={integrated || undefined} playsInline preload="auto" aria-label="Room video" style={{ width: '100%', height: '100%', objectFit: 'contain' }}>
-        {localSubtitle?.url && <track ref={element => { localTrackRef.current = element; if (element) element.track.mode = subtitleSelection.current === 'local' ? 'showing' : 'disabled'; }} key={localSubtitle.url} kind="subtitles" src={localSubtitle.url} label={localSubtitle.name} onLoad={(event) => { event.currentTarget.track.mode = subtitleSelection.current === 'local' ? 'showing' : 'disabled'; }} onError={() => { setSubtitleError('Unable to display that subtitle file. Choose another file.'); setTrackDialog('subtitles'); selectSubtitle('off'); }} />}
+        {!integrated && localSubtitle?.url && <track ref={element => { localTrackRef.current = element; if (element) element.track.mode = subtitleSelection.current === 'local' ? 'showing' : 'disabled'; }} key={localSubtitle.url} kind="subtitles" src={localSubtitle.url} label={localSubtitle.name} onLoad={(event) => { event.currentTarget.track.mode = subtitleSelection.current === 'local' ? 'showing' : 'disabled'; }} onError={() => { setSubtitleError('Unable to display that subtitle file. Choose another file.'); setTrackDialog('subtitles'); selectSubtitle('off'); }} />}
       </video>
       {error ? <div className="player-buffering"><StatusCard title="Unable to play video" tone="error" actions={<><Button onClick={() => setRetry(value => value + 1)}>Retry video</Button>{integrated && <Button variant="text" onClick={() => { setBrowserPlayback(true); setRetry(value => value + 1); }}>Use browser player</Button>}</>}>{error}</StatusCard></div>
         : status === 'loading' || status === 'buffering' ? <div className="player-buffering"><LoadingIndicator label={status === 'loading' ? 'Loading video' : 'Buffering'} />{slowLoading && <><p className="player-loading-help">{slowLoadingMessage(ready || integrated ? '' : url, navigator.userAgent)}</p><Button onClick={() => setRetry(value => value + 1)}>Retry video</Button></>}</div>
@@ -397,7 +451,7 @@ function MediaPlayer({ url, onReport, onNotify, onState, syncTarget, onSync, syn
       </div>
       <p className="player-subtitle-help">SRT, VTT, SSA/ASS or TTML files · Up to 5 MB. Advanced subtitle styling may look different.</p>
       {unsupportedSubtitles > 0 && <p>Some embedded subtitle formats are not supported. You can choose a local subtitle file.</p>}
-      {browserPlayback && <p>Some embedded tracks may be unavailable in browser playback. <Button variant="text" onClick={() => { setBrowserPlayback(false); setRetry(value => value + 1); setTrackDialog(null); }}>Try enhanced player</Button></p>}
+      {browserPlayback && <p>Some embedded tracks may be unavailable in browser playback. <Button variant="text" onClick={() => { fallbackUsed.current = false; handoff.current = null; setBrowserPlayback(false); setRetry(value => value + 1); setTrackDialog(null); }}>Try enhanced player</Button></p>}
       {subtitleError && <StatusCard title="Unable to load subtitles" tone="error">{subtitleError}</StatusCard>}
     </Dialog>
     <Dialog open={trackDialog === 'audio'} title="Audio tracks" onClose={() => setTrackDialog(null)} actions={<Button variant="text" onClick={() => setTrackDialog(null)}>Done</Button>}>

@@ -154,3 +154,9 @@ Resolved questions are preserved with their answers for traceability.
 
 - [Resolved, DD-041] Use a bug icon next to Share/Invite in the room app bar with one large description field.
 - [Resolved, DD-041] Send description, device/browser details and application session logs to private backend storage; see [contract](bug-report-contract.md). Retention defaults to 30 days. A staff triage UI or notifications remain outside this feature.
+
+
+## Default browser player (2026-11-11)
+
+- [Resolved, DD-042] Use AVPlayer for all HTTP(S) browser media, with one automatic browser/native-HLS/hls.js fallback on failure or a 30-second initial startup stall while online.
+- Physical-device/mobile Safari and full-movie acceptance remain unverified. Embedded track availability can differ between AVPlayer and fallback engines; no universal codec or track-parity promise is made.

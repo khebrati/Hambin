@@ -3,10 +3,10 @@ import { readFile } from 'node:fs/promises';
 
 const url = 'https://media.example.test/integrated.mkv';
 const source = readFile(new URL('./fixtures/player-mkv/movie.mkv', import.meta.url));
-async function mediaSource(page: Page) {
-  const bytes = await source;
+async function mediaSource(page: Page, mediaUrl = url, file = 'movie.mkv') {
+  const bytes = file === 'movie.mkv' ? await source : await readFile(new URL(`./fixtures/player-mkv/${file}`, import.meta.url));
   const requests: string[] = [];
-  await page.route(url, async route => {
+  await page.route(mediaUrl, async route => {
     const request = route.request();
     const range = request.headers().range;
     requests.push(`${request.method()} ${range ?? ''}`);
@@ -17,7 +17,7 @@ async function mediaSource(page: Page) {
     const end = Math.min(Number(match?.[2] || bytes.length - 1), bytes.length - 1);
     if (start >= bytes.length) return route.fulfill({ status: 416, headers: { ...headers, 'content-range': `bytes */${bytes.length}` } });
     const body = bytes.subarray(start, end + 1);
-    await route.fulfill({ status: match ? 206 : 200, headers: { ...headers, 'content-length': String(body.length), ...(match ? { 'content-range': `bytes ${start}-${end}/${bytes.length}` } : {}) }, contentType: 'video/x-matroska', body });
+    await route.fulfill({ status: match ? 206 : 200, headers: { ...headers, 'content-length': String(body.length), ...(match ? { 'content-range': `bytes ${start}-${end}/${bytes.length}` } : {}) }, contentType: file.endsWith('.mp4') ? 'video/mp4' : file.endsWith('.webm') ? 'video/webm' : 'video/x-matroska', body });
   });
   return requests;
 }
@@ -175,39 +175,84 @@ for (const settings of [
   await page.screenshot({ path: `test-results/avplayer-${settings.name.replaceAll(' ', '-')}.png`, fullPage: true });
 });
 
-test('failed player asset download offers video retry and recovers', async ({ page }) => {
+test('failed player assets automatically fall back and enhanced playback can be retried', async ({ page }) => {
   await mediaSource(page);
   await page.route('**/vendor/avplayer/**/avplayer.js', route => route.abort());
   await page.goto(`/e2e/player.html?url=${encodeURIComponent(url)}`);
-  await expect(page.getByRole('alert')).toBeVisible();
+  const video = page.locator('.cinema-player__visual > video:not([hidden])');
+  await expect(video).toHaveAttribute('src', url);
+  await expect.poll(() => video.evaluate(v => v.getVideoPlaybackQuality().totalVideoFrames)).toBeGreaterThan(5);
+  await expect(page.getByTestId('player-notice')).toHaveText('Switched to browser playback.');
   await page.unroute('**/vendor/avplayer/**/avplayer.js');
-  await page.getByRole('button', { name: 'Retry video', exact: true }).click();
+  await page.getByRole('button', { name: 'Subtitles', exact: true }).click();
+  await page.getByRole('button', { name: 'Try enhanced player', exact: true }).click();
   await expect.poll(() => page.locator('.integrated-player video').evaluateAll(videos => videos[0] ? (videos[0] as HTMLVideoElement).getVideoPlaybackQuality().totalVideoFrames : 0)).toBeGreaterThan(5);
   await expect(page.getByRole('alert')).toHaveCount(0);
 });
 
-test('browser fallback preserves playback when the enhanced runtime cannot load', async ({ page }) => {
+for (const extension of ['mp4', 'webm']) test(`${extension} starts with AVPlayer and recovers through browser playback when needed`, async ({ page }) => {
   await mediaSource(page);
-  await page.route('**/vendor/avplayer/**/avplayer.js', route => route.abort());
-  await page.goto(`/e2e/player.html?url=${encodeURIComponent(url)}`);
-  await page.getByRole('button', { name: 'Use browser player', exact: true }).click();
-  const video = page.locator('video:not([hidden])');
-  await expect(video).toHaveAttribute('src', url);
-  await expect.poll(() => video.evaluate(v => v.getVideoPlaybackQuality().totalVideoFrames)).toBeGreaterThan(5);
-  await expect(page.getByRole('alert')).toHaveCount(0);
+  const replacement = `https://media.example.test/replaced.${extension}`;
+  await mediaSource(page, replacement, `movie.${extension}`);
+  await openPlayer(page);
+  await page.evaluate(url => (window as any).replacePlayerSource(url), replacement);
+  const video = page.locator(extension === 'webm' ? '.cinema-player__visual > video:not([hidden])' : '.integrated-player video');
+  await expect.poll(() => video.evaluateAll(videos => videos[0] ? (videos[0] as HTMLVideoElement).getVideoPlaybackQuality().totalVideoFrames : 0)).toBeGreaterThan(5);
+  await expect(video).toHaveAttribute('src', extension === 'webm' ? replacement : /^blob:/);
+  await expect.poll(() => page.evaluate(() => (window as any).AVPlayer.Instances.length)).toBe(extension === 'webm' ? 0 : 1);
+  await page.getByRole('button', { name: 'Pause', exact: true }).click();
+  await seek(page, 18);
+  await expect.poll(() => video.evaluate(v => v.currentTime)).toBeGreaterThan(17.9);
+  await expect.poll(() => video.evaluate(v => v.paused)).toBe(true);
+  await expect(page.getByRole('button', { name: 'Subtitles', exact: true })).toHaveAttribute('aria-pressed', 'false');
+  if (extension === 'webm') await expect(page.getByTestId('player-notice')).toHaveText('Switched to browser playback.');
+  else await expect(page.getByTestId('player-notice')).toHaveCount(0);
 });
 
-test('source replacement disposes the old engine and local subtitle state', async ({ page }) => {
+test('a playback failure preserves paused position, volume, mute and imported subtitles in browser fallback', async ({ page }) => {
   await mediaSource(page);
   await openPlayer(page);
-  await page.getByRole('button', { name: 'Subtitles', exact: true }).click();
-  await page.getByRole('dialog', { name: 'Subtitles', exact: true }).getByRole('radio', { name: 'Persian · fas', exact: true }).check();
-  await page.route('https://media.example.test/replaced.mp4', () => {});
-  await page.evaluate(() => (window as any).replacePlayerSource('https://media.example.test/replaced.mp4'));
+  await page.getByRole('button', { name: 'Pause', exact: true }).click();
+  await seek(page, 18);
+  const enhanced = page.locator('.integrated-player video');
+  await expect.poll(() => enhanced.evaluate(v => v.currentTime)).toBeGreaterThan(17.9);
+  await expect.poll(() => enhanced.evaluate(v => v.paused)).toBe(true);
+  await page.getByRole('slider', { name: 'Volume', exact: true }).fill('35');
+  await page.getByRole('button', { name: 'Mute video', exact: true }).click();
+  await page.locator('input[type=file]').setInputFiles({ name: 'local.vtt', mimeType: 'text/vtt', buffer: Buffer.from('WEBVTT\n\n00:00:00.000 --> 00:00:31.000\nFallback caption\n') });
+  await enhanced.evaluate(v => v.dispatchEvent(new Event('error')));
+  const native = page.locator('.cinema-player__visual > video:not([hidden])');
+  await expect(native).toHaveAttribute('src', url);
+  await expect.poll(() => native.evaluate(v => v.currentTime)).toBeGreaterThan(17.9);
+  await expect.poll(() => native.evaluate(v => v.paused && v.muted && Math.abs(v.volume - 0.35) < 0.01)).toBe(true);
+  await expect.poll(() => native.evaluate(v => Array.from(v.textTracks).flatMap(t => t.mode === 'showing' ? Array.from(t.activeCues ?? []).map(c => (c as VTTCue).text) : []))).toContain('Fallback caption');
+  await native.evaluate(v => v.dispatchEvent(new Event('error')));
+  await expect(page.getByRole('alert')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Retry video', exact: true })).toBeVisible();
   await expect(page.locator('.integrated-player video')).toHaveCount(0);
-  await expect.poll(() => page.evaluate(() => (window as any).AVPlayer.Instances.length)).toBe(0);
-  await expect(page.locator('video')).toHaveAttribute('src', 'https://media.example.test/replaced.mp4');
-  await expect(page.getByRole('button', { name: 'Subtitles', exact: true })).toHaveAttribute('aria-pressed', 'false');
+});
+
+test('online startup stall falls back once after 30 seconds and ignores late engine completion', async ({ page }) => {
+  await page.clock.install();
+  await page.route('**/vendor/avplayer/**/avplayer.js', () => {});
+  await mediaSource(page);
+  await page.goto(`/e2e/player.html?url=${encodeURIComponent(url)}`);
+  await page.clock.fastForward(30_001);
+  await expect(page.locator('.cinema-player__visual > video:not([hidden])')).toHaveAttribute('src', url);
+  await expect(page.getByTestId('player-notice')).toHaveText('Switched to browser playback.');
+  await page.unroute('**/vendor/avplayer/**/avplayer.js');
+  await page.clock.fastForward(60_000);
+  await expect(page.locator('.integrated-player video')).toHaveCount(0);
+});
+
+test('offline startup failure keeps Retry without switching engines', async ({ page, context }) => {
+  await page.route('**/vendor/avplayer/**/avplayer.js', async route => {
+    await context.setOffline(true);
+    await route.abort();
+  });
+  await page.goto(`/e2e/player.html?url=${encodeURIComponent(url)}`);
+  await expect(page.getByRole('alert')).toContainText('offline');
+  await expect(page.getByTestId('player-notice')).toHaveCount(0);
 });
 
 test('explicit synchronization only advances the integrated player and reports actual playback', async ({ page }) => {
@@ -245,10 +290,44 @@ test('autoplay denial stays paused in reports and Play recovers', async ({ page 
   const blocked = page.getByText('Select Play to start the video on this device.');
   await expect(blocked).toBeVisible();
   expect(await page.evaluate(() => (window as any).playerReports.every((report: any) => !report.playing))).toBe(true);
-  await page.evaluate(() => { (window as any).allowPlayback = true; });
+  // Grant permission with the click, as a real user gesture would. Granting it
+  // beforehand can resume pending autoplay and turn Play into Pause mid-click.
+  await page.evaluate(() => document.addEventListener('click', () => { (window as any).allowPlayback = true; }, { capture: true, once: true }));
   await page.getByRole('button', { name: 'Play', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
   await expect(blocked).toHaveCount(0);
   await expect.poll(() => page.locator('.integrated-player video').evaluate(v => v.muted)).toBe(false);
   expect(errors).toEqual([]);
+});
+
+
+test('HLS plays and seeks through AVPlayer by default', async ({ page }) => {
+  const playlist = await readFile(new URL('./fixtures/player-hls/default/playlist.m3u8', import.meta.url), 'utf8');
+  await page.route('https://media.example.test/default.m3u8', route => route.fulfill({
+    contentType: 'application/vnd.apple.mpegurl', headers: { 'access-control-allow-origin': '*' },
+    body: playlist,
+  }));
+  await page.route('https://media.example.test/playlist*.ts', async route => route.fulfill({ contentType: 'video/mp2t', headers: { 'access-control-allow-origin': '*' }, body: await readFile(new URL(`./fixtures/player-hls/default/${new URL(route.request().url()).pathname.slice(1)}`, import.meta.url)) }));
+  await page.goto('/e2e/player.html?url=https%3A%2F%2Fmedia.example.test%2Fdefault.m3u8');
+  const video = page.locator('.integrated-player video');
+  await expect.poll(() => video.evaluateAll(videos => videos[0] ? (videos[0] as HTMLVideoElement).getVideoPlaybackQuality().totalVideoFrames : 0)).toBeGreaterThan(5);
+  await page.getByRole('button', { name: 'Pause', exact: true }).click();
+  await seek(page, 18);
+  await expect.poll(() => video.evaluate(v => v.currentTime)).toBeGreaterThan(17.9);
+  await expect.poll(() => video.evaluate(v => v.paused)).toBe(true);
+  await expect(page.getByTestId('player-notice')).toHaveCount(0);
+});
+
+
+test('ordinary buffering after readiness does not switch engines at the startup deadline', async ({ page }) => {
+  await page.clock.install();
+  await mediaSource(page);
+  await openPlayer(page);
+  await page.locator('.integrated-player video').evaluate(video => {
+    Object.defineProperty(video, 'readyState', { configurable: true, value: 1 });
+    video.dispatchEvent(new Event('waiting'));
+  });
+  await page.clock.fastForward(30_001);
+  await expect(page.locator('.integrated-player video')).toHaveCount(1);
+  await expect(page.getByTestId('player-notice')).toHaveCount(0);
 });

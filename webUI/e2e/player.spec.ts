@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 test.beforeEach(async ({ page }) => {
+  await page.route('**/vendor/avplayer/**/avplayer.js', route => route.abort());
   // Keep the source pending before metadata, as in the reported Firefox scan.
   await page.route('https://media.example.test/**', () => {});
   await page.addInitScript(() => {

@@ -11,6 +11,9 @@ interface RuntimePlayer {
   seek(time: bigint): Promise<void>;
   destroy(): Promise<void>;
   getDuration(): bigint;
+  isLive(): boolean;
+  getAudioList(): Promise<{ list: { lang: string }[]; selectedIndex: number }>;
+  getSubtitleList(): Promise<{ list: { lang: string }[]; selectedIndex: number }>;
   getStreams(): Stream[];
   getSelectedAudioStreamId(): number;
   getSelectedSubtitleStreamId(): number;
@@ -56,7 +59,7 @@ function loadRuntime(): Promise<Runtime> {
 const emptyRanges: TimeRanges = { length: 0, start: () => { throw new DOMException('No buffered ranges', 'IndexSizeError'); }, end: () => { throw new DOMException('No buffered ranges', 'IndexSizeError'); } };
 const textCodecs = new Set([94210, 94212, 94213, 94225, 94226, 94230, 94232]);
 export function usesIntegratedPlayer(url: string): boolean {
-  try { return new URL(url).pathname.toLowerCase().endsWith('.mkv'); } catch { return false; }
+  try { return ['http:', 'https:'].includes(new URL(url).protocol); } catch { return false; }
 }
 
 /** Keep engine commands ordered: AVPlayer does not allow overlapping asynchronous calls. */
@@ -78,6 +81,7 @@ export class AvMedia implements PlayerMedia {
   private rejectLocal: ((reason: Error) => void) | null = null;
   private loaded = false;
   private durationValue = NaN;
+  private manifest = false;
   private previewing = false;
   private pendingSeeks = 0;
   private seekRevision = 0;
@@ -151,13 +155,22 @@ export class AvMedia implements PlayerMedia {
     await player.load(url, { http: { credentials: 'omit' } });
     if (this.closed) return;
     this.loaded = true;
-    this.durationValue = Number(player.getDuration()) / 1000;
+    this.durationValue = player.isLive() ? Infinity : Number(player.getDuration()) / 1000;
+    this.manifest = /\.(m3u8|mpd)(?:$|[?#])/i.test(url);
     const streams = player.getStreams();
     const choices = (items: Stream[]) => items.map(stream => ({ id: `av:${stream.id}`, name: [stream.metadata.title, stream.metadata.language === 'und' ? '' : stream.metadata.language].filter(Boolean).join(' · ') || `${stream.mediaType} ${stream.id + 1}` }));
     const subtitles = streams.filter(stream => stream.mediaType === 'Subtitle');
     const supported = subtitles.filter(stream => textCodecs.has(stream.codecparProxy.codecId));
     const automatic = player.getSelectedAudioStreamId();
-    this.callbacks.tracks(choices(streams.filter(stream => stream.mediaType === 'Audio')), choices(supported), automatic >= 0 ? `av:${automatic}` : null, subtitles.length - supported.length);
+    if (this.manifest) {
+      const [audio, subtitles] = await Promise.all([player.getAudioList(), player.getSubtitleList()]);
+      if (this.closed) return;
+      // The pinned MSE runtime can stall/recreate SourceBuffers when switching
+      // manifest renditions. Preserve working hls.js/native track controls.
+      if (audio.list.length > 1 || subtitles.list.length > 0) throw new Error('This manifest needs browser playback for track selection.');
+      const tracks = (list: { lang: string }[], kind: string) => list.map((track, index) => ({ id: `avh:${index}`, name: track.lang || `${kind} ${index + 1}` }));
+      this.callbacks.tracks(tracks(audio.list, 'Audio'), tracks(subtitles.list, 'Subtitles'), audio.selectedIndex >= 0 ? `avh:${audio.selectedIndex}` : null, 0);
+    } else this.callbacks.tracks(choices(streams.filter(stream => stream.mediaType === 'Audio')), choices(supported), automatic >= 0 ? `av:${automatic}` : null, subtitles.length - supported.length);
     this.callbacks.update();
   }
   private enqueue<T>(action: (player: RuntimePlayer) => Promise<T>): Promise<T | undefined> {
@@ -263,14 +276,17 @@ export class AvMedia implements PlayerMedia {
     });
   }
   pause() { void this.enqueue(player => player.pause()).catch(() => this.fail('Unable to pause this video. Retry the video.')); }
-  async selectAudio(id: string) { await this.seekTo(() => this.currentTime, Number(id.slice(3))); }
+  async selectAudio(id: string) {
+    if (id.startsWith('avh:')) await this.enqueue(player => player.selectAudio(Number(id.slice(4))));
+    else await this.seekTo(() => this.currentTime, Number(id.slice(3)));
+  }
   async selectSubtitle(id: string) {
     if (this.localTrack) this.localTrack.track.mode = id === 'local' ? 'showing' : 'disabled';
     if (id === 'off') { this.container.dataset.subtitles = 'off'; return; }
     if (id === 'local') { this.container.dataset.subtitles = 'off'; return; }
     await this.enqueue(async player => {
-      const selected = Number(id.slice(3));
-      if (player.getSelectedSubtitleStreamId() !== selected) await player.selectSubtitle(selected);
+      const selected = Number(id.slice(id.startsWith('avh:') ? 4 : 3));
+      if (id.startsWith('avh:') || player.getSelectedSubtitleStreamId() !== selected) await player.selectSubtitle(selected);
       this.container.dataset.subtitles = 'on';
     });
   }

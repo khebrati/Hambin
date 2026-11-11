@@ -1,6 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 
+test.beforeEach(async ({ page }, info) => {
+  if (info.title.includes('default HLS')) return;
+  await page.route('**/vendor/avplayer/**/avplayer.js', route => route.abort());
+});
+
 async function preparePlayer(page: Page, query = '') {
   await page.route('https://media.example.test/**', () => {});
   await page.addInitScript(() => {
@@ -158,7 +163,7 @@ for (const settings of [
   });
 }
 
-test('HLS renditions switch audio and subtitles through the real hls.js manifest lifecycle', async ({ page }) => {
+for (const engine of ['browser', 'integrated']) test(`${engine === 'integrated' ? 'default HLS' : 'hls.js'} renditions switch audio and subtitles through real manifests`, async ({ page }) => {
   test.setTimeout(20_000);
   const requests: string[] = [];
   const videoSegment = await readFile(new URL('./fixtures/player-hls/video.mpegts', import.meta.url));
@@ -182,6 +187,7 @@ test('HLS renditions switch audio and subtitles through the real hls.js manifest
     HTMLMediaElement.prototype.canPlayType = function (type) { return type === 'application/vnd.apple.mpegurl' ? '' : canPlayType.call(this, type); };
   });
   await page.goto('/e2e/player.html?url=https%3A%2F%2Fmedia.example.test%2Fmaster.m3u8');
+  if (engine === 'integrated') await expect(page.getByTestId('player-notice')).toHaveText('Switched to browser playback.');
   await page.getByRole('button', { name: 'Audio tracks', exact: true }).click();
   await page.getByRole('dialog', { name: 'Audio tracks', exact: true }).getByRole('radio', { name: 'Persian', exact: true }).check();
   await expect.poll(() => requests).toContain('/fa.m3u8');
@@ -193,10 +199,10 @@ test('HLS renditions switch audio and subtitles through the real hls.js manifest
     await page.getByRole('dialog', { name: 'Subtitles', exact: true }).getByRole('radio', { name: 'Persian subtitles', exact: true }).check();
     await expect(page.getByRole('button', { name: 'Subtitles', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await expect.poll(() => requests).toContain('/subs.m3u8');
-    await expect.poll(() => page.locator('video').evaluate(video => Array.from(video.textTracks).filter(track => track.mode === 'showing').flatMap(track => Array.from(track.cues ?? []).map(cue => (cue as VTTCue).text)))).toContain('سلام HLS');
+    await expect.poll(() => page.locator('video:not([hidden])').evaluate(video => Array.from(video.textTracks).filter(track => track.mode === 'showing').flatMap(track => Array.from(track.cues ?? []).map(cue => (cue as VTTCue).text)))).toContain('سلام HLS');
     await page.getByRole('button', { name: 'Subtitles', exact: true }).click();
     await page.getByRole('dialog', { name: 'Subtitles', exact: true }).getByRole('radio', { name: 'Off', exact: true }).check();
     await expect(page.getByRole('button', { name: 'Subtitles', exact: true })).toHaveAttribute('aria-pressed', 'false');
-    await expect.poll(() => page.locator('video').evaluate(video => Array.from(video.textTracks).every(track => track.mode !== 'showing'))).toBe(true);
+    await expect.poll(() => page.locator('video:not([hidden])').evaluate(video => Array.from(video.textTracks).every(track => track.mode !== 'showing'))).toBe(true);
   }
 });
