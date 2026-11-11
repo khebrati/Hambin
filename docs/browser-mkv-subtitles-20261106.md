@@ -123,3 +123,23 @@ the same cause. These checks used the local player, not a production deployment.
 All 77 unit tests and the production build passed. The autoplay-recovery browser
 test had intermittent failures during verification; a baseline rerun passed.
 The final full integrated-player rerun passed all nine browser tests.
+
+### Authorized deployment of the seek fix
+
+Commit `c8eccf5` was pushed to `master` and deployed to `watchparty.top` on
+November 11. All 56 staged, installed and public HTTPS browser files matched
+the build's SHA-256 manifest. The browser index hash is
+`18bb21b72ba43689e057f4aaac9f3bfc1a9a2fdbdd6e03b935df788591f94521`.
+The active release remains `/opt/hambin/releases/20261106-active-party-f04516c`;
+`web-seeking-release.json` records the browser manifest. Rollback material is
+`/opt/hambin/backups/before-web-seeking-c8eccf5/web`. Previous hashed assets were
+retained and the index replaced atomically. No application services restarted.
+Readiness returned ready/database/dispatcher/voice true.
+
+An actual public-browser temporary-party test confirmed the runtime's
+`preLoadTime` is 30 and the exact Odyssey URL seeks while playing to 600,
+1800 and back to 300 seconds. These stages completed in approximately 8.3,
+3.2 and 4.9 seconds, all with `readyState=4`, no page errors and no player
+alerts. The temporary party was left and its guest session revoked. Local
+evidence is `/tmp/hambin-production-seeking.json` and `.png`.
+The two focused seek regressions also passed after the preload increase.
