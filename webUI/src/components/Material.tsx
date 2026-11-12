@@ -56,7 +56,6 @@ export function IconButton({
       aria-label={label}
       aria-pressed={props['aria-pressed'] ?? (selected ? true : undefined)}
       data-tooltip={label}
-      title={label}
       {...props}
     >
       <Icon aria-hidden="true" size={22} strokeWidth={2.1} />

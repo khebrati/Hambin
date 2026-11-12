@@ -12,7 +12,7 @@ export function AndroidDownloadRow() {
         <strong>{t("Native Android app")}</strong>
         <p>{t("Background voice party · v1.2.1")}</p>
       </div>
-      <a className="md-icon-button md-icon-button--tonal" href={androidDownloadUrl} download="watch-party-1.2.1-11.apk" aria-label={t("Download native Android app")} title={t("Download native Android app")} data-tooltip={t("Download for Android")}>
+      <a className="md-icon-button md-icon-button--tonal" href={androidDownloadUrl} download="watch-party-1.2.1-11.apk" aria-label={t("Download native Android app")} data-tooltip={t("Download for Android")}>
         <ArrowDownToLine size={22} aria-hidden="true" />
       </a>
     </aside>
