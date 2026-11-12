@@ -368,6 +368,9 @@ strong {
   background: transparent;
   color: inherit;
   cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+  caret-color: transparent;
   transition:
     transform var(--md-sys-motion-duration-short) var(--md-sys-motion-easing-standard),
     border-radius var(--md-sys-motion-duration-medium) var(--md-sys-motion-easing-emphasized),
