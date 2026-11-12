@@ -57,7 +57,7 @@ internal fun SettingsColorGarden(selected: ThemeColor, onSelect: (ThemeColor) ->
             }
         }
         BoxWithConstraints(Modifier.fillMaxWidth().heightIn(max = 560.dp)
-            .verticalScroll(rememberScrollState()).selectableGroup().semantics { contentDescription = pickerLabel }) {
+            .verticalScroll(rememberScrollState()).padding(4.dp).selectableGroup().semantics { contentDescription = pickerLabel }) {
             val gap = 8.dp
             val columns = maxOf(1, ((maxWidth + gap) / (112.dp + gap)).toInt())
             val itemWidth = (maxWidth - gap * (columns - 1)) / columns
@@ -66,7 +66,7 @@ internal fun SettingsColorGarden(selected: ThemeColor, onSelect: (ThemeColor) ->
                 maxItemsInEachRow = columns) {
                 ThemeColor.entries.forEach { color ->
                     val isSelected = color == selected
-                    Surface(modifier = Modifier.width(itemWidth).heightIn(min = 168.dp)
+                    Surface(modifier = Modifier.width(itemWidth).heightIn(min = 144.dp)
                         .selectable(selected = isSelected, role = Role.RadioButton, onClick = { onSelect(color) }),
                         shape = if (isSelected) MaterialTheme.shapes.extraLarge else MaterialTheme.shapes.large,
                         color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,

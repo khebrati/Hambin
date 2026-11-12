@@ -42,6 +42,8 @@ class SettingsPickersUiTest {
                 }
             }
         }
+        File("/tmp/hambin-settings-compact-parity-${if (persian) "fa" else "en"}-profile.png")
+            .writeBytes(Image.makeFromBitmap(onRoot().captureToImage().asSkiaBitmap()).encodeToData()!!.bytes)
         val colorsLabel = if (persian) "رنگ دلخواهت" else "Your colors"
         onNodeWithContentDescription(colorsLabel).performScrollTo()
         onAllNodes(isSelectable() and hasAnyAncestor(hasContentDescription(colorsLabel))).assertCountEquals(25)

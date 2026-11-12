@@ -620,3 +620,11 @@ deployment evidence remains historical.
 - **Decision:** Automatic Persian party titles use «دورهمی {name}», for example «دورهمی فرانکی». English automatic titles keep “{name}'s party”; explicit user-entered titles retain their content.
 - **Chat empty state:** Use a chat icon and the existing empty-state heading. Remove “Say hi, share a thought, or start with 🍿.” and its Persian counterpart from browser, previews and shared native presentation.
 - **Invitation:** Keep the invitation/share icon in the party top bar. Remove the duplicate full-width invitation button below voice chat across clients.
+
+
+## DD-069: Native Party Header and Compact Profile Parity
+
+- **Date:** 2026-11-12
+- **Decision:** Remove the decorative brand icon beside the native party title. Retain the title and existing invitation, report, video-link and leave actions.
+- **Profile:** Match the compact browser Settings layout in native presentation: compact header margins, 76dp preview avatar, two-column avatar choices with 8dp gaps and compact tile padding, a full-row selected character, and denser named color cards. Let profile and section text wrap within its available width, including Persian and large text. Keep expanded layouts adaptive.
+- **Behavior:** Preserve avatar/language drafts, Save and Back behavior, immediate color persistence, and existing recovery states. These are shared Compose presentation changes, including Android; backend contracts are unchanged.

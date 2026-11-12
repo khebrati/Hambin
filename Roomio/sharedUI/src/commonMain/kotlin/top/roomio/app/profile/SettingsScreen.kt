@@ -170,14 +170,14 @@ private fun ProfileTopBar(onBack: () -> Unit) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 68.dp),
+                .heightIn(min = 72.dp),
             contentAlignment = Alignment.Center,
         ) {
             Row(
                 modifier = Modifier
                     .widthIn(max = 1120.dp)
                     .fillMaxWidth()
-                    .padding(horizontal = 28.dp, vertical = 8.dp),
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
@@ -241,9 +241,11 @@ private fun ProfileSpotlight(
                 avatar = avatar,
                 description = avatarDescription,
                 selected = false,
+                baseArtworkSize = 76.dp,
+                selectedArtworkSize = 76.dp,
             )
             Spacer(Modifier.width(16.dp))
-            Column {
+            Column(Modifier.weight(1f)) {
                 Text(
                     text = stringResource(Res.string.ready_to_watch),
                     style = MaterialTheme.typography.labelMedium,
@@ -285,7 +287,7 @@ private fun ProfileSection(
                     )
                 }
             }
-            Column {
+            Column(Modifier.weight(1f)) {
                 Text(
                     text = title,
                     style = MaterialTheme.typography.titleLarge,
@@ -315,8 +317,9 @@ private fun AvatarPicker(
 ) {
     val pickerLabel = stringResource(Res.string.choose_an_avatar)
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-        val columns = if (maxWidth < 600.dp) 2 else 3
-        val gap = 12.dp
+        val compact = maxWidth < 600.dp
+        val columns = if (compact) 2 else 3
+        val gap = if (compact) 8.dp else 16.dp
         val itemWidth = (maxWidth - gap * (columns - 1)) / columns
         FlowRow(
             modifier = Modifier
@@ -332,7 +335,8 @@ private fun AvatarPicker(
                     avatar = avatar,
                     selected = avatar == selectedAvatar,
                     onClick = { onSelected(avatar) },
-                    baseArtworkSize = minOf(itemWidth - 32.dp, 96.dp),
+                    baseArtworkSize = minOf(itemWidth - 24.dp, 96.dp),
+                    compact = compact,
                     selectedArtworkSize = 176.dp,
                     modifier = Modifier.width(if (avatar == selectedAvatar) itemWidth * 2 + gap else itemWidth),
                 )
@@ -348,6 +352,7 @@ private fun AvatarChoice(
     onClick: () -> Unit,
     baseArtworkSize: androidx.compose.ui.unit.Dp,
     selectedArtworkSize: androidx.compose.ui.unit.Dp,
+    compact: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val shape = if (selected) RoomioDesignSystem.shapes.extraExtraLarge else MaterialTheme.shapes.large
@@ -362,7 +367,7 @@ private fun AvatarChoice(
             if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(horizontal = if (compact) 8.dp else 16.dp, vertical = if (compact) 12.dp else 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
         ) {
@@ -405,7 +410,7 @@ private fun ProfileAvatarImage(
     )
 
     Box(
-        modifier = Modifier.size(selectedArtworkSize + 8.dp),
+        modifier = Modifier.size(selectedArtworkSize),
         contentAlignment = Alignment.Center,
     ) {
         Surface(

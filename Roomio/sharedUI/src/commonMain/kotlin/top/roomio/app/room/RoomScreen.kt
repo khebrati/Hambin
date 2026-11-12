@@ -645,7 +645,6 @@ private fun RoomTopBar(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(if (compactBar) 6.dp else 10.dp),
                 ) {
-                    RoomioMark(size = if (compactBar) 40.dp else 48.dp)
                     Column(Modifier.weight(1f)) {
                         Text(
                             title,
@@ -672,35 +671,6 @@ private fun RoomTopBar(
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         }
-    }
-}
-
-@Composable
-private fun RoomioMark(size: Dp = 48.dp) {
-    val primary = MaterialTheme.colorScheme.primary
-    val secondary = MaterialTheme.colorScheme.secondary
-    val container = MaterialTheme.colorScheme.primaryContainer
-    Canvas(
-        modifier = Modifier
-            .size(size)
-            .clip(MaterialTheme.shapes.large)
-            .background(container),
-    ) {
-        drawCircle(
-            color = primary,
-            radius = this.size.minDimension * .23f,
-            center = Offset(this.size.width * .42f, this.size.height * .40f),
-        )
-        drawCircle(
-            color = container,
-            radius = this.size.minDimension * .20f,
-            center = Offset(this.size.width * .66f, this.size.height * .65f),
-        )
-        drawCircle(
-            color = secondary,
-            radius = this.size.minDimension * .16f,
-            center = Offset(this.size.width * .66f, this.size.height * .65f),
-        )
     }
 }
 
