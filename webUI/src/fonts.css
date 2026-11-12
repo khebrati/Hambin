@@ -1,0 +1,65 @@
+/* Bundled Pofak fonts: no system installation or external font service required. */
+
+@font-face {
+  font-family: "Pofak";
+  font-style: normal;
+  font-weight: 100;
+  font-display: swap;
+  src: url("./assets/fonts/pofak/pofak_thin.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "Pofak";
+  font-style: normal;
+  font-weight: 200;
+  font-display: swap;
+  src: url("./assets/fonts/pofak/pofak_ultralight.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "Pofak";
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url("./assets/fonts/pofak/pofak_light.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "Pofak";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./assets/fonts/pofak/pofak_regular.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "Pofak";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("./assets/fonts/pofak/pofak_medium.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "Pofak";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("./assets/fonts/pofak/pofak_demibold.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "Pofak";
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url("./assets/fonts/pofak/pofak_extrabold.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "Pofak";
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+  src: url("./assets/fonts/pofak/pofak_black.ttf") format("truetype");
+}

@@ -102,7 +102,7 @@ internal fun RoomioTheme(
     ) {
         MaterialTheme(
             colorScheme = colorScheme,
-            typography = RoomioTypography,
+            typography = RoomioTypography(),
             shapes = RoomioMaterialShapes,
         ) {
             Surface(

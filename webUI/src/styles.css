@@ -1,3 +1,5 @@
+@import "./fonts.css";
+
 :root {
   color-scheme: light;
 
@@ -47,8 +49,8 @@
   --app-color-scene-station: #f2e9e7;
   --app-color-scene-window: #f7bb4d;
 
-  --md-ref-typeface-brand: "Roboto Flex", Roboto, "Segoe UI", sans-serif;
-  --md-ref-typeface-plain: "Roboto Flex", Roboto, "Segoe UI", sans-serif;
+  --md-ref-typeface-brand: "Pofak", Tahoma, sans-serif;
+  --md-ref-typeface-plain: "Pofak", Tahoma, sans-serif;
 
   --md-sys-typescale-display-small-size: 2.25rem;
   --md-sys-typescale-display-small-line-height: 2.75rem;

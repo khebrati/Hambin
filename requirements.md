@@ -64,3 +64,7 @@ Confirmed Android launcher icon foundation (2026-11-11):
 Confirmed localized product naming (2026-11-12):
 1. The English app name is Watch Party. The Persian app name is هم‌بین, with a zero-width non-joiner (U+200C) between هم and بین. Use these names consistently in application text, browser metadata, launcher labels, and desktop/iOS display names. Roomio and Hambin are not user-facing brand names.
 2. The Persian home headline is «با هم ببینید». The English headline remains “Stream and chill”.
+
+
+Confirmed application typography (2026-11-12):
+1. Use Pofak as the application typeface in both the browser and Android clients, including English and Persian. Bundle the fonts with each client; users must not need to install them or access a third-party font service. Preserve text scaling, RTL support, and the existing typography hierarchy.
