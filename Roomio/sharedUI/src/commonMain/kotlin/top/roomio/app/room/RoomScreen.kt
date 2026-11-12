@@ -644,7 +644,7 @@ private fun RoomTopBar(
                         .fillMaxWidth()
                         .heightIn(min = if (compactBar) 64.dp else 72.dp)
                         .padding(
-                            horizontal = if (compactBar) 4.dp else 16.dp,
+                            horizontal = if (compactBar) RoomioDesignSystem.spacing.small else 16.dp,
                             vertical = if (compactBar) 4.dp else 8.dp,
                         ),
                     verticalAlignment = Alignment.CenterVertically,
