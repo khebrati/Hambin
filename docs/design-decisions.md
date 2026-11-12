@@ -483,3 +483,10 @@ deployment evidence remains historical.
 - **Language:** Keep canonical English names identical for everyone; translate picker labels into Persian. Save applies avatar and language, and Back discards drafts.
 - **Identity:** Duplicate names are allowed. Stable guest/membership UUIDs control authentication, ownership, chat and voice. Repeated avatars can be visually ambiguous; no unique-name constraint or numeric suffix is introduced.
 - **Continuity:** Normalize existing profile/membership names without resetting identities or ownership. Preserve historical chat snapshots. Backend derives names and ignores the legacy name input.
+
+
+## DD-057: Consecutive Chat Message Groups
+
+- **Date:** 2026-11-12
+- **Decision:** In browser and native chat, consecutive messages from one person share a single sender/“You” and time header above the first bubble. Show “Sent” after the last bubble only. Keep bubbles close together and show the avatar only at the start of a group.
+- **Identity and delivery:** Group by stable sender identity, regardless of matching names/avatars or elapsed time. Preserve per-message sending/failure feedback and recovery controls. Recompute boundaries when messages arrive, history loads, or pending messages reconcile.

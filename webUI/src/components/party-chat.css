@@ -12,7 +12,7 @@
 .chat-start { display: flex; align-items: center; gap: 12px; color: var(--chat-muted); font-size: var(--md-sys-typescale-label-medium-size); flex-shrink: 0; }
 .chat-start > span { height: 1px; background: var(--md-sys-color-outline-variant); flex: 1; }
 .chat-message { display: flex; align-items: flex-start; gap: 10px; max-width: 94%; flex-shrink: 0; }
-.chat-message > .avatar { width: 30px; height: 30px; flex-shrink: 0; margin-top: 4px; }
+.chat-message > .avatar { --avatar-size: 30px; width: 30px; height: 30px; flex-shrink: 0; margin-top: 4px; }
 .chat-message__main { min-width: 0; }
 .chat-message__meta { display: flex; gap: 10px; align-items: baseline; margin-bottom: 5px; font-size: var(--md-sys-typescale-label-medium-size); }
 .chat-message__meta > span { color: var(--chat-muted); font-size: .65rem; }
@@ -72,3 +72,7 @@
   .chat-panel__header { gap: var(--md-sys-spacing-xs); padding: 12px; }
   .chat-panel__mark { display: none; }
 }
+
+/* Keep consecutive bubbles close while preserving the sender's avatar column. */
+.chat-panel .chat-message--continuation { margin-top: -14px; }
+.chat-message__avatar-space { width: 30px; flex-shrink: 0; }

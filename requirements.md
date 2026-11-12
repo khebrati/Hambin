@@ -68,3 +68,6 @@ Confirmed localized product naming (2026-11-12):
 
 Confirmed application typography (2026-11-12):
 1. Use Pofak as the application typeface in both the browser and Android clients, including English and Persian. Bundle the fonts with each client; users must not need to install them or access a third-party font service. Preserve text scaling, RTL support, and the existing typography hierarchy.
+
+Confirmed consecutive chat messages (2026-11-12):
+1. Consecutive messages from the same person appear as separate, closely spaced bubbles with the sender name/“You” and time only above the first bubble, and “Sent” only after the last bubble. Changing sender begins a new group.

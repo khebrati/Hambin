@@ -21,6 +21,26 @@ import kotlin.test.*
 
 @OptIn(ExperimentalTestApi::class)
 class RoomChatUiTest {
+    @Test fun consecutiveMessagesShareHeaderAndFinalDeliveryStatus() = runComposeUiTest {
+        fun message(id: String, sender: String) = ChatMessage(id, "room", sender, sender, "Same name", "berry", id, "2026-11-12T06:00:00Z", id.toLong())
+        val state = mutableStateOf(RoomChatState(identityId = "me", connected = true, loading = false,
+            messages = listOf(message("1", "me"), message("2", "me"), message("3", "me"))))
+        setContent {
+            RoomioTheme(darkTheme = false) { Box(Modifier.width(600.dp).height(900.dp)) { RoomChatPanel(state.value, {}) } }
+        }
+        onAllNodesWithText("You").assertCountEquals(1)
+        onAllNodesWithText("Sent").assertCountEquals(1)
+        runOnIdle { state.value = state.value.copy(messages = listOf(message("1", "friend-a"), message("2", "friend-a"), message("3", "friend-b"))) }
+        onAllNodesWithText("Same name").assertCountEquals(2)
+        onAllNodesWithText("Sent").assertCountEquals(0)
+        runOnIdle { state.value = state.value.copy(messages = listOf(message("1", "me"), message("2", "me")),
+            pending = listOf(PendingChatMessage("failed", "Failed continuation", ChatSendState.FAILED, "NETWORK"))) }
+        onAllNodesWithText("You").assertCountEquals(1)
+        onAllNodesWithText("Sent").assertCountEquals(0)
+        onNodeWithText("Retry").assertExists()
+        onNodeWithText("Discard").assertExists()
+    }
+
     @Test fun compactPanelKeepsDraftRetryAndCollapseAvailableAtLargeText() = runComposeUiTest {
         val state=mutableStateOf(RoomChatState(connected=true,loading=false,pending=listOf(PendingChatMessage("failed","A failed message",ChatSendState.FAILED,"NETWORK"))))
         val actions=mutableListOf<RoomAction>()

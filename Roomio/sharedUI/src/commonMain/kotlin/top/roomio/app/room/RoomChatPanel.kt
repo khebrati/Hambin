@@ -4,7 +4,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -95,7 +95,7 @@ internal fun RoomChatPanel(state: RoomChatState, onAction: (RoomAction) -> Unit,
                 Box {
                     LazyColumn(
                         state = list, modifier = Modifier.fillMaxWidth().height(320.dp),
-                        contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp),
+                        contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         if (state.hasMore) item(key = "history") {
                             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -116,9 +116,16 @@ internal fun RoomChatPanel(state: RoomChatState, onAction: (RoomAction) -> Unit,
                                 Text(stringResource(Res.string.chat_empty_copy), style = MaterialTheme.typography.bodyMedium)
                             }
                         }
-                        items(state.messages, key = { "message-${it.id}" }) { message -> ChatMessageRow(message, message.identityId == state.identityId) }
-                        items(state.pending, key = { "pending-${it.id}" }) { message ->
-                            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
+                        itemsIndexed(state.messages, key = { _, message -> "message-${message.id}" }) { index, message ->
+                            val first = state.messages.getOrNull(index - 1)?.identityId != message.identityId
+                            val last = state.messages.getOrNull(index + 1)?.identityId != message.identityId &&
+                                !(message.identityId == state.identityId && index == state.messages.lastIndex && state.pending.isNotEmpty())
+                            ChatMessageRow(message, message.identityId == state.identityId, first, last)
+                        }
+                        itemsIndexed(state.pending, key = { _, message -> "pending-${message.id}" }) { index, message ->
+                            val first = index == 0 && state.messages.lastOrNull()?.identityId != state.identityId
+                            Column(Modifier.fillMaxWidth().padding(top = if (first) 10.dp else 0.dp), horizontalAlignment = Alignment.End) {
+                                if (first) Text(stringResource(Res.string.chat_you), style = MaterialTheme.typography.labelMedium)
                                 ChatBubble(message.text, true)
                                 if (message.state == ChatSendState.FAILED) {
                                     Text(chatError(message.error), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
@@ -181,9 +188,9 @@ internal fun RoomChatPanel(state: RoomChatState, onAction: (RoomAction) -> Unit,
 }
 
 @Composable
-private fun ChatMessageRow(message: ChatMessage, self: Boolean) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = if (self) Arrangement.End else Arrangement.Start) {
-        if (!self) {
+private fun ChatMessageRow(message: ChatMessage, self: Boolean, first: Boolean, last: Boolean) {
+    Row(Modifier.fillMaxWidth().padding(top = if (first) 10.dp else 0.dp), horizontalArrangement = if (self) Arrangement.End else Arrangement.Start) {
+        if (!self && first) {
             val avatar = when (message.avatar.uppercase()) {
                 "MINT" -> Res.drawable.avatar_mint; "SUNNY" -> Res.drawable.avatar_sunny; "BERRY" -> Res.drawable.avatar_berry
                 "CLOUD" -> Res.drawable.avatar_cloud; "EMBER" -> Res.drawable.avatar_ember; "NOVA" -> Res.drawable.avatar_nova
@@ -192,9 +199,9 @@ private fun ChatMessageRow(message: ChatMessage, self: Boolean) {
             }
             Image(painterResource(avatar), message.displayName, Modifier.size(30.dp).clip(CircleShape), contentScale = ContentScale.Crop)
             Spacer(Modifier.width(10.dp))
-        } else Spacer(Modifier.width(30.dp))
+        } else Spacer(Modifier.width(if (self) 30.dp else 40.dp))
         Column(Modifier.weight(1f), horizontalAlignment = if (self) Alignment.End else Alignment.Start, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (first) Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(if (self) stringResource(Res.string.chat_you) else message.displayName, style = MaterialTheme.typography.labelMedium)
                 val localTime = remember(message.createdAt) { runCatching {
                     val value = kotlin.time.Instant.parse(message.createdAt).toLocalDateTime(TimeZone.currentSystemDefault())
@@ -203,7 +210,7 @@ private fun ChatMessageRow(message: ChatMessage, self: Boolean) {
                 Text(localTime, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             ChatBubble(message.text, self)
-            if (self) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            if (self && last) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 Icon(Icons.Default.Check, null, Modifier.size(13.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(stringResource(Res.string.chat_sent), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
