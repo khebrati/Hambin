@@ -47,6 +47,8 @@ for (const variant of [
   expect(payload.clientInfo).toMatchObject({platform:'browser'});
   expect(String(payload.log)).toContain('Application started');
   expect(String(payload.log)).toContain('earlier failure');
+  for (const event of ['auth.start', 'auth.response', 'http.start', 'http.complete', 'room.connect', 'report.send']) expect(String(payload.log)).toContain(event);
+  expect(String(payload.log)).not.toContain('ABCD2345');
   expect(String(payload.log)).not.toMatch(/do-not-send|secret.example|hidden/);
   expect(Date.parse(String(payload.sessionStartedAt))).toBeGreaterThan(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

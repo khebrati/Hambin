@@ -1,3 +1,4 @@
+import { diagnosticEvent, diagnosticError } from './sessionLog';
 import { io, type Socket } from 'socket.io-client';
 import { ApiError, backendUrl, request } from './api';
 import type { RoomEvent, Snapshot, SyncResult } from './contracts';
@@ -15,11 +16,13 @@ export class RoomConnection {
   private pendingEvents: RoomEvent[] = [];
   private syncRequest = '';
   private authReady = false;
+  private diagnosticState = '';
   private syncWaiters = new Map<string, { resolve: (value: SyncResult) => void; reject: (error: unknown) => void; timer: ReturnType<typeof setTimeout> }>();
   constructor(private options: Options) {}
   start() { void this.connect(); }
   private async connect() {
     const generation = ++this.generation;
+    diagnosticEvent('room.connect', { generation, attempt: this.retry + 1 });
     try {
       const admission = await request<{ ticket: string; namespace: string }>(`/v1/rooms/${this.options.roomId}/realtime-ticket`, {});
       if (this.closed || generation !== this.generation) return;
@@ -27,6 +30,7 @@ export class RoomConnection {
       this.socket = socket;
       socket.on('snapshot', (value: Snapshot) => {
         if (generation !== this.generation || this.closed) return;
+        diagnosticEvent('room.connected', { generation, sequence: value.sequence, members: value.members.length });
         this.retry = 0;
         this.authReady = true;
         this.applySnapshot(value);
@@ -48,11 +52,13 @@ export class RoomConnection {
       socket.on('sync.result', (result: SyncResult) => {
         const waiter = this.syncWaiters.get(result.requestId);
         if (!waiter) return;
+        diagnosticEvent('room.sync_result', { status: result.status, targetPositionMs: result.targetPositionMs });
         clearTimeout(waiter.timer); this.syncWaiters.delete(result.requestId); waiter.resolve(result);
       });
       socket.on('error', (error: { code: string }) => this.options.onError(new ApiError(error.code)));
-      socket.on('disconnect', () => this.schedule());
+      socket.on('disconnect', () => { diagnosticEvent('room.disconnected', { generation }); this.schedule(); });
       socket.on('connect_error', (error: Error & { data?: { code: string } }) => {
+        diagnosticEvent('room.connect_failure', { generation, code: diagnosticError(new ApiError(error.data?.code || 'NETWORK')) });
         this.options.onError(new ApiError(error.data?.code || 'NETWORK'));
         this.schedule();
       });
@@ -65,6 +71,7 @@ export class RoomConnection {
   }
   private schedule() {
     if (this.closed || this.timer) return;
+    diagnosticEvent('room.retry_scheduled', { attempt: this.retry + 1, delayMs: Math.min(10000, 500 * 2 ** Math.min(this.retry, 5)) });
     this.authReady = false;
     this.options.onConnection(false);
     this.socket?.removeAllListeners(); this.socket?.disconnect(); this.socket = undefined;
@@ -73,6 +80,11 @@ export class RoomConnection {
   applySnapshot(value: Snapshot) {
     if (this.closed || (this.snapshot && value.sequence < this.snapshot.sequence)) return;
     if (this.snapshot && value.stream.revision < this.snapshot.stream.revision) return;
+    const diagnosticState = `${value.stream.state}:${value.stream.revision}:${value.members.length}:${value.members.find(member => member.isOwner)?.present}`;
+    if (diagnosticState !== this.diagnosticState) {
+      this.diagnosticState = diagnosticState;
+      diagnosticEvent('room.state', { stream: value.stream.state, revision: value.stream.revision, members: value.members.length, sequence: value.sequence });
+    }
     if (this.snapshot?.stream.sessionId !== value.stream.sessionId) this.syncRequest = '';
     value = { ...value, ownerName: value.members.find(m => m.isOwner)?.displayName || value.ownerName || this.snapshot?.ownerName };
     this.snapshot = value;
@@ -81,6 +93,7 @@ export class RoomConnection {
   async recover() {
     if (this.recovery) return this.recovery;
     const generation = this.generation;
+    diagnosticEvent('room.snapshot_recovery', { generation, sequence: this.snapshot?.sequence, pending: this.pendingEvents.length });
     this.recovery = request<Snapshot>(`/v1/rooms/${this.options.roomId}/snapshot`).then(value => {
       if (!this.closed && generation === this.generation) this.applySnapshot(value);
     }).finally(() => { this.recovery = undefined; });
@@ -101,11 +114,12 @@ export class RoomConnection {
   async sync(positionMs: number): Promise<SyncResult | undefined> {
     const stream = this.snapshot?.stream;
     if (!this.socket?.connected || !this.authReady || stream?.state !== 'ACTIVE') throw new ApiError('NETWORK');
+    diagnosticEvent('room.sync_requested', { positionMs: Math.round(positionMs) });
     const requestId = crypto.randomUUID();
     const sessionId = stream.sessionId;
     this.syncRequest = requestId;
     const result = await new Promise<SyncResult>((resolve, reject) => {
-      const timer = setTimeout(() => { this.syncWaiters.delete(requestId); reject(new ApiError('NETWORK')); }, 10000);
+      const timer = setTimeout(() => { this.syncWaiters.delete(requestId); diagnosticEvent('room.sync_timeout'); reject(new ApiError('NETWORK')); }, 10000);
       this.syncWaiters.set(requestId, { resolve, reject, timer });
       this.socket!.emit('sync.request', { requestId, streamSessionId: sessionId, positionMs: Math.max(0, Math.round(positionMs)) });
     });
@@ -121,6 +135,7 @@ export class RoomConnection {
     }));
   }
   close() {
+    diagnosticEvent('room.close');
     this.closed = true; ++this.generation; this.syncRequest = '';
     clearTimeout(this.timer); this.timer = undefined;
     this.socket?.removeAllListeners(); this.socket?.disconnect();

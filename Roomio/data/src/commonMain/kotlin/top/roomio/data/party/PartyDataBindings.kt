@@ -9,8 +9,6 @@ import io.ktor.client.HttpClient
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.api.createClientPlugin
 import io.ktor.client.plugins.defaultRequest
-import io.ktor.client.plugins.logging.LogLevel
-import io.ktor.client.plugins.logging.Logging
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.request.accept
 import io.ktor.http.URLBuilder
@@ -90,14 +88,7 @@ interface PartyDataBindings {
             expectSuccess = false
             install(ContentNegotiation) { json(json) }
             install(WebSockets)
-            install(Logging) {
-                logger = object : io.ktor.client.plugins.logging.Logger {
-                    override fun log(message: String) { co.touchlab.kermit.Logger.withTag("HTTP").i(message) }
-                }
-                level = LogLevel.INFO
-                sanitizeHeader { header -> header == HttpHeaders.Authorization }
-                filter { request -> shouldLogHttpRequest(request.url.build()) }
-            }
+            install(httpDiagnosticsPlugin(config))
             install(backendAuthorizationPlugin(tokens, config))
             defaultRequest {
                 accept(ContentType.Application.Json)
@@ -133,7 +124,3 @@ internal fun hasBackendOrigin(request: Url, baseUrl: String): Boolean {
     return request.host.equals(backend.host, ignoreCase = true) &&
         request.port == backend.port && request.protocol == backend.protocol
 }
-
-/** Session responses and refresh bodies contain credentials; suppress their complete exchange. */
-internal fun shouldLogHttpRequest(request: Url): Boolean =
-    !request.encodedPath.trimEnd('/').let { it == "/v1/guest-sessions" || it.startsWith("/v1/guest-sessions/") }

@@ -56,6 +56,7 @@ class KtorRealtimeClient(
 ) : RealtimeClient {
 
     override suspend fun connect(roomId: String): RealtimeSession {
+        log.i("room.connect requested")
         val initial = openRoomNamespace(roomId)
         return KtorRealtimeSession(
             initialNamespace = initial,
@@ -74,7 +75,7 @@ class KtorRealtimeClient(
         val connection = SocketIoConnection(socket, json)
         return try {
             connection.awaitOpen()
-            connection.connectNamespace(ticket.namespace, ticket.ticket)
+            connection.connectNamespace(ticket.namespace, ticket.ticket).also { log.i("room.connected") }
         } catch (error: Throwable) {
             connection.close()
             throw error
@@ -131,6 +132,7 @@ private class KtorRealtimeSession(
     }
 
     override suspend fun close() {
+        log.i("room.close requested")
         closed = true
         scope.cancel()
         namespaceMutex.withLock { runCatching { namespace.close() } }
@@ -151,7 +153,7 @@ private class KtorRealtimeSession(
             try {
                 val current = namespaceMutex.withLock { namespace }
                 for (incoming in current.events) {
-                    if (incoming.name == "snapshot") attempts = 0
+                    if (incoming.name == "snapshot") { log.i("room.snapshot received reconnectAttempts=$attempts"); attempts = 0 }
                     for (event in eventGate.accept(incoming)) output.send(event)
                 }
                 if (!closed) throw IllegalStateException("Socket.IO namespace ended")
@@ -160,14 +162,17 @@ private class KtorRealtimeSession(
             } catch (error: Throwable) {
                 if (closed) break
                 val failure = error.asPartyException()
+                log.w("room.disconnected code=${failure.code}")
                 output.trySend(RealtimeEvent.Failure(failure.code.ifBlank { PARTY_CODE_NETWORK }, failure.message.orEmpty()))
                 runCatching { namespaceMutex.withLock { namespace.close() } }
                 attempts = (attempts + 1).coerceAtMost(MAX_RECONNECT_ATTEMPTS)
                 val base = (RECONNECT_BASE_MS shl (attempts - 1)).coerceAtMost(RECONNECT_MAX_MS)
+                log.i("room.retry_scheduled attempt=$attempts baseDelayMs=$base")
                 delay(base + Random.nextLong(0, (base / 4).coerceAtLeast(1)))
                 try {
                     val replacement = reconnect()
                     namespaceMutex.withLock { namespace = replacement }
+                    log.i("room.reconnected attempt=$attempts")
                 } catch (reconnectError: CancellationException) {
                     throw reconnectError
                 } catch (reconnectError: Throwable) {
@@ -184,6 +189,7 @@ private class KtorRealtimeSession(
             val waitMs = (credentials.expiresAtEpochMs - nowMs() - AUTH_REFRESH_EARLY_MS).coerceAtLeast(1_000L)
             delay(waitMs)
             try {
+                log.i("room.auth_refresh requested")
                 sessions.refresh()
                 val fresh = tokens.credentials() ?: return
                 val ack = namespaceMutex.withLock {
@@ -196,6 +202,7 @@ private class KtorRealtimeSession(
                 throw cancellation
             } catch (error: Throwable) {
                 val partyError = error.asPartyException()
+                log.w("room.auth_refresh failure code=${partyError.code}")
                 if (partyError.code != PARTY_CODE_NETWORK) {
                     output.trySend(RealtimeEvent.Failure(partyError.code, partyError.message.orEmpty()))
                 }

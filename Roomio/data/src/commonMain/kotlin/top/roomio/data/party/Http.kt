@@ -10,7 +10,12 @@ import top.roomio.domain.party.PartyException
 
 internal suspend inline fun <reified T> HttpResponse.bodyOrThrow(): T {
     if (status.isSuccess()) {
-        return body()
+        return try { body() }
+        catch (cancel: CancellationException) { throw cancel }
+        catch (error: Exception) {
+            co.touchlab.kermit.Logger.withTag("HTTP").w("http.decode_failure status=${status.value} route=${diagnosticRoute(call.request.url.encodedPath)}")
+            throw error
+        }
     }
     throw toPartyException()
 }
@@ -22,6 +27,7 @@ internal suspend fun HttpResponse.toPartyException(): PartyException {
         null -> if (status.value == 503) PARTY_CODE_NETWORK else "HTTP_${status.value}"
         else -> error.code
     }
+    co.touchlab.kermit.Logger.withTag("HTTP").w("http.rejected status=${status.value} code=${code.takeIf { Regex("[A-Z][A-Z_0-9]{1,63}").matches(it) } ?: "UNKNOWN"}")
     return PartyException(
         code = code,
         message = error?.message ?: "Request failed",

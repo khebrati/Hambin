@@ -13,4 +13,8 @@ class AppSessionLogTest {
         assertTrue(saved.contains("Voice failed"))
         for (secret in listOf("secret", "refreshToken=refresh", "private", "media.example", "hidden", "Bearer authorization")) assertFalse(saved.contains(secret), secret)
     }
+    @Test fun redactsSocketAndLocalResourceUrls() {
+        val saved = redactAppLog("wss://socket.private/?ticket=hidden content://files/private.srt file:///secret/path blob:https://private/movie")
+        for (secret in listOf("socket.private", "hidden", "private.srt", "secret/path", "private/movie")) assertFalse(saved.contains(secret), secret)
+    }
 }

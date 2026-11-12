@@ -112,6 +112,7 @@ internal class MeshVoiceClient(
             "Backend returned an unexpected voice namespace"
         }
         if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            voiceLog.w("voice.microphone permission_denied")
             throw PartyException("VOICE_PERMISSION_REQUIRED", "Allow microphone access to join voice")
         }
         val session = MeshVoiceSession(context.applicationContext, http, backend, json, sessions, tokens, configuration) {
@@ -410,6 +411,7 @@ private class MeshVoiceSession(
                 scope.launch { eventMutex.withLock {
                     val observed = state ?: return@withLock
                     if (closed || peers[member.membershipId] !== observed) return@withLock
+                    voiceLog.i("voice.peer_ice state=$stateValue generation=${observed.localPeerGeneration} retries=${observed.retries}")
                     observed.iceState = stateValue
                     when (stateValue) {
                         PeerConnection.IceConnectionState.CONNECTED, PeerConnection.IceConnectionState.COMPLETED -> {
@@ -701,6 +703,7 @@ private class MeshVoiceSession(
     }
 
     override fun setMicrophoneEnabled(enabled: Boolean) {
+        voiceLog.i("voice.microphone requested enabled=$enabled")
         microphoneIntent.request(enabled, ::applyCapture)
         scope.launch { applyMuteIntent() }
     }
@@ -718,6 +721,7 @@ private class MeshVoiceSession(
             acknowledged("voice.mute", buildJsonObject { put("muted", JsonPrimitive(!wanted)) })
             // A delayed unmute cannot override a newer mute command.
             microphoneIntent.authorized(request, !closed && rosterReady && namespace === muteNamespace && muteNamespace?.isConnected == true) { capture ->
+                voiceLog.i("voice.microphone authorized enabled=$capture")
                 applyCapture(capture)
                 output.trySend(VoiceEvent.MicrophoneChanged(capture))
             }
@@ -859,6 +863,7 @@ private class MeshVoiceSession(
 
     override suspend fun disconnect() = withContext(NonCancellable) {
         if (closed) return@withContext
+        voiceLog.i("voice.disconnect peers=${peers.size}")
         closed = true
         microphoneIntent.request(false, ::applyCapture)
         synchronized(speakingLock) {

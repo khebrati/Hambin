@@ -25,12 +25,12 @@ private val log = Logger.withTag("RealtimeParser")
 internal fun parseRealtimeFrame(json: Json, text: String): RealtimeEvent {
     val element = runCatching { json.parseToJsonElement(text).jsonObject }.getOrNull()
     if (element == null) {
-        log.w("unparseable frame: ${text.take(MAX_FRAME_LOG_CHARS)}")
+        log.w("unparseable frame (${text.length} chars)")
         return RealtimeEvent.Ignored
     }
     val type = element["type"]?.jsonPrimitive?.contentOrNull
     if (type == null) {
-        log.w("frame without type: ${text.take(MAX_FRAME_LOG_CHARS)}")
+        log.w("frame without type (${text.length} chars)")
         return RealtimeEvent.Ignored
     }
     return when (type) {
@@ -43,12 +43,12 @@ internal fun parseRealtimeFrame(json: Json, text: String): RealtimeEvent {
         "event" -> parseEvent(json, element, text)
         "sync.result" -> {
             val dto = json.decodeFromJsonElement(SyncResultMessageDto.serializer(), element)
-            log.i("sync.result status=${dto.status} target=${dto.targetPositionMs}ms raw=${text.take(MAX_FRAME_LOG_CHARS)}")
+            log.i("sync.result status=${dto.status} target=${dto.targetPositionMs}ms")
             RealtimeEvent.SyncResult(dto.status.toSyncStatus(), dto.targetPositionMs, dto.requestId)
         }
         "error" -> {
             val dto = json.decodeFromJsonElement(ErrorMessageDto.serializer(), element)
-            log.e("server error code=${dto.code} message=${dto.message}")
+            log.e("server error code=${dto.code}")
             RealtimeEvent.Failure(dto.code, dto.message)
         }
         else -> {
@@ -63,7 +63,7 @@ private fun parseEvent(json: Json, element: JsonObject, text: String): RealtimeE
         json.decodeFromJsonElement(EventMessageDto.serializer(), element)
     }.getOrNull()
     if (dto == null) {
-        log.w("unparseable event frame: ${text.take(MAX_FRAME_LOG_CHARS)}")
+        log.w("unparseable event frame (${text.length} chars)")
         return RealtimeEvent.Ignored
     }
     val payload = dto.payload
@@ -123,5 +123,3 @@ private fun String.toSyncStatus(): SyncStatus = when (uppercase()) {
     "ALREADY_LEADING" -> SyncStatus.ALREADY_LEADING
     else -> SyncStatus.UNAVAILABLE
 }
-
-private const val MAX_FRAME_LOG_CHARS = 200

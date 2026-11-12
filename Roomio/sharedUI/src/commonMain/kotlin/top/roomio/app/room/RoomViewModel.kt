@@ -293,7 +293,7 @@ internal class RoomViewModel(
     private suspend fun connect() {
         identityId = sessionRepository.currentSession()?.identity?.id
             ?: runCatching { sessionRepository.ensureSession("Guest", "COMET").identity.id }.getOrNull()
-        log.i("connect identity=$identityId room=$roomId asOwner=$asOwner")
+        log.i("room.connect asOwner=$asOwner")
         try {
             applySnapshot(roomRepository.snapshot(roomId))
             // Keep the session alive in the background once the room is joined.
@@ -304,7 +304,7 @@ internal class RoomViewModel(
             val connectivity = error is PartyException && error.isConnectivity()
             // The network snapshot can fail while offline (DNS, connection, timeout).
             // Map it to an error state and an offline snackbar instead of crashing.
-            log.e("snapshot failed: ${error.message ?: error::class.simpleName} connectivity=$connectivity")
+            log.e("snapshot failed: ${(error as? PartyException)?.code ?: "UNKNOWN"} connectivity=$connectivity")
             mutableState.update { it.copy(playback = RoomPlaybackState.ERROR) }
             mutableEffects.tryEmit(RoomEffect.Error(connectivity))
             return
@@ -316,24 +316,24 @@ internal class RoomViewModel(
             try {
                 val session = realtimeClient.connect(roomId)
                 realtime = session
-                log.i("realtime connected room=$roomId, awaiting events")
+                log.i("realtime connected, awaiting events")
                 session.events.collect { event -> handleEvent(event) }
-                log.w("realtime event flow ended room=$roomId")
+                log.w("realtime event flow ended")
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (error: Throwable) {
                 // Retry below; the server resends a snapshot on reconnect.
-                log.e("realtime connect failed room=$roomId: ${error.message ?: error::class.simpleName}")
+                log.e("realtime connect failed: ${(error as? PartyException)?.code ?: "UNKNOWN"}")
             } finally {
-                if (realtime != null) log.w("realtime detached room=$roomId")
+                if (realtime != null) log.w("realtime detached")
                 realtime = null
             }
             if (!closedByServer) {
-                log.i("reconnecting room=$roomId in ${RECONNECT_DELAY_MS}ms")
+                log.i("reconnecting in ${RECONNECT_DELAY_MS}ms")
                 delay(RECONNECT_DELAY_MS)
             }
         }
-        log.w("connect loop ended room=$roomId closedByServer=$closedByServer")
+        log.w("connect loop ended closedByServer=$closedByServer")
     }
 
     private fun handleEvent(event: RealtimeEvent) {
@@ -353,7 +353,7 @@ internal class RoomViewModel(
                 }
                 streamRevision = event.revision
                 streamSessionId = event.sessionId
-                log.i("stream.started session=${event.sessionId} revision=${event.revision} url=${event.url}")
+                log.i("stream.started session=${event.sessionId} revision=${event.revision}")
                 mutableState.update {
                     it.copy(
                         videoUrl = event.url,
@@ -405,7 +405,7 @@ internal class RoomViewModel(
                     }
                 }
             }
-            is RealtimeEvent.Failure -> log.w("realtime failure code=${event.code} message=${event.message}")
+            is RealtimeEvent.Failure -> log.w("realtime failure code=${event.code}")
             RealtimeEvent.Ignored -> Unit
         }
     }
@@ -428,7 +428,7 @@ internal class RoomViewModel(
             StreamState.ABORTED -> RoomPlaybackState.ABORTED
             StreamState.EMPTY -> if (asOwner) RoomPlaybackState.OWNER_EMPTY else RoomPlaybackState.WAITING_FOR_OWNER
         }
-        log.i("snapshot room=${snapshot.room.code} stream=${snapshot.stream.state} streamSessionId=$streamSessionId playback=$playback sameActiveStream=$sameActiveStream")
+        log.i("snapshot received stream=${snapshot.stream.state} streamSessionId=$streamSessionId playback=$playback sameActiveStream=$sameActiveStream")
         mutableState.update { current ->
             val effectivePlayback = if (sameActiveStream) current.playback else playback
             current.copy(
@@ -501,7 +501,7 @@ internal class RoomViewModel(
             log.w("startStream skipped: no video URL")
             return
         }
-        log.i("startStream requested url=$url")
+        log.i("startStream requested")
         viewModelScope.launch {
             try {
                 val stream = roomRepository.startStream(roomId, url)
@@ -512,7 +512,7 @@ internal class RoomViewModel(
                 throw cancellation
             } catch (error: Throwable) {
                 val connectivity = error is PartyException && error.isConnectivity()
-                log.e("startStream failed: ${error.message ?: error::class.simpleName} connectivity=$connectivity")
+                log.e("startStream failed: ${(error as? PartyException)?.code ?: "UNKNOWN"} connectivity=$connectivity")
                 mutableState.update { it.copy(playback = RoomPlaybackState.ERROR) }
                 mutableEffects.tryEmit(RoomEffect.Error(connectivity))
             }
@@ -552,11 +552,11 @@ internal class RoomViewModel(
         val current = mutableState.value
         when {
             session == null -> {
-                log.w("sync skipped: realtime not connected room=$roomId")
+                log.w("sync skipped: realtime not connected")
                 mutableEffects.tryEmit(RoomEffect.SyncUnavailable)
             }
             streamId == null || !current.hasPlayer -> {
-                log.w("sync skipped: no active stream room=$roomId streamSessionId=$streamId playback=${current.playback}")
+                log.w("sync skipped: no active stream streamSessionId=$streamId playback=${current.playback}")
                 mutableEffects.tryEmit(RoomEffect.SyncUnavailable)
             }
             else -> {
@@ -570,7 +570,7 @@ internal class RoomViewModel(
                     delay(SYNC_TIMEOUT_MS)
                     if (pendingSyncRequestId == requestId) {
                         pendingSyncRequestId = null
-                        log.w("sync timed out requestId=$requestId room=$roomId")
+                        log.w("sync timed out requestId=$requestId")
                         mutableEffects.tryEmit(RoomEffect.SyncUnavailable)
                     }
                 }
@@ -578,7 +578,7 @@ internal class RoomViewModel(
                 viewModelScope.launch {
                     runCatching { session.requestSync(streamId, current.positionMs, requestId) }
                         .onFailure { error ->
-                            log.e("sync request failed: ${error.message ?: error::class.simpleName}")
+                            log.e("sync request failed: ${(error as? PartyException)?.code ?: "UNKNOWN"}")
                             if (pendingSyncRequestId == requestId) {
                                 pendingSyncRequestId = null
                                 syncTimeoutJob?.cancel()
@@ -610,7 +610,7 @@ internal class RoomViewModel(
             log.d("report> stream=$streamId pos=${current.positionMs}ms playing=${current.playback == RoomPlaybackState.PLAYING}")
             runCatching {
                 session.reportPlayback(streamId, current.positionMs, current.playback == RoomPlaybackState.PLAYING)
-            }.onFailure { error -> log.e("report failed: ${error.message ?: error::class.simpleName}") }
+            }.onFailure { error -> log.e("report failed: ${(error as? PartyException)?.code ?: "UNKNOWN"}") }
         }
     }
 

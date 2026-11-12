@@ -2,7 +2,7 @@ import { t } from '../i18n';
 import { useEffect, useRef, useState } from 'react';
 import { Button, Dialog, StatusCard } from './Material';
 import { errorMessage, request } from '../data/api';
-import { browserInfo, sessionLog, sessionStartedAt } from '../data/sessionLog';
+import { diagnosticEvent, diagnosticError, browserInfo, sessionLog, sessionStartedAt } from '../data/sessionLog';
 
 export function BugReportDialog({ open, roomId, onClose, onSent, enabled }: {open: boolean; roomId: string; onClose: () => void; onSent: () => void; enabled: boolean}) {
   const [description, setDescription] = useState('');
@@ -19,12 +19,14 @@ export function BugReportDialog({ open, roomId, onClose, onSent, enabled }: {ope
   const send = async () => {
     const text = description.trim();
     if (!text || !online || inFlight.current || !enabled) return;
+    diagnosticEvent('report.send', { retry: pending.current?.description === text });
     inFlight.current = true; setSending(true); setError('');
     try {
       if (pending.current?.description !== text) pending.current = {description: text, payload: {reportId: crypto.randomUUID(), description: text, clientInfo: browserInfo(), sessionStartedAt, log: sessionLog()}};
       await request(`/v1/rooms/${encodeURIComponent(roomId)}/bug-reports`, pending.current.payload);
+      diagnosticEvent('report.accepted');
       pending.current = null; setDescription(''); onClose(); onSent();
-    } catch (failure) { setError(errorMessage(failure)); }
+    } catch (failure) { diagnosticEvent('report.failure', { code: diagnosticError(failure) }); setError(errorMessage(failure)); }
     finally { inFlight.current = false; setSending(false); }
   };
   return <Dialog className="bug-report-dialog" open={open} title={t("Report a bug")} onClose={() => { if (!inFlight.current) onClose(); }} actions={<>

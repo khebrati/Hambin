@@ -1,3 +1,4 @@
+import { diagnosticEvent, diagnosticError } from './sessionLog'
 import { io, type Socket } from 'socket.io-client'
 
 export interface VoiceState {
@@ -56,6 +57,7 @@ function code(error: unknown) {
 
 /** Microphone-only mesh; lifetime is independent of the movie player. */
 export class MeshVoice {
+  private diagnosticState = ''
   private state: VoiceState = { status: 'off', muted: true, members: {} }
   private descriptor?: Descriptor
   private socket?: Socket
@@ -88,6 +90,7 @@ export class MeshVoice {
 
   async join() {
     if (this.active) { await this.resumeAudio(); return }
+    diagnosticEvent('voice.join')
     this.active = true
     const run = ++this.run
     const startup = this.later(() => { if (this.current(run) && !this.rosterReady) this.fail(new Error('Voice startup timed out. Join voice to retry.'), true) }, 30_000)
@@ -103,6 +106,7 @@ export class MeshVoice {
       this.cancelCapture = undefined
       stream.getAudioTracks().forEach(track => { track.enabled = false })
       if (!this.current(run)) { if (!discarded) stream.getTracks().forEach(track => track.stop()); return }
+      diagnosticEvent('voice.microphone_acquired', { tracks: stream.getAudioTracks().length })
       this.stream = stream
       this.prepareLocalMeter()
       await this.open(run, false)
@@ -117,6 +121,7 @@ export class MeshVoice {
     if (!this.active) return
     // Resume during the button gesture, before waiting for server authorization.
     if (!muted) this.prepareLocalMeter()
+    diagnosticEvent('voice.mute_requested', { muted })
     this.muteIntent = muted
     const revision = ++this.muteRevision
     if (muted) {
@@ -222,6 +227,11 @@ export class MeshVoice {
 
   private current(run: number) { return this.active && this.run === run }
   private publish() {
+    const diagnosticState = `${this.state.status}:${this.state.muted}:${this.peers.size}`
+    if (this.diagnosticState !== diagnosticState) {
+      this.diagnosticState = diagnosticState
+      diagnosticEvent('voice.state', { status: this.state.status, muted: this.state.muted, peers: this.peers.size })
+    }
     const selfId = this.descriptor?.membershipId
     const self = selfId ? this.state.members[selfId] : undefined
     if (self && selfId) {
@@ -232,6 +242,7 @@ export class MeshVoice {
     this.options.onState({ ...this.state, members })
   }
   private fail(error: unknown, fatal = false) {
+    diagnosticEvent('voice.failure', { code: diagnosticError(error), fatal })
     const message = error instanceof Error ? error.message : code(error) || 'Voice connection failed. Retry voice.'
     if (fatal) this.disconnect()
     this.state = { ...this.state, status: !fatal && this.active && (this.rosterReady || this.reconnecting || this.peers.size > 0) ? this.reconnecting ? 'reconnecting' : 'degraded' : 'error', error: message }; this.publish()
@@ -382,6 +393,7 @@ export class MeshVoice {
     }
     pc.onconnectionstatechange = () => {
       if (this.peers.get(member.membershipId) !== peer) return
+      diagnosticEvent('voice.peer_state', { state: pc.connectionState, retries: peer.retries })
       if (pc.connectionState === 'connected') { clearTimeout(peer.timer); peer.retries = 0 }
       if (pc.connectionState === 'failed') this.enqueue(() => this.retry(peer, true))
       if (pc.connectionState === 'disconnected') this.later(() => {

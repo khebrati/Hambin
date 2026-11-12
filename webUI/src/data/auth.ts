@@ -1,3 +1,4 @@
+import { diagnosticEvent, diagnosticError, nextOperationId } from './sessionLog';
 import { randomGuestName } from './guestName';
 import type { IdentityDto } from './contracts';
 import { backendUrl } from './config';
@@ -30,6 +31,10 @@ function prepareStorage() {
   localStorage.setItem(formatKey, 'backend-v1');
 }
 async function sessionRequest(path: string, body: unknown, accessToken?: string): Promise<Response> {
+  const operation = nextOperationId();
+  const started = performance.now();
+  const action = path === '' ? 'create' : path === '/refresh' ? 'refresh' : path === '/reset' ? 'reset' : 'other';
+  diagnosticEvent('auth.start', { operation, action });
   let response: Response;
   try {
     response = await fetch(`${backendUrl}/v1/guest-sessions${path}`, {
@@ -37,9 +42,14 @@ async function sessionRequest(path: string, body: unknown, accessToken?: string)
       headers: { 'Content-Type': 'application/json', 'X-Roomio-Client': 'browser', ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
       body: JSON.stringify(body), signal: AbortSignal.timeout(15000),
     });
-  } catch { throw new ApiError('NETWORK'); }
+  } catch (error) {
+    diagnosticEvent('auth.failure', { operation, code: diagnosticError(error), elapsedMs: Math.round(performance.now() - started) });
+    throw new ApiError('NETWORK');
+  }
+  diagnosticEvent('auth.response', { operation, status: response.status, elapsedMs: Math.round(performance.now() - started) });
   if (!response.ok) {
     const failure = await response.json().catch(() => ({}));
+    diagnosticEvent('auth.rejected', { operation, code: diagnosticError(new ApiError(failure.code || 'AUTH_UNAVAILABLE')) });
     throw new ApiError(failure.code || 'AUTH_UNAVAILABLE', response.status);
   }
   return response;
@@ -57,6 +67,7 @@ function scheduleRefresh(delay?: number) {
 function accept(value: GuestSession): GuestSession {
   if (!value.accessToken || !value.identity?.id || !Number.isFinite(Date.parse(value.accessExpiresAt)) || !Number.isFinite(Date.parse(value.refreshExpiresAt))) throw new ApiError('INVALID_TOKEN', 401);
   if (current && current.identity.id !== value.identity.id) throw new ApiError('INVALID_TOKEN', 401);
+  diagnosticEvent('auth.accepted', { restored: !!current });
   current = value;
   for (const callback of listeners.keys()) callback(value.accessToken);
   scheduleRefresh();

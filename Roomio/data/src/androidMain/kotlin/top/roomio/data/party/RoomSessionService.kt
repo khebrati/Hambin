@@ -28,6 +28,7 @@ import top.roomio.domain.party.SessionAction
  * leave actions handled through its bound interface.
  */
 class RoomSessionService : Service() {
+    private val log = co.touchlab.kermit.Logger.withTag("RoomService")
 
     private var roomId: String? = null
     private var asOwner: Boolean = false
@@ -62,6 +63,14 @@ class RoomSessionService : Service() {
     override fun onBind(intent: Intent?): IBinder = localBinder
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val action = when (intent?.action) {
+            ACTION_START -> "start"
+            ACTION_STOP -> "stop"
+            ACTION_TOGGLE_MIC -> "toggle_microphone"
+            ACTION_LEAVE -> "leave"
+            else -> "unknown"
+        }
+        log.i("service.command action=$action foreground=$foregroundStarted voice=$voiceActive muted=$micMuted")
         when (intent?.action) {
             ACTION_STOP -> stopSession()
             ACTION_TOGGLE_MIC -> {
@@ -78,6 +87,7 @@ class RoomSessionService : Service() {
                         intent.getBooleanExtra(EXTRA_VOICE_ACTIVE, false),
                         intent.getBooleanExtra(EXTRA_MIC_MUTED, true)))
                 } catch (error: Throwable) {
+                    log.e("service.start_failed type=${error::class.simpleName}")
                     startupFailure = error
                     voiceActive = false
                     micMuted = true
@@ -92,6 +102,7 @@ class RoomSessionService : Service() {
     }
 
     override fun onDestroy() {
+        log.i("service.destroyed")
         commandHandler?.invoke(SessionAction.MicrophoneServiceLost)
         commandHandler = null
         stopForegroundCompat()
@@ -99,6 +110,7 @@ class RoomSessionService : Service() {
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
+        log.i("service.task_removed")
         commandHandler?.invoke(SessionAction.Leave) ?: stopSession()
         super.onTaskRemoved(rootIntent)
     }

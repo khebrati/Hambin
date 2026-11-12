@@ -46,6 +46,7 @@ class KtorRoomRepository(
     override suspend fun reportBug(roomId: String, description: String) {
         val text = description.trim()
         val previous = pendingReport?.takeIf { it.first == roomId && it.second.description == text }?.second
+        log.i("report.send retry=${previous != null}")
         val payload = previous ?: BugReportRequest(newReportId(), text, reportDeviceInfo(), AppSessionLog.startedAt, AppSessionLog.snapshot())
         pendingReport = roomId to payload
         val sent = kotlinx.coroutines.withTimeoutOrNull(30_000) {
@@ -58,6 +59,7 @@ class KtorRoomRepository(
             true
         } ?: false
         if (!sent) throw PartyException(PARTY_CODE_NETWORK, "Report request timed out")
+        log.i("report.accepted")
         pendingReport = null
     }
 
@@ -144,7 +146,7 @@ class KtorRoomRepository(
                 throw partyError
             }
         } else if (partyError.code == PARTY_CODE_NETWORK) {
-            log.e("request failed before backend: ${error.message ?: error::class.simpleName}")
+            log.e("request failed before backend code=NETWORK")
             throw partyError
         } else {
             throw partyError

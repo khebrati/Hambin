@@ -14,11 +14,4 @@ class BackendAuthorizationScopeTest {
         assertFalse(hasBackendOrigin(URLBuilder("http://attacker.test:8081/v1/rooms").build(), backend))
         assertFalse(hasBackendOrigin(URLBuilder("https://10.0.2.2:8081/v1/rooms").build(), backend))
     }
-    @Test
-    fun sessionSecretsAreExcludedFromHttpLogs() {
-        for (path in listOf("/v1/guest-sessions", "/v1/guest-sessions/", "/v1/guest-sessions/refresh", "/v1/guest-sessions/revoke")) {
-            assertFalse(shouldLogHttpRequest(URLBuilder("$backend$path").build()))
-        }
-        assertTrue(shouldLogHttpRequest(URLBuilder("$backend/v1/rooms").build()))
-    }
 }

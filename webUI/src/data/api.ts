@@ -1,5 +1,5 @@
 import { t } from '../i18n';
-import { appLog } from './sessionLog';
+import { diagnosticEvent, diagnosticRoute, diagnosticError, nextOperationId } from './sessionLog';
 import { token } from './auth';
 import { ApiError } from './errors';
 import { backendUrl } from './config';
@@ -7,23 +7,40 @@ export { ApiError } from './errors';
 export { backendUrl } from './config';
 export async function request<T>(path: string, body?: unknown, method = body === undefined ? 'GET' : 'POST', idempotencyKey?: string): Promise<T> {
   if (!path.startsWith('/v1/')) throw new Error('Invalid API path');
-  const send = async (force: boolean) => {
-    const accessToken = await token(force);
-    try {
-      return await fetch(`${backendUrl}${path}`, { method, credentials: 'include', headers: { 'X-Roomio-Client': 'browser', Authorization: `Bearer ${accessToken}`, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}) }, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(15000) });
-    } catch { throw new ApiError('NETWORK'); }
-  };
-  let response = await send(false);
-  if (response.status === 401) {
-    const failure = await response.clone().json().catch(() => ({}));
-    if (['SESSION_EXPIRED', 'INVALID_TOKEN', 'UNAUTHENTICATED'].includes(failure.code)) response = await send(true);
+  const operation = nextOperationId();
+  const route = diagnosticRoute(path);
+  const started = performance.now();
+  diagnosticEvent('http.start', { operation, method, route });
+  try {
+    const send = async (force: boolean) => {
+      diagnosticEvent('http.attempt', { operation, refresh: force });
+      const accessToken = await token(force);
+      try {
+        const response = await fetch(`${backendUrl}${path}`, { method, credentials: 'include', headers: { 'X-Roomio-Client': 'browser', Authorization: `Bearer ${accessToken}`, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}) }, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(15000) });
+        diagnosticEvent('http.attempt_response', { operation, refresh: force, status: response.status });
+        return response;
+      } catch (error) {
+        diagnosticEvent('http.transport_failure', { operation, code: diagnosticError(error) });
+        throw new ApiError('NETWORK');
+      }
+    };
+    let response = await send(false);
+    if (response.status === 401) {
+      const failure = await response.clone().json().catch(() => ({}));
+      if (['SESSION_EXPIRED', 'INVALID_TOKEN', 'UNAUTHENTICATED'].includes(failure.code)) response = await send(true);
+    }
+    diagnosticEvent('http.response', { operation, status: response.status, elapsedMs: Math.round(performance.now() - started) });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new ApiError(error.code || 'UNAVAILABLE', response.status, error.code === 'ALREADY_IN_ROOM' && typeof error.activePartyCode === 'string' && /^[0-9A-HJKMNP-TV-Z]{8}$/.test(error.activePartyCode) ? error.activePartyCode : undefined);
+    }
+    const result = response.status === 204 ? undefined as T : await response.json();
+    diagnosticEvent('http.complete', { operation, elapsedMs: Math.round(performance.now() - started) });
+    return result;
+  } catch (error) {
+    diagnosticEvent('http.failure', { operation, code: diagnosticError(error), elapsedMs: Math.round(performance.now() - started) });
+    throw error;
   }
-  appLog(`HTTP ${method} ${path.replace(/\/rooms\/[^/]+/, '/rooms/[room]')} status=${response.status}`);
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new ApiError(error.code || 'UNAVAILABLE', response.status, error.code === 'ALREADY_IN_ROOM' && typeof error.activePartyCode === 'string' && /^[0-9A-HJKMNP-TV-Z]{8}$/.test(error.activePartyCode) ? error.activePartyCode : undefined);
-  }
-  return response.status === 204 ? undefined as T : response.json();
 }
 const messages: Record<string, string> = {
   REPORT_TOO_LARGE: 'The session log is too large to send. Copy your description, then reload the page to begin a new log.', INVALID_REPORT: 'Check your description (up to 8,000 characters).', REPORT_CONFLICT: 'This report changed. Edit your description and send again.',

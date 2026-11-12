@@ -65,10 +65,12 @@ internal actual fun rememberPlatformVideoPlayer(
     DisposableEffect(player, lifecycleOwner) {
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
+                log.i("player.state state=$playbackState positionMs=${player.currentPosition} bufferedMs=${player.bufferedPosition}")
                 currentOnStateChanged(handle.toVideoPlayerState())
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
+                log.i("player.playing value=$isPlaying positionMs=${player.currentPosition}")
                 currentOnStateChanged(handle.toVideoPlayerState())
             }
 
@@ -77,11 +79,13 @@ internal actual fun rememberPlatformVideoPlayer(
             }
 
             override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
+                log.i("player.tracks groups=${tracks.groups.size}")
                 handle.selectPendingSubtitle()
                 currentOnStateChanged(handle.toVideoPlayerState())
             }
 
             override fun onPlayerError(error: PlaybackException) {
+                log.e("player.failure code=${error.errorCodeName}")
                 currentOnStateChanged(
                     handle.toVideoPlayerState().copy(
                         status = VideoPlayerStatus.ERROR,
@@ -91,6 +95,7 @@ internal actual fun rememberPlatformVideoPlayer(
             }
         }
         val lifecycleObserver = LifecycleEventObserver { _, event ->
+            log.i("player.lifecycle event=$event")
             if (event == Lifecycle.Event.ON_STOP) {
                 player.pause()
             }
@@ -100,6 +105,7 @@ internal actual fun rememberPlatformVideoPlayer(
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(lifecycleObserver)
             player.removeListener(listener)
+            log.i("player.released")
             player.release()
         }
     }
@@ -188,7 +194,7 @@ internal class ExoPlayerVideoPlayerHandle(
     internal val player: ExoPlayer,
 ) : VideoPlayerHandle {
     override fun load(url: String) {
-        log.i("load url=$url")
+        log.i("player.load requested")
         audioTrackSelectionId = null
         baseMediaItem = MediaItem.fromUri(url)
         externalSubtitle = null
@@ -271,7 +277,7 @@ internal class ExoPlayerVideoPlayerHandle(
         player.prepare()
         selectPendingSubtitle()
         player.playWhenReady = shouldPlay
-        log.i("subtitle loaded label=${file.label}")
+        log.i("player.subtitle loaded")
     }
 
     internal fun selectPendingSubtitle() {
@@ -287,7 +293,7 @@ internal class ExoPlayerVideoPlayerHandle(
                 .addOverride(TrackSelectionOverride(group.mediaTrackGroup, listOf(trackIndex)))
                 .build()
             pendingSubtitleLabel = null
-            log.i("selected subtitle label=$expectedLabel group=$groupIndex track=$trackIndex")
+            log.i("player.subtitle selected group=$groupIndex track=$trackIndex")
             return
         }
     }

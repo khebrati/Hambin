@@ -1,3 +1,4 @@
+import { diagnosticEvent } from '../data/sessionLog';
 import { t } from '../i18n';
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import Hls from 'hls.js';
@@ -77,6 +78,7 @@ function MediaPlayer({ url, onReport, onNotify, onState, syncTarget, onSync, syn
   callbacks.current = { onReport, onNotify, onState };
   const [retry, setRetry] = useState(0);
   const [status, setStatus] = useState<StreamStatus>('loading');
+  useEffect(() => { diagnosticEvent('player.state', { state: status, engine: integrated ? 'avplayer' : 'browser' }); }, [status, integrated]);
   const [error, setError] = useState('');
   const [blocked, setBlocked] = useState(false);
   const [slowLoading, setSlowLoading] = useState(false);
@@ -189,6 +191,7 @@ function MediaPlayer({ url, onReport, onNotify, onState, syncTarget, onSync, syn
         audio: selection.audio.find(track => track.id === selection.audioId)?.name,
         subtitle: selection.subtitles.find(track => track.id === selection.subtitleId)?.name,
       };
+      diagnosticEvent('player.fallback', { reason: startupReady ? 'engine_failure' : 'startup_failure', positionMs: Math.round(current.currentTime * 1000) });
       fallbackUsed.current = true;
       failed = true;
       setBrowserPlayback(true);
@@ -210,7 +213,7 @@ function MediaPlayer({ url, onReport, onNotify, onState, syncTarget, onSync, syn
       void media()!.play().catch((reason: unknown) => {
         if (!active || failed) return;
         if (reason instanceof DOMException && reason.name === 'AbortError') return;
-        if (reason instanceof DOMException && reason.name === 'NotAllowedError') { setBlocked(true); setStatus('paused'); }
+        if (reason instanceof DOMException && reason.name === 'NotAllowedError') { diagnosticEvent('player.autoplay_blocked'); setBlocked(true); setStatus('paused'); }
         else fail(t("This video could not start. Check its format and connection, then retry."));
       });
     };
@@ -338,6 +341,7 @@ function MediaPlayer({ url, onReport, onNotify, onState, syncTarget, onSync, syn
     catch { setBlocked(true); callbacks.current.onNotify(t("Playback could not start. Try Play again or retry the video.")); }
   };
   const seek = (value: number) => {
+    diagnosticEvent('player.seek_requested', { seconds: Math.round(value) });
     const video = media();
     if (!video || !ready || !Number.isFinite(video.duration) || live) return;
     try { const target = Math.max(0, Math.min(value, video.duration)); video.currentTime = target; setPosition(target); }

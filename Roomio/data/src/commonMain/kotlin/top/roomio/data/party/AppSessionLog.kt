@@ -33,7 +33,7 @@ object AppSessionLog : LogWriter() {
 }
 
 internal fun redactAppLog(value: String): String = value
-    .replace(Regex("https?://[^\\s\\\"'<>]+", RegexOption.IGNORE_CASE), "[url]")
+    .replace(Regex("(?:https?|wss?|content|file|blob):[^\\s\\\"'<>]+", RegexOption.IGNORE_CASE), "[url]")
     .replace(Regex("Bearer\\s+[^\\s\\\"',}]+", RegexOption.IGNORE_CASE), "Bearer [redacted]")
     .replace(Regex("\\beyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+"), "[token]")
     .replace(Regex("([\\\"']?(?:accessToken|refreshToken|authorization|password|credential|ticket|token)[\\\"']?\\s*[:=]\\s*)(\\\"[^\\\"]*\\\"|'[^']*'|[^\\s,;}]+)", RegexOption.IGNORE_CASE), "$1[redacted]")

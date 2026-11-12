@@ -1,5 +1,6 @@
 package top.roomio.data.party
 
+import co.touchlab.kermit.Logger
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
@@ -30,12 +31,14 @@ class KtorSessionRepository(
     private val auth: BackendSessionClient,
     private val tokens: TokenStore,
 ) : SessionRepository {
+    private val log = Logger.withTag("Auth")
     private val sessionMutex = Mutex()
 
     override suspend fun ensureSession(name: String, avatar: String, language: String): GuestSession = normalized {
         sessionMutex.withLock {
             val current = tokens.credentials()
             if (current == null) {
+                log.i("auth.create requested")
                 tokens.saveCredentials(auth.create(name, avatar, language))
             } else {
                 refreshIfNeeded(current)
@@ -53,7 +56,9 @@ class KtorSessionRepository(
     override suspend fun refresh(): GuestSession? = normalized {
         sessionMutex.withLock {
             val credentials = tokens.credentials() ?: return@withLock null
+            log.i("auth.refresh requested")
             tokens.saveCredentials(auth.refresh(credentials))
+            log.i("auth.refresh accepted")
             tokens.current()
         }
     }
@@ -77,6 +82,7 @@ class KtorSessionRepository(
                 if (error.code != "INVALID_TOKEN") throw error
             }
             tokens.clear()
+            log.i("auth.reset completed")
         }
     }
 
@@ -95,6 +101,7 @@ class KtorSessionRepository(
             patchProfile(name, avatar, language)
         }
         tokens.saveIdentity(identity)
+        log.i("auth.profile updated")
         return identity
     }
 
@@ -107,14 +114,15 @@ class KtorSessionRepository(
 
     private suspend fun refreshIfNeeded(current: BackendCredentials) {
         if (current.expiresAtEpochMs - Clock.System.now().toEpochMilliseconds() <= REFRESH_EARLY_MS) {
+            log.i("auth.refresh expiring credential")
             tokens.saveCredentials(auth.refresh(current))
         }
     }
 
     private suspend fun <T> normalized(block: suspend () -> T): T = try { block() }
     catch (cancellation: CancellationException) { throw cancellation }
-    catch (error: PartyException) { throw error }
-    catch (_: Throwable) { throw PartyException(PARTY_CODE_NETWORK, "Guest session request failed; please retry") }
+    catch (error: PartyException) { log.w("auth.failure code=${error.code}"); throw error }
+    catch (_: Throwable) { log.w("auth.failure code=NETWORK"); throw PartyException(PARTY_CODE_NETWORK, "Guest session request failed; please retry") }
 
     private companion object { const val REFRESH_EARLY_MS = 60 * 1000L }
 }
