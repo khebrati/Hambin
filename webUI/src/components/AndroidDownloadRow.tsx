@@ -2,7 +2,7 @@ import { t } from '../i18n';
 import { ArrowDownToLine, Smartphone } from 'lucide-react';
 import './android-download-row.css';
 
-export const androidDownloadUrl = 'https://watchparty.top/downloads/watch-party-1.3.1-13.apk';
+export const androidDownloadUrl = 'https://watchparty.top/downloads/watch-party-1.3.2-14.apk';
 
 export function AndroidDownloadRow() {
   return (
@@ -10,9 +10,9 @@ export function AndroidDownloadRow() {
       <Smartphone size={24} aria-hidden="true" />
       <div>
         <strong>{t("Native Android app")}</strong>
-        <p>{t("Background voice party · v1.3.1")}</p>
+        <p>{t("Background voice party · v1.3.2")}</p>
       </div>
-      <a className="md-icon-button md-icon-button--tonal" href={androidDownloadUrl} download="watch-party-1.3.1-13.apk" aria-label={t("Download native Android app")} data-tooltip={t("Download for Android")}>
+      <a className="md-icon-button md-icon-button--tonal" href={androidDownloadUrl} download="watch-party-1.3.2-14.apk" aria-label={t("Download native Android app")} data-tooltip={t("Download for Android")}>
         <ArrowDownToLine size={22} aria-hidden="true" />
       </a>
     </aside>
