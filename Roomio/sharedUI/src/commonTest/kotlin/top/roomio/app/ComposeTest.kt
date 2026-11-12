@@ -95,7 +95,10 @@ class ComposeTest {
             RoomioUi(TestProfileRepository())
         }
 
-        onNodeWithText("Your next watch party is one room away.").assertExists()
+        onNodeWithText("Stream and chill").assertExists()
+        onNodeWithText("Your next watch party is one room away.").assertDoesNotExist()
+        onNodeWithText("READY WHEN EVERYONE IS").assertDoesNotExist()
+        onNodeWithText("Roomio").assertDoesNotExist()
         onNodeWithText("Nika").assertExists()
         onNodeWithText("Create a party").assertExists()
         onNodeWithText("Join with code").assertExists()
@@ -123,7 +126,10 @@ class ComposeTest {
         onNodeWithText("Save profile").performClick()
 
         onNodeWithText("Mira").assertExists()
-        onNodeWithText("Your next watch party is one room away.").assertExists()
+        onNodeWithText("Stream and chill").assertExists()
+        onNodeWithText("Your next watch party is one room away.").assertDoesNotExist()
+        onNodeWithText("READY WHEN EVERYONE IS").assertDoesNotExist()
+        onNodeWithText("Roomio").assertDoesNotExist()
     }
 
     @Test
@@ -165,12 +171,18 @@ class ComposeTest {
         onNodeWithContentDescription("Settings").performClick()
         onNodeWithText("Your profile").assertExists()
         onNodeWithContentDescription("Back").performClick()
-        onNodeWithText("Your next watch party is one room away.").assertExists()
+        onNodeWithText("Stream and chill").assertExists()
+        onNodeWithText("Your next watch party is one room away.").assertDoesNotExist()
+        onNodeWithText("READY WHEN EVERYONE IS").assertDoesNotExist()
+        onNodeWithText("Roomio").assertDoesNotExist()
 
         onNodeWithText("Create a party").performClick()
         onNodeWithText("Party manager").assertExists()
         onNodeWithContentDescription("Back").performClick()
-        onNodeWithText("Your next watch party is one room away.").assertExists()
+        onNodeWithText("Stream and chill").assertExists()
+        onNodeWithText("Your next watch party is one room away.").assertDoesNotExist()
+        onNodeWithText("READY WHEN EVERYONE IS").assertDoesNotExist()
+        onNodeWithText("Roomio").assertDoesNotExist()
     }
 
     @Test
@@ -185,7 +197,10 @@ class ComposeTest {
         onNodeWithText("Leave party?").assertExists()
         onNodeWithText("Leave").performClick()
 
-        onNodeWithText("Your next watch party is one room away.").assertExists()
+        onNodeWithText("Stream and chill").assertExists()
+        onNodeWithText("Your next watch party is one room away.").assertDoesNotExist()
+        onNodeWithText("READY WHEN EVERYONE IS").assertDoesNotExist()
+        onNodeWithText("Roomio").assertDoesNotExist()
         onNodeWithText("Party manager").assertDoesNotExist()
     }
 

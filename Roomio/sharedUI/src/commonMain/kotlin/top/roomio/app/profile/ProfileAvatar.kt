@@ -15,6 +15,9 @@ import roomio.sharedui.generated.resources.avatar_prism
 import roomio.sharedui.generated.resources.avatar_spark
 import roomio.sharedui.generated.resources.avatar_sunny
 import top.roomio.domain.profile.ProfileAvatarId
+import androidx.compose.runtime.Composable
+import org.jetbrains.compose.resources.stringResource
+import roomio.sharedui.generated.resources.*
 
 internal enum class ProfileAvatar(
     val label: String,
@@ -39,3 +42,19 @@ internal fun ProfileAvatarId.toPresentationAvatar(): ProfileAvatar =
 
 internal fun ProfileAvatar.toDomainAvatar(): ProfileAvatarId =
     ProfileAvatarId.valueOf(name)
+
+internal val ProfileAvatar.localizedLabel: String
+    @Composable get() = stringResource(when (this) {
+        ProfileAvatar.COMET -> Res.string.avatar_label_comet
+        ProfileAvatar.MINT -> Res.string.avatar_label_mint
+        ProfileAvatar.SUNNY -> Res.string.avatar_label_sunny
+        ProfileAvatar.BERRY -> Res.string.avatar_label_berry
+        ProfileAvatar.CLOUD -> Res.string.avatar_label_cloud
+        ProfileAvatar.EMBER -> Res.string.avatar_label_ember
+        ProfileAvatar.NOVA -> Res.string.avatar_label_nova
+        ProfileAvatar.ORBIT -> Res.string.avatar_label_orbit
+        ProfileAvatar.PRISM -> Res.string.avatar_label_prism
+        ProfileAvatar.ECHO -> Res.string.avatar_label_echo
+        ProfileAvatar.SPARK -> Res.string.avatar_label_spark
+        ProfileAvatar.BLOOM -> Res.string.avatar_label_bloom
+    })

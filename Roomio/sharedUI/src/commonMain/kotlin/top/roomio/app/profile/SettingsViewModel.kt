@@ -18,6 +18,7 @@ internal data class SettingsUiState(
     val saveFailed: Boolean = false,
     val themeColor: ThemeColor = ThemeColor.ROOMIO,
     val colorSaveFailed: Boolean = false,
+    val draftLanguage: top.roomio.domain.profile.AppLanguage = top.roomio.domain.profile.AppLanguage.ENGLISH,
 ) {
     val trimmedName: String
         get() = draftName.trim()
@@ -33,6 +34,7 @@ internal sealed interface SettingsAction {
     data class NameChanged(val name: String) : SettingsAction
     data class AvatarSelected(val avatar: ProfileAvatar) : SettingsAction
     data class ColorSelected(val color: ThemeColor) : SettingsAction
+    data class LanguageSelected(val language: top.roomio.domain.profile.AppLanguage) : SettingsAction
     data object BackClicked : SettingsAction
     data object SaveClicked : SettingsAction
 }
@@ -51,6 +53,7 @@ internal class SettingsViewModel(
         SettingsUiState(
             themeColor = themePreferencesRepository.color.value,
             draftName = initialProfile.name,
+            draftLanguage = initialProfile.language,
             draftAvatar = initialProfile.avatar.toPresentationAvatar(),
         ),
     )
@@ -79,6 +82,7 @@ internal class SettingsViewModel(
                     onFailure = { mutableState.update { it.copy(colorSaveFailed = true) } },
                 )
             }
+            is SettingsAction.LanguageSelected -> mutableState.update { it.copy(draftLanguage = action.language, saveFailed = false) }
             SettingsAction.SaveClicked -> saveProfile()
             SettingsAction.BackClicked -> Unit
         }
@@ -91,6 +95,7 @@ internal class SettingsViewModel(
         profileRepository.saveProfile(
             UserProfile(
                 name = currentState.trimmedName,
+                language = currentState.draftLanguage,
                 avatar = currentState.draftAvatar.toDomainAvatar(),
             ),
         ).fold(

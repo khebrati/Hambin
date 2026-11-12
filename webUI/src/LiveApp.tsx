@@ -1,3 +1,4 @@
+import { t, setLanguage } from './i18n';
 import { useThemePalette } from './theme';
 import { appLog } from './data/sessionLog';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -63,7 +64,6 @@ export default function LiveApp() {
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     document.documentElement.dataset.textScale = new URLSearchParams(location.search).get('largeText') === '1' ? 'large' : 'standard';
-    document.documentElement.dir = new URLSearchParams(location.search).get('dir') === 'rtl' ? 'rtl' : 'ltr';
     localStorage.setItem('roomio-theme', theme);
   }, [theme]);
   useEffect(() => { if (!snackbar || snackbar.partyCode) return; const t = setTimeout(() => setSnackbar(null), 5000); return () => clearTimeout(t); }, [snackbar]);
@@ -86,6 +86,7 @@ export default function LiveApp() {
     setResetAllowed(false);
     void ensureSession().then(async value => {
       if (!active) return;
+      setLanguage(value.identity.language);
       setIdentity(identityModel(value.identity)); setIdentityId(value.identity.id); setReady(true);
       const savedRoom = readLastRoom(value.identity.id);
       if (savedRoom) setReturnableParty(savedRoom);
@@ -128,7 +129,7 @@ export default function LiveApp() {
       setSnapshot(value);
     };
     const session = new RoomConnection({ roomId, onSnapshot, onConnection: setConnected, onError: e => notify(errorMessage(e)), onClosed: reason => {
-      voice.current?.disconnect(); voice.current = null; setVoiceState(voiceOff); sessionStorage.removeItem(activeCodeKey); setRoomId(''); setSnapshot(null); setScreen('home'); if (['ROOM_ENDED', 'ROOM_NOT_FOUND'].includes(reason || '')) { if (snapshot?.room.code) forgetLastRoom(identityId, snapshot.room.code); setReturnableParty(null); } else setReturnableParty(readLastRoom(identityId)); notify('This room session has ended.');
+      voice.current?.disconnect(); voice.current = null; setVoiceState(voiceOff); sessionStorage.removeItem(activeCodeKey); setRoomId(''); setSnapshot(null); setScreen('home'); if (['ROOM_ENDED', 'ROOM_NOT_FOUND'].includes(reason || '')) { if (snapshot?.room.code) forgetLastRoom(identityId, snapshot.room.code); setReturnableParty(null); } else setReturnableParty(readLastRoom(identityId)); notify(t("This room session has ended."));
     } });
     realtime.current = session;
     const unsubscribe = watchToken(accessToken => {
@@ -171,7 +172,7 @@ export default function LiveApp() {
   };
   const saveProfile = async (value: Identity) => {
     setSaving(true);
-    try { const result = await request<{identity: IdentityDto}>('/v1/guest-sessions/profile', profileBody(value), 'PATCH'); setIdentity(identityModel(result.identity)); setScreen('home'); notify('Profile updated'); }
+    try { const result = await request<{identity: IdentityDto}>('/v1/guest-sessions/profile', profileBody(value), 'PATCH'); setLanguage(result.identity.language); setIdentity(identityModel(result.identity)); setScreen('home'); notify(t("Profile updated")); }
     catch (error) { notify(errorMessage(error)); }
     finally { setSaving(false); }
   };
@@ -184,7 +185,7 @@ export default function LiveApp() {
   };
   const abortStream = async () => {
     setAborting(true);
-    try { await mutations.current.run(`/v1/rooms/${roomId}/stream/abort`, { revision: snapshot?.stream.revision }); await realtime.current?.recover(); notify('Stream ended for everyone'); }
+    try { await mutations.current.run(`/v1/rooms/${roomId}/stream/abort`, { revision: snapshot?.stream.revision }); await realtime.current?.recover(); notify(t("Stream ended for everyone")); }
     catch (error) { notify(errorMessage(error)); }
     finally { setAborting(false); }
   };
@@ -198,7 +199,7 @@ export default function LiveApp() {
       const party = snapshot && partyModel(snapshot, identityId);
       if (party && !result.roomClosed) setReturnableParty(party);
       else { setReturnableParty(null); if (party?.code) forgetLastRoom(identityId, party.code); }
-      sessionStorage.removeItem(activeCodeKey); realtime.current?.close(); setRoomId(''); setSnapshot(null); setStreamStatus('empty'); setScreen('home'); notify(result.roomClosed ? 'The party has ended' : 'You left the party');
+      sessionStorage.removeItem(activeCodeKey); realtime.current?.close(); setRoomId(''); setSnapshot(null); setStreamStatus('empty'); setScreen('home'); notify(result.roomClosed ? t("The party has ended") : t("You left the party"));
     } catch (error) {
       if (error instanceof ApiError && ['NOT_A_MEMBER', 'ROOM_ENDED', 'ROOM_NOT_FOUND'].includes(error.code)) {
         if (error.code !== 'NOT_A_MEMBER' && snapshot?.room.code) forgetLastRoom(identityId, snapshot.room.code);
@@ -219,12 +220,12 @@ export default function LiveApp() {
   };
   const sync = async () => {
     setSyncing(true);
-    try { const result = await realtime.current?.sync(playback.current.positionMs); if (result?.status === 'APPLIED') { setSyncTarget({ requestId: result.requestId, positionMs: result.targetPositionMs }); notify("You're caught up with the room"); } else if (result) notify(result.status === 'ALREADY_LEADING' ? "You're already caught up" : 'No recent room position is available. Try again shortly.'); }
+    try { const result = await realtime.current?.sync(playback.current.positionMs); if (result?.status === 'APPLIED') { setSyncTarget({ requestId: result.requestId, positionMs: result.targetPositionMs }); notify(t("You're caught up with the room")); } else if (result) notify(result.status === 'ALREADY_LEADING' ? t("You're already caught up") : t("No recent room position is available. Try again shortly.")); }
     catch (error) { notify(errorMessage(error)); }
     finally { setSyncing(false); }
   };
   const resetGuest = async () => {
-    if (resetting || !window.confirm('Reset your guest identity? You will lose ownership of your existing parties.')) return;
+    if (resetting || !window.confirm(t("Reset your guest identity? You will lose ownership of your existing parties."))) return;
     setResetting(true);
     try {
       await resetIdentity();
@@ -240,13 +241,13 @@ export default function LiveApp() {
   const party = snapshot ? partyModel(snapshot, identityId) : null;
   if (party) party.participants = party.participants.map(p => ({ ...p, isMuted: voiceState.members[p.id]?.muted ?? true, isSpeaking: voiceState.members[p.id]?.speaking ?? false }));
   return <div className="app-shell">
-    {!ready ? <main className="form-page">{initialError ? <StatusCard title="Unable to restore your profile" tone="error" actions={<><Button disabled={resetting} onClick={() => setAttempt(v => v + 1)}>Retry connection</Button>{resetAllowed && <Button variant="text" disabled={resetting} onClick={() => void resetGuest()}>{resetting ? 'Resetting identity…' : 'Reset guest identity'}</Button>}</>}>{initialError}</StatusCard> : <LoadingIndicator label="Restoring your profile" />}</main> : <>
+    {!ready ? <main className="form-page">{initialError ? <StatusCard title={t("Unable to restore your profile")} tone="error" actions={<><Button disabled={resetting} onClick={() => setAttempt(v => v + 1)}>{t("Retry connection")}</Button>{resetAllowed && <Button variant="text" disabled={resetting} onClick={() => void resetGuest()}>{resetting ? t("Resetting identity…") : t("Reset guest identity")}</Button>}</>}>{initialError}</StatusCard> : <LoadingIndicator label={t("Restoring your profile")} />}</main> : <>
       {screen === 'home' && <HomeScreen live busy={joinStatus === 'loading'} identity={identity} theme={theme} onToggleTheme={toggleTheme} onSettings={() => setScreen('settings')} onCreate={() => {setManagerMode('create');setJoinStatus('idle');setJoinError('');setScreen('party-manager');}} onJoin={() => {setManagerMode('join');setJoinStatus('idle');setJoinError('');setScreen('party-manager');}} returnableParty={returnableParty} onReturnToParty={() => returnableParty && void loadPreview(returnableParty.code || returnableParty.id, 'home')} />}
       {screen === 'settings' && <SettingsScreen palette={palette} identity={identity} theme={theme} onToggleTheme={toggleTheme} onBack={() => setScreen('home')} onSave={saveProfile} saving={saving} />}
       {screen === 'party-manager' && <PartyManagerScreen initialMode={managerMode} joinStatus={joinStatus} errorMessage={joinError} codeDraft={codeDraft} onCodeChange={setCodeDraft} theme={theme} onToggleTheme={toggleTheme} onBack={() => setScreen('home')} onCreate={() => void enterRoom('/v1/rooms')} onPreview={loadPreview} onResetError={() => {setJoinStatus('idle');setJoinError('');}} live />}
       {screen === 'room-preview' && roomPreview && <><RoomPreviewScreen preview={roomPreview} joinStatus={joinStatus} theme={theme} onToggleTheme={toggleTheme} onBack={() => {setScreen(previewBackScreen);setManagerMode('join');setJoinStatus('idle');}} onJoin={() => void enterRoom(`/v1/rooms/${roomPreview.id}/join`)} errorMessage={joinError} /></>}
       {screen === 'party' && party && <><PartyScreen key={roomId} party={party} streamStatus={streamStatus} theme={theme} aborting={aborting} onToggleTheme={toggleTheme} onStartStream={startStream} onSetStreamStatus={setStreamStatus} onAbort={abortStream} onLeave={leave} onNotify={notify} live={{ connected, leaving, voice: voiceState, onToggleVoice: toggleVoice, onRetryVoice: () => voice.current?.retryConnections(), onResumeVoice: () => { void voice.current?.resumeAudio().catch(e => notify(e.message)); }, onSync: sync, syncing, syncTarget, onReport: (positionMs, playing) => { playback.current = {positionMs,playing}; realtime.current?.report(positionMs, playing); } }} /></>}
     </>}
-    <Snackbar message={snackbar?.message || ''} onDismiss={() => setSnackbar(null)} action={snackbar?.partyCode ? { label: 'Return to party', disabled: joinStatus === 'loading', onClick: () => { void enterRoom(`/v1/rooms/${encodeURIComponent(snackbar.partyCode!)}/join`); } } : undefined} />
+    <Snackbar message={snackbar?.message || ''} onDismiss={() => setSnackbar(null)} action={snackbar?.partyCode ? { label: t("Return to party"), disabled: joinStatus === 'loading', onClick: () => { void enterRoom(`/v1/rooms/${encodeURIComponent(snackbar.partyCode!)}/join`); } } : undefined} />
   </div>;
 }

@@ -56,7 +56,7 @@ export default function BugReportDesigns() {
       {concepts.map((concept, index) => <section className="br-concept" key={concept.title} aria-labelledby={`br-title-${index}`}>
         <div className="br-caption"><p className="eyebrow">{concept.place}</p><h2 id={`br-title-${index}`}>{concept.title}</h2><p>{concept.description}</p></div>
         <div className="br-phone">
-          <div className="br-appbar">{index === 0 ? <ArrowLeft aria-hidden="true" /> : <span className="brand-mark" aria-hidden="true"><span /><span /></span>}<strong>{index === 0 ? 'Your profile' : index === 1 ? 'Friday night crew' : 'Roomio'}</strong>{index === 1 ? <IconButton icon={Ellipsis} label="Party options" aria-expanded={menu} onClick={() => setMenu(!menu)} /> : <Settings size={22} aria-hidden="true" />}</div>
+          <div className="br-appbar">{index === 0 && <ArrowLeft aria-hidden="true" />}<strong>{index === 0 ? 'Your profile' : index === 1 ? 'Friday night crew' : 'Roomio'}</strong>{index === 1 ? <IconButton icon={Ellipsis} label="Party options" aria-expanded={menu} onClick={() => setMenu(!menu)} /> : <Settings size={22} aria-hidden="true" />}</div>
           {index === 0 ? <div className="br-context">
             <div className="br-profile"><Avatar avatarId="comet" label="Spider-Man" size="large" /><div><small>Ready to watch</small><strong>Spider-Man</strong></div></div>
             <div className="br-setting"><span>Display name</span><strong>Spider-Man</strong></div><div className="br-setting"><span>Avatar</span><div className="br-avatars"><Avatar avatarId="comet" label="Comet" /><Avatar avatarId="mint" label="Mint" /><Avatar avatarId="sunny" label="Sunny" /></div></div><div className="br-setting"><span>App language</span><strong>English</strong></div>
@@ -69,7 +69,7 @@ export default function BugReportDesigns() {
             {menu && <div className="br-menu"><p className="eyebrow">PARTY OPTIONS</p><button className="br-report-row" onClick={() => open(1)}><Bug aria-hidden="true" /><span><strong>Report a bug</strong><small>Keep your party open</small></span></button></div>}
             {!menu && <p className="br-menu-hint">Try the ••• menu above</p>}
           </div> : <div className="br-context br-home">
-            <p className="eyebrow">READY WHEN EVERYONE IS</p><h3>Bring the film.<br />Keep your own pace.</h3><p className="br-muted">Your next watch party is one room away.</p><div className="br-profile"><Avatar avatarId="comet" label="Spider-Man" size="large" /><div><small>Watching as</small><strong>Spider-Man</strong></div></div>
+            <h3>Stream and chill</h3><div className="br-profile"><Avatar avatarId="comet" label="Spider-Man" size="large" /><div><small>Watching as</small><strong>Spider-Man</strong></div></div>
             <div className="br-static-actions" aria-label="Home screen context"><span className="md-button md-button--filled"><Plus size={20} aria-hidden="true" />Create a party</span><span className="md-button md-button--tonal"><Ticket size={20} aria-hidden="true" />Join with code</span></div>
             <div className="br-home-report"><Bug size={20} aria-hidden="true" /><span>Something not working?</span><Button variant="text" onClick={() => open(2)}>Report a bug <ArrowRight size={16} className="br-forward" aria-hidden="true" /></Button></div>
           </div>}

@@ -288,36 +288,6 @@ strong {
   gap: var(--md-sys-spacing-xxs);
 }
 
-.brand-mark {
-  position: relative;
-  width: 48px;
-  height: 48px;
-  flex: 0 0 48px;
-  border-radius: var(--md-sys-shape-corner-large);
-  background: var(--md-sys-color-primary-container);
-  overflow: hidden;
-}
-
-.brand-mark span {
-  position: absolute;
-  width: 22px;
-  height: 22px;
-  border-radius: var(--md-sys-shape-corner-full);
-}
-
-.brand-mark span:first-child {
-  top: 9px;
-  left: 9px;
-  background: var(--md-sys-color-primary);
-}
-
-.brand-mark span:last-child {
-  right: 7px;
-  bottom: 7px;
-  background: var(--md-sys-color-secondary);
-  border: 3px solid var(--md-sys-color-primary-container);
-}
-
 .md-button {
   min-height: 48px;
   min-width: 64px;
@@ -835,6 +805,14 @@ strong {
   margin-inline: auto;
 }
 
+.home-tools {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--md-sys-spacing-xxs);
+}
+
 .home-stage {
   display: grid;
   gap: var(--md-sys-spacing-lg);
@@ -847,18 +825,12 @@ strong {
   gap: 12px;
 }
 
-.home-stage__copy h2 {
+.home-stage__copy h1 {
   max-width: 720px;
   font-family: var(--md-ref-typeface-brand);
   font-size: var(--md-sys-typescale-display-small-size);
   line-height: var(--md-sys-typescale-display-small-line-height);
   font-weight: var(--md-sys-typescale-display-small-weight);
-}
-
-.home-stage__body {
-  color: var(--md-sys-color-on-surface-variant);
-  font-size: 1.125rem;
-  line-height: 1.75rem;
 }
 
 .identity-pill {
@@ -1982,7 +1954,7 @@ input[type="range"]::-moz-range-thumb {
     display: none;
   }
 
-  .home-stage__copy h2 {
+  .home-stage__copy h1 {
     font-size: 2rem;
     line-height: 2.5rem;
   }
@@ -2105,8 +2077,9 @@ input[type="range"]::-moz-range-thumb {
   .home-main {
     grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.75fr);
     align-items: stretch;
-    min-height: calc(100vh - 72px);
-    padding-top: 48px;
+    min-height: 100vh;
+    grid-template-rows: auto 1fr;
+    padding-top: 24px;
     padding-bottom: 64px;
   }
 
@@ -2351,3 +2324,9 @@ input[type="range"]::-moz-range-thumb {
 .theme-color-choice:active { transform: scale(0.98); }
 .theme-color-choice > span:nth-child(2) { flex: 1; overflow-wrap: anywhere; }
 .theme-color-swatch { flex: 0 0 24px; height: 24px; border-radius: var(--md-sys-shape-corner-full); background: var(--seed-color); border: 1px solid var(--md-sys-color-outline); }
+
+/* Persian follows logical layout; transport controls, URLs and codes stay LTR. */
+:root[lang="fa"] { letter-spacing: normal; }
+:root[lang="fa"] input, :root[lang="fa"] textarea, :root[lang="fa"] button { letter-spacing: normal; }
+[dir="rtl"] .directional-icon svg { transform: scaleX(-1); }
+.player-progress, .transport, .player-time, .volume-control input, .invite-code, .invite-link { direction: ltr; unicode-bidi: isolate; }

@@ -201,14 +201,24 @@ internal fun SettingsScreen(
                     description = stringResource(Res.string.language_description),
                     showDivider = false,
                 ) {
-                    OutlinedTextField(
-                        value = stringResource(Res.string.english),
-                        onValueChange = {},
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = false,
-                        singleLine = true,
-                        label = { Text(stringResource(Res.string.app_language)) },
-                    )
+                    Column(Modifier.selectableGroup().semantics {
+                        contentDescription = "English / فارسی"
+                    }) {
+                        top.roomio.domain.profile.AppLanguage.entries.forEach { language ->
+                            val selected = state.draftLanguage == language
+                            Row(
+                                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
+                                    .selectable(selected = selected, role = Role.RadioButton,
+                                        onClick = { onAction(SettingsAction.LanguageSelected(language)) })
+                                    .padding(horizontal = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                androidx.compose.material3.RadioButton(selected = selected, onClick = null)
+                                Text(if (language == top.roomio.domain.profile.AppLanguage.PERSIAN) "فارسی" else "English")
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -437,7 +447,7 @@ private fun AvatarChoice(
             Box {
                 ProfileAvatarImage(
                     avatar = avatar,
-                    description = avatar.label,
+                    description = avatar.localizedLabel,
                     selected = selected,
                     baseArtworkSize = baseArtworkSize,
                     selectedArtworkSize = selectedArtworkSize,
@@ -461,7 +471,7 @@ private fun AvatarChoice(
                 }
             }
             Text(
-                text = avatar.label,
+                text = avatar.localizedLabel,
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold,
                 color = if (selected) {

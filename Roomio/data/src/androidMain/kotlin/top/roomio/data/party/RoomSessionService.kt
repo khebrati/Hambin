@@ -146,6 +146,13 @@ class RoomSessionService : Service() {
         }
     }
 
+    private fun localizedString(id: Int): String {
+        val configuration = android.content.res.Configuration(resources.configuration).apply {
+            setLocale(java.util.Locale.getDefault())
+        }
+        return createConfigurationContext(configuration).getString(id)
+    }
+
     private fun buildNotification(): Notification {
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(this, CHANNEL_ID)
@@ -155,9 +162,9 @@ class RoomSessionService : Service() {
         }
         builder
             .setSmallIcon(R.drawable.ic_roomio_session)
-            .setContentTitle(getString(R.string.session_notification_title))
+            .setContentTitle(localizedString(R.string.session_notification_title))
             .setContentText(
-                getString(
+                localizedString(
                     if (voiceActive) {
                         R.string.session_notification_text_voice
                     } else {
@@ -182,7 +189,7 @@ class RoomSessionService : Service() {
 
     private fun microphoneAction(): Notification.Action {
         val icon = if (micMuted) R.drawable.ic_roomio_unmute else R.drawable.ic_roomio_mute
-        val title = getString(
+        val title = localizedString(
             if (micMuted) R.string.session_action_unmute else R.string.session_action_mute,
         )
         return action(icon, title, REQUEST_TOGGLE_MIC, ACTION_TOGGLE_MIC)
@@ -191,7 +198,7 @@ class RoomSessionService : Service() {
     private fun leaveAction(): Notification.Action =
         action(
             R.drawable.ic_roomio_leave,
-            getString(R.string.session_action_leave),
+            localizedString(R.string.session_action_leave),
             REQUEST_LEAVE,
             ACTION_LEAVE,
         )
@@ -226,10 +233,10 @@ class RoomSessionService : Service() {
         if (manager.getNotificationChannel(CHANNEL_ID) != null) return
         val channel = NotificationChannel(
             CHANNEL_ID,
-            getString(R.string.session_channel_name),
+            localizedString(R.string.session_channel_name),
             NotificationManager.IMPORTANCE_LOW,
         ).apply {
-            description = getString(R.string.session_channel_description)
+            description = localizedString(R.string.session_channel_description)
             setShowBadge(false)
         }
         manager.createNotificationChannel(channel)

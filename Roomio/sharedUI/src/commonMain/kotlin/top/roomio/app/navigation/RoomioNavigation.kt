@@ -174,6 +174,7 @@ internal fun RoomioNavigation(
                             is SettingsAction.NameChanged,
                             is SettingsAction.AvatarSelected,
                             is SettingsAction.ColorSelected,
+                            is SettingsAction.LanguageSelected,
                             -> Unit
                         }
                     },

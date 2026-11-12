@@ -17,6 +17,7 @@ import dev.zacsweers.metro.Provides
 import dev.zacsweers.metro.createGraphFactory
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import top.roomio.app.locale.AppLanguageEnvironment
 import top.roomio.app.home.HomeViewModel
 import top.roomio.app.manager.PartyManagerViewModel
 import top.roomio.app.navigation.RoomioNavigation
@@ -111,14 +112,17 @@ fun RoomioUi(
     }
 
     val themeColor by themePreferencesRepository.color.collectAsState()
-    AppTheme(onThemeChanged, themeColor = themeColor) {
-        Box(Modifier.fillMaxSize()) {
-            RoomioNavigation(
-                presentationGraph = presentationGraph,
-                modifier = Modifier,
-            )
-            if (launcherIconController != null && launcherIconController.isSupported) {
-                ThemeLauncherIcon(themeColor, launcherIconController)
+    val profile by profileRepository.observeProfile().collectAsState(profileRepository.currentProfile())
+    AppLanguageEnvironment(profile.language) {
+        AppTheme(onThemeChanged, themeColor = themeColor) {
+            Box(Modifier.fillMaxSize()) {
+                RoomioNavigation(
+                    presentationGraph = presentationGraph,
+                    modifier = Modifier,
+                )
+                if (launcherIconController != null && launcherIconController.isSupported) {
+                    ThemeLauncherIcon(themeColor, launcherIconController)
+                }
             }
         }
     }

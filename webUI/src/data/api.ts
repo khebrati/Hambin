@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { appLog } from './sessionLog';
 import { token } from './auth';
 import { ApiError } from './errors';
@@ -30,7 +31,7 @@ const messages: Record<string, string> = {
   NETWORK: "You're offline. Check your connection and try again.", ROOM_NOT_FOUND: 'That party could not be found. Check the code and try again.', ROOM_FULL: 'This room is full.', ROOM_ENDED: 'This party has ended.', NOT_A_MEMBER: 'Your room session has ended. Join the party again.', OWNER_REQUIRED: 'Only the present owner can change the stream.', INVALID_URL: 'Enter a valid HTTPS video URL.', INVALID_PROFILE: 'Use a name of 1–48 characters.', RATE_LIMITED: 'Too many requests. Wait a moment and try again.', AUTH_UNAVAILABLE: 'Identity service is unavailable. Your saved identity is kept; try again.', SESSION_REVOKED: 'This session was revoked. Reset your guest identity to start again.', SESSION_EXPIRED: 'Your saved guest session has expired. Reset your guest identity to start again.', INVALID_TOKEN: 'Your saved guest session is unavailable. Reset your guest identity to start again.', UNAUTHENTICATED: 'Your saved guest session is unavailable. Reset your guest identity to start again.', VOICE_DISABLED: 'Voice is unavailable on this server.', UNAVAILABLE: 'The service is unavailable. Try again.'
 };
 export function errorMessage(error: unknown): string {
-  return error instanceof ApiError ? messages[error.code] || 'That action failed. Please try again.' : 'Unable to restore your session. Check your connection and try again.';
+  return t(error instanceof ApiError ? messages[error.code] || 'That action failed. Please try again.' : 'Unable to restore your session. Check your connection and try again.');
 }
 
 export class MutationRequests {

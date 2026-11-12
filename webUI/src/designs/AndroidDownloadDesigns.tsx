@@ -38,9 +38,9 @@ export default function AndroidDownloadDesigns() {
       {concepts.map((concept, index) => <section className="ad-concept" key={concept.title} aria-labelledby={`concept-${index}`}>
         <div className="ad-caption"><p className="eyebrow">{concept.placement}</p><h2 id={`concept-${index}`}>{concept.title}</h2></div>
         <div className="ad-phone">
-          <div className="ad-appbar"><span className="brand-mark" aria-hidden="true"><span /><span /></span><strong>Roomio</strong><Settings size={21} aria-hidden="true" /></div>
+          <div className="ad-appbar"><strong>Roomio</strong><Settings size={21} aria-hidden="true" /></div>
           {index < 2 ? <div className="ad-home-context">
-            <p className="eyebrow">Ready when everyone is</p><h3>Bring the film.<br />Keep your own pace.</h3><p>Your next watch party is one room away.</p>
+            <h3>Stream and chill</h3>
             <div className="identity-pill"><Avatar avatarId="comet" label="Mira" size="large" /><div><span>Watching as</span><strong>Mira</strong></div></div>
             <div className="ad-context-actions" aria-label="Home screen context"><span className="md-button md-button--filled"><Plus size={20} aria-hidden="true" />Create a party</span><span className="md-button md-button--tonal"><Ticket size={20} aria-hidden="true" />Join with code</span></div>
           </div> : <div className="ad-room-context">

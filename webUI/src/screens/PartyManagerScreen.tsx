@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { DoorOpen, Plus, Ticket } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { AppBar } from '../components/AppBar';
@@ -49,8 +50,8 @@ export function PartyManagerScreen({
   return (
     <div className="screen manager-screen screen-enter">
       <AppBar
-        title="Party manager"
-        subtitle="Create a room or join friends"
+        title={t("Party manager")}
+        subtitle={t("Create a room or join friends")}
         canGoBack
         onBack={onBack}
         theme={theme}
@@ -58,7 +59,7 @@ export function PartyManagerScreen({
       />
 
       <main className="manager-main">
-        <div className="segmented-control" role="tablist" aria-label="Party action">
+        <div className="segmented-control" role="tablist" aria-label={t("Party action")}>
           <button
             role="tab"
             aria-selected={mode === 'create'}
@@ -66,8 +67,7 @@ export function PartyManagerScreen({
             onClick={() => changeMode('create')}
           >
             <Plus size={18} aria-hidden="true" />
-            Create
-          </button>
+            {t("Create")}</button>
           <button
             role="tab"
             aria-selected={mode === 'join'}
@@ -75,11 +75,10 @@ export function PartyManagerScreen({
             onClick={() => changeMode('join')}
           >
             <Ticket size={18} aria-hidden="true" />
-            Join
-          </button>
+            {t("Join")}</button>
         </div>
 
-        {errorMessage && mode === 'create' && <StatusCard title="Unable to create the party" tone="error">{errorMessage}</StatusCard>}
+        {errorMessage && mode === 'create' && <StatusCard title={t("Unable to create the party")} tone="error">{errorMessage}</StatusCard>}
         {mode === 'create' ? (
           <section className="manager-panel" aria-labelledby="create-title">
             <div className="manager-visual manager-visual--create" aria-hidden="true">
@@ -88,29 +87,27 @@ export function PartyManagerScreen({
               <span className="manager-visual__seat manager-visual__seat--two" />
               <span className="manager-visual__seat manager-visual__seat--three" />
             </div>
-            <p className="eyebrow">You will be the host</p>
-            <h2 id="create-title">Open a room for movie night</h2>
+            <p className="eyebrow">{t("You will be the host")}</p>
+            <h2 id="create-title">{t("Open a room for movie night")}</h2>
             <p>
-              Roomio will create a party code and take you to the empty cinema.
-            </p>
+              {t("Roomio will create a party code and take you to the empty cinema.")}</p>
             {joinStatus === 'loading' ? (
-              <LoadingIndicator label="Opening your room" />
+              <LoadingIndicator label={t("Opening your room")} />
             ) : (
               <Button
                 fullWidth
                 icon={<DoorOpen size={20} aria-hidden="true" />}
                 onClick={onCreate}
               >
-                Create party
-              </Button>
+                {t("Create party")}</Button>
             )}
           </section>
         ) : (
           <section className="manager-panel" aria-labelledby="join-title">
-            <p className="eyebrow">A friend has the code</p>
-            <h2 id="join-title">Step into their room</h2>
+            <p className="eyebrow">{t("A friend has the code")}</p>
+            <h2 id="join-title">{t("Step into their room")}</h2>
             <TextField
-              label="Party code"
+              label={t("Party code")}
               value={code}
               onChange={(value) => {
                 setCode(value.toUpperCase());
@@ -120,13 +117,13 @@ export function PartyManagerScreen({
               placeholder={live ? "ABCD1234" : "MOON-42"}
               error={
                 joinStatus === 'error'
-                  ? errorMessage || "We couldn't find that party. Check the code and try again."
+                  ? errorMessage || t("We couldn't find that party. Check the code and try again.")
                   : undefined
               }
               disabled={joinStatus === 'loading'}
             />
             {joinStatus === 'loading' ? (
-              <LoadingIndicator label="Finding that party" />
+              <LoadingIndicator label={t("Finding that party")} />
             ) : (
               <Button
                 fullWidth
@@ -134,11 +131,10 @@ export function PartyManagerScreen({
                 disabled={!code.trim()}
                 onClick={() => onPreview(code)}
               >
-                Preview party
-              </Button>
+                {t("Preview party")}</Button>
             )}
             {!live && <p className="manager-code-hints">
-              Try <strong>MOON-42</strong>, <strong>ORBIT-08</strong>, <strong>FULL-10</strong>, or <strong>ENDED-3</strong>.
+              {t('Try MOON-42, ORBIT-08, FULL-10, or ENDED-3.')}
             </p>}
           </section>
         )}

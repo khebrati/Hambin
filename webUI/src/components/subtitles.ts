@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 /** Local imports are converted to browser WebVTT; styling and ASS drawings are not rendered. */
 interface Cue { start: number; end: number; text: string; settings?: string }
 interface TtmlRates { frameRate?: number; subFrameRate?: number; tickRate?: number }
@@ -6,7 +7,7 @@ const MAX_FILE_BYTES = 5_000_000;
 const MAX_CUES = 50_000;
 const supportedExtensions = new Set(['vtt', 'srt', 'ssa', 'ass', 'ttml', 'dfxp', 'xml']);
 
-function invalid(message = 'This subtitle file contains invalid or unsupported timing.'): never { throw new Error(message); }
+function invalid(message = t("This subtitle file contains invalid or unsupported timing.")): never { throw new Error(message); }
 
 function escapeCueText(text: string): string {
   // WebVTT cue escaping: https://www.w3.org/TR/webvtt1/#webvtt-cue-text
@@ -40,8 +41,8 @@ function timestamp(seconds: number): string {
 
 function serialize(cues: Cue[]): string {
   const visible = cues.filter(cue => cue.text.trim());
-  if (!visible.length) invalid('No readable subtitle cues were found in this file.');
-  if (visible.length > MAX_CUES) invalid('This subtitle file has too many cues. Choose a smaller file.');
+  if (!visible.length) invalid(t("No readable subtitle cues were found in this file."));
+  if (visible.length > MAX_CUES) invalid(t("This subtitle file has too many cues. Choose a smaller file."));
   for (const cue of visible) {
     if (!Number.isFinite(cue.start) || !Number.isFinite(cue.end) || cue.start < 0 || Math.round(cue.end * 1000) <= Math.round(cue.start * 1000)) invalid();
   }
@@ -59,7 +60,7 @@ function parseNumberedCues(text: string, vtt: boolean): Cue[] {
   let body = text;
   if (vtt) {
     const header = /^WEBVTT(?:[ \t][^\n]*)?\n(?:[^\n]+\n)*\n/.exec(text);
-    if (!header || header[0].includes('-->')) invalid('This file is not valid WebVTT.');
+    if (!header || header[0].includes('-->')) invalid(t("This file is not valid WebVTT."));
     body = text.slice(header[0].length);
   }
   const cues: Cue[] = [];
@@ -131,14 +132,14 @@ export function parseTtmlTime(value: string, rates: TtmlRates = {}): number {
   const frameRate = rates.frameRate ?? 30;
   const subFrameRate = rates.subFrameRate ?? 1;
   const tickRate = rates.tickRate ?? 1;
-  if (![frameRate, subFrameRate, tickRate].every(rate => Number.isFinite(rate) && rate > 0)) invalid('The TTML subtitle has invalid frame or tick rates.');
+  if (![frameRate, subFrameRate, tickRate].every(rate => Number.isFinite(rate) && rate > 0)) invalid(t("The TTML subtitle has invalid frame or tick rates."));
   const clock = /^(\d{2,}):(\d{2}):(\d{2})(?:\.(\d+)|:(\d+)(?:\.(\d+))?)?$/.exec(value);
   if (clock) {
     if (Number(clock[2]) > 59 || Number(clock[3]) > 59 || (clock[5] !== undefined && Number(clock[5]) >= Math.ceil(frameRate)) || (clock[6] !== undefined && Number(clock[6]) >= subFrameRate)) invalid();
     return Number(clock[1]) * 3600 + Number(clock[2]) * 60 + Number(clock[3]) + (clock[4] ? Number(`0.${clock[4]}`) : 0) + (clock[5] ? (Number(clock[5]) + Number(clock[6] || 0) / subFrameRate) / frameRate : 0);
   }
   const offset = /^(\d+(?:\.\d+)?)(h|m|s|ms|f|t)$/.exec(value);
-  if (!offset) invalid('The TTML subtitle contains an unsupported time expression.');
+  if (!offset) invalid(t("The TTML subtitle contains an unsupported time expression."));
   const units: Record<string, number> = { h: 3600, m: 60, s: 1, ms: 0.001, f: 1 / frameRate, t: 1 / tickRate };
   return Number(offset[1]) * units[offset[2]];
 }
@@ -152,18 +153,18 @@ function parseTtml(text: string): Cue[] {
   if (typeof DOMParser === 'undefined') invalid('TTML subtitle import is unavailable in this browser.');
   const document = new DOMParser().parseFromString(text, 'application/xml');
   const root = document.documentElement;
-  if (root.localName !== 'tt' || document.getElementsByTagNameNS('*', 'parsererror').length) invalid('This file is not valid TTML XML.');
+  if (root.localName !== 'tt' || document.getElementsByTagNameNS('*', 'parsererror').length) invalid(t("This file is not valid TTML XML."));
   const timeBase = attribute(root, 'timeBase');
-  if (timeBase && timeBase !== 'media') invalid('This TTML time base is not supported. Choose subtitles with media timing.');
+  if (timeBase && timeBase !== 'media') invalid(t("This TTML time base is not supported. Choose subtitles with media timing."));
   const rawFrameRate = attribute(root, 'frameRate');
   const frameRate = Number(rawFrameRate ?? 30);
   const multiplier = (attribute(root, 'frameRateMultiplier') ?? '1 1').trim().split(/\s+/).map(Number);
-  if (multiplier.length !== 2 || !multiplier.every(value => Number.isFinite(value) && value > 0)) invalid('The TTML frame-rate multiplier is invalid.');
+  if (multiplier.length !== 2 || !multiplier.every(value => Number.isFinite(value) && value > 0)) invalid(t("The TTML frame-rate multiplier is invalid."));
   const subFrameRate = Number(attribute(root, 'subFrameRate') ?? 1);
   const rates = { frameRate: frameRate * multiplier[0] / multiplier[1], subFrameRate, tickRate: Number(attribute(root, 'tickRate') ?? (rawFrameRate ? frameRate * multiplier[0] / multiplier[1] * subFrameRate : 1)) };
   parseTtmlTime('0s', rates);
   const elements = Array.from(root.getElementsByTagNameNS('*', '*'));
-  if (elements.some(element => attribute(element, 'timeContainer') === 'seq')) invalid('Sequential TTML timing is not supported. Choose subtitles with parallel timing.');
+  if (elements.some(element => attribute(element, 'timeContainer') === 'seq')) invalid(t("Sequential TTML timing is not supported. Choose subtitles with parallel timing."));
   const intervals = new Map<Element, { start: number; end: number }>();
   const interval = (element: Element): { start: number; end: number } => {
     const existing = intervals.get(element);
@@ -209,9 +210,9 @@ function parseTtml(text: string): Cue[] {
 /** Exposed for deterministic parser tests and browser fixtures; no files leave this device. */
 export function subtitleTextToVtt(content: string, extension: string): string {
   const type = extension.replace(/^\./, '').toLowerCase();
-  if (!supportedExtensions.has(type)) invalid('Choose an SRT, VTT, ASS, SSA, TTML, DFXP, or XML subtitle file.');
+  if (!supportedExtensions.has(type)) invalid(t("Choose an SRT, VTT, ASS, SSA, TTML, DFXP, or XML subtitle file."));
   const text = content.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').trim();
-  if (!text) invalid('This subtitle file is empty.');
+  if (!text) invalid(t("This subtitle file is empty."));
   if (type === 'vtt') return serialize(parseNumberedCues(`${text}\n\n`, true));
   if (type === 'srt') return serialize(parseNumberedCues(text, false));
   if (type === 'ass' || type === 'ssa') return serialize(parseAss(text));
@@ -219,10 +220,10 @@ export function subtitleTextToVtt(content: string, extension: string): string {
 }
 
 export async function subtitleFileToVtt(file: File): Promise<string> {
-  if (file.size > MAX_FILE_BYTES) invalid('Choose a subtitle file smaller than 5 MB.');
+  if (file.size > MAX_FILE_BYTES) invalid(t("Choose a subtitle file smaller than 5 MB."));
   const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
-  if (!supportedExtensions.has(extension)) invalid('Choose an SRT, VTT, ASS, SSA, TTML, DFXP, or XML subtitle file.');
+  if (!supportedExtensions.has(extension)) invalid(t("Choose an SRT, VTT, ASS, SSA, TTML, DFXP, or XML subtitle file."));
   let content: string;
-  try { content = await file.text(); } catch { invalid('Unable to read that subtitle file. Choose it again.'); }
+  try { content = await file.text(); } catch { invalid(t("Unable to read that subtitle file. Choose it again.")); }
   return subtitleTextToVtt(content, extension);
 }

@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { Bug } from 'lucide-react';
 import { BugReportDialog } from '../components/BugReportDialog';
 import {
@@ -124,15 +125,15 @@ export function PartyScreen({
   const partyCode = party.code || party.id;
   const voiceMuted = live ? live.voice.muted : micMuted;
   const voiceStatus = live?.voice.status ?? (voiceJoined ? 'connected' : 'off');
-  const voiceLabel = voiceMuted ? 'Unmute' : 'Mute';
-  const voiceMessage = voiceStatus === 'off' ? 'Talk with the room'
-    : voiceStatus === 'connecting' ? 'Joining voice…'
-    : voiceStatus === 'degraded' ? 'Some voice connections need attention'
-    : voiceStatus === 'reconnecting' ? 'Reconnecting voice signaling'
+  const voiceLabel = voiceMuted ? t("Unmute") : t("Mute");
+  const voiceMessage = voiceStatus === 'off' ? t("Talk with the room")
+    : voiceStatus === 'connecting' ? t("Joining voice…")
+    : voiceStatus === 'degraded' ? t("Some voice connections need attention")
+    : voiceStatus === 'reconnecting' ? t("Reconnecting voice signaling")
     : voiceStatus === 'error' ? live?.voice.error === 'NETWORK'
-      ? 'Could not reach voice. Check your connection and try again.'
-      : 'Could not join voice. Try again.'
-    : voiceMuted ? 'Your mic is muted' : 'Your mic is on';
+      ? t("Could not reach voice. Check your connection and try again.")
+      : t("Could not join voice. Try again.")
+    : voiceMuted ? t("Your mic is muted") : t("Your mic is on");
   const retryVoiceAvailable = voiceStatus === 'degraded'
     || Object.values(live?.voice.members ?? {}).some(member => member.connection === 'unavailable');
   const toggleMic = () => {
@@ -177,11 +178,11 @@ export function PartyScreen({
     try {
       await writeClipboardText(activeUrl);
     } catch {
-      onNotify('Copy is unavailable. Select the link manually.');
+      onNotify(t("Copy is unavailable. Select the link manually."));
       return;
     }
     setCopied(true);
-    onNotify('Video link copied');
+    onNotify(t("Video link copied"));
     window.setTimeout(() => setCopied(false), 1600);
   };
 
@@ -190,21 +191,21 @@ export function PartyScreen({
     try {
       pasted = await navigator.clipboard.readText();
     } catch {
-      if (live) { onNotify('Paste is unavailable. Enter the video URL manually.'); return; }
+      if (live) { onNotify(t("Paste is unavailable. Enter the video URL manually.")); return; }
       pasted = sampleVideoUrl;
     }
     setUrlDraft(pasted || sampleVideoUrl);
-    onNotify('Video link ready');
+    onNotify(t("Video link ready"));
   };
 
   const copyInvite = async (value: string, target: 'code' | 'link') => {
     try {
       await writeClipboardText(value);
       setInviteCopyState(target);
-      onNotify(target === 'code' ? 'Party code copied' : 'Invite link copied');
+      onNotify(target === 'code' ? t("Party code copied") : t("Invite link copied"));
     } catch {
       setInviteCopyState('error');
-      onNotify('Copy is unavailable. You can select the text manually.');
+      onNotify(t("Copy is unavailable. You can select the text manually."));
     }
   };
 
@@ -219,47 +220,46 @@ export function PartyScreen({
 
   const syncPlayback = () => {
     setPosition(LEADING_POSITION);
-    onNotify("You're caught up with the room");
+    onNotify(t("You're caught up with the room"));
   };
 
   return (
     <div className="screen party-screen screen-enter">
       <AppBar
         title={party.title}
-        subtitle={`${partyCode} · ${isOwner ? 'Owner' : party.ownerPresent ? 'Guest' : 'Owner away'}`}
+        subtitle={`${partyCode} · ${isOwner ? t("Owner") : party.ownerPresent ? t("Guest") : t("Owner away")}`}
         theme={theme}
         onToggleTheme={onToggleTheme}
         actions={
           <>
             <IconButton
               icon={UserPlus}
-              label="Invite friends"
+              label={t("Invite friends")}
               variant="tonal"
               onClick={() => {
                 setInviteCopyState('idle');
                 setInviteOpen(true);
               }}
             />
-            <IconButton icon={Bug} label="Report a bug" onClick={() => setBugReportOpen(true)} />
+            <IconButton icon={Bug} label={t("Report a bug")} onClick={() => setBugReportOpen(true)} />
             {hasPlayer ? (
-              <IconButton icon={Link2} label="View video link" onClick={() => setUrlOpen(true)} />
+              <IconButton icon={Link2} label={t("View video link")} onClick={() => setUrlOpen(true)} />
             ) : null}
-            <IconButton icon={LogOut} label="Leave party" onClick={() => setLeaveOpen(true)} />
+            <IconButton icon={LogOut} label={t("Leave party")} onClick={() => setLeaveOpen(true)} />
           </>
         }
       />
 
       <main className="party-layout">
-        <section className="cinema-column" aria-label="Cinema">
+        <section className="cinema-column" aria-label={t("Cinema")}>
           {!isOwner && !party.ownerPresent ? (
             <div className="owner-away-banner" role="status">
               <LockKeyhole size={24} aria-hidden="true" />
               <div>
-                <span className="eyebrow">Owner away</span>
-                <strong>{party.ownerName} left the room</strong>
+                <span className="eyebrow">{t("Owner away")}</span>
+                <strong>{party.ownerName} {t("left the room")}</strong>
                 <p>
-                  The current video stays available, but nobody can replace or end it until{' '}
-                  {party.ownerName} returns.
+                  {t('The current video stays available, but nobody can replace or end it until {name} returns.', { name: party.ownerName })}
                 </p>
               </div>
             </div>
@@ -301,8 +301,8 @@ export function PartyScreen({
           {hasPlayer ? (
             <div className="sync-band">
               <div>
-                <span className="eyebrow">Local playback</span>
-                <strong>{streamStatus === 'paused' ? 'Paused for you' : 'Playing for you'}</strong>
+                <span className="eyebrow">{t("Local playback")}</span>
+                <strong>{streamStatus === 'paused' ? t("Paused for you") : t("Playing for you")}</strong>
               </div>
               <Button
                 variant="tonal"
@@ -310,7 +310,7 @@ export function PartyScreen({
                 onClick={live ? () => void live.onSync() : syncPlayback}
                 disabled={live ? !live.connected || live.syncing : false}
               >
-                {live?.syncing ? 'Syncing…' : 'Sync to room'}
+                {live?.syncing ? t("Syncing…") : t("Sync to room")}
               </Button>
             </div>
           ) : null}
@@ -320,26 +320,26 @@ export function PartyScreen({
           </div>
         </section>
 
-        <aside className="party-support" aria-label="Party details">
+        <aside className="party-support" aria-label={t("Party details")}>
           <div className="participants-wide">
             <ParticipantStrip participants={participants} voiceMembers={live?.voice.members} />
           </div>
 
           <section className="voice-panel" aria-labelledby="voice-heading">
             <div>
-              <span className="eyebrow">Voice room</span>
+              <span className="eyebrow">{t("Voice room")}</span>
               <h2 id="voice-heading" aria-live={voiceStatus === 'error' ? 'assertive' : 'polite'}>{voiceMessage}</h2>
             </div>
             {voiceStatus === 'connecting' ? (
-              <span className="md-loading__shape voice-panel__progress" role="progressbar" aria-label="Joining voice" />
+              <span className="md-loading__shape voice-panel__progress" role="progressbar" aria-label={t("Joining voice")} />
             ) : voiceStatus === 'off' || voiceStatus === 'error' ? (
-              <Button onClick={joinVoice}>Join voice</Button>
+              <Button onClick={joinVoice}>{t("Join voice")}</Button>
             ) : (
               <IconButton icon={voiceMuted ? MicOff : Mic} label={voiceLabel} variant="tonal" onClick={toggleMic} />
             )}
           </section>
-          {live && retryVoiceAvailable && <Button variant="outlined" fullWidth onClick={live.onRetryVoice}>Retry voice connections</Button>}
-          {live?.voice.error?.includes('playback was blocked') && <Button variant="outlined" fullWidth onClick={live.onResumeVoice}>Resume voice audio</Button>}
+          {live && retryVoiceAvailable && <Button variant="outlined" fullWidth onClick={live.onRetryVoice}>{t("Retry voice connections")}</Button>}
+          {live?.voice.error?.includes('playback was blocked') && <Button variant="outlined" fullWidth onClick={live.onResumeVoice}>{t("Resume voice audio")}</Button>}
           <Button
             variant="outlined"
             icon={<UserPlus size={18} aria-hidden="true" />}
@@ -349,18 +349,17 @@ export function PartyScreen({
             }}
             fullWidth
           >
-            Invite friends
-          </Button>
+            {t("Invite friends")}</Button>
 
           {hasPlayer ? (
-            <section className="source-row" aria-label="Current video source">
+            <section className="source-row" aria-label={t("Current video source")}>
               <div>
-                <span>Video source</span>
+                <span>{t("Video source")}</span>
                 <strong>{new URL(activeUrl).pathname.split('/').pop()}</strong>
               </div>
               <IconButton
                 icon={copied ? ClipboardCheck : Clipboard}
-                label={copied ? 'Link copied' : 'Copy video link'}
+                label={copied ? t("Link copied") : t("Copy video link")}
                 onClick={copyUrl}
               />
             </section>
@@ -373,27 +372,25 @@ export function PartyScreen({
               onClick={() => setAbortOpen(true)}
               fullWidth
             >
-              End stream for everyone
-            </Button>
+              {t("End stream for everyone")}</Button>
           ) : null}
         </aside>
       </main>
 
-      <BugReportDialog open={bugReportOpen} roomId={party.id} enabled={!!live} onClose={() => setBugReportOpen(false)} onSent={() => onNotify("Bug report sent. Thank you.")} />
+      <BugReportDialog open={bugReportOpen} roomId={party.id} enabled={!!live} onClose={() => setBugReportOpen(false)} onSent={() => onNotify(t("Bug report sent. Thank you."))} />
       <Dialog
         open={inviteOpen}
-        title="Invite friends"
+        title={t("Invite friends")}
         onClose={() => setInviteOpen(false)}
         actions={
           <Button variant="text" onClick={() => setInviteOpen(false)}>
-            Done
-          </Button>
+            {t("Done")}</Button>
         }
       >
-        <p>Share either option. Friends will preview the room before they join.</p>
+        <p>{t("Share either option. Friends will preview the room before they join.")}</p>
         <section className="share-option" aria-labelledby="party-code-label">
           <label className="read-only-field">
-            <span id="party-code-label">Party code</span>
+            <span id="party-code-label">{t("Party code")}</span>
             <input value={partyCode} readOnly />
           </label>
           <Button
@@ -407,12 +404,12 @@ export function PartyScreen({
             }
             onClick={() => void copyInvite(partyCode, 'code')}
           >
-            {inviteCopyState === 'code' ? 'Code copied' : 'Copy code'}
+            {inviteCopyState === 'code' ? t("Code copied") : t("Copy code")}
           </Button>
         </section>
         <section className="share-option" aria-labelledby="invite-link-label">
           <label className="read-only-field">
-            <span id="invite-link-label">Invite link</span>
+            <span id="invite-link-label">{t("Invite link")}</span>
             <input value={inviteLink} readOnly />
           </label>
           <Button
@@ -426,19 +423,18 @@ export function PartyScreen({
             }
             onClick={() => void copyInvite(inviteLink, 'link')}
           >
-            {inviteCopyState === 'link' ? 'Link copied' : 'Copy link'}
+            {inviteCopyState === 'link' ? t("Link copied") : t("Copy link")}
           </Button>
         </section>
         {inviteCopyState === 'error' ? (
-          <StatusCard title="Unable to copy" tone="error">
-            Select the code or link above to share it manually.
-          </StatusCard>
+          <StatusCard title={t("Unable to copy")} tone="error">
+            {t("Select the code or link above to share it manually.")}</StatusCard>
         ) : null}
       </Dialog>
 
       <Dialog
         open={urlOpen}
-        title="Current video link"
+        title={t("Current video link")}
         onClose={() => setUrlOpen(false)}
         actions={
           <Button
@@ -446,57 +442,55 @@ export function PartyScreen({
             icon={copied ? <ClipboardCheck size={18} /> : <Clipboard size={18} />}
             onClick={copyUrl}
           >
-            {copied ? 'Copied' : 'Copy link'}
+            {copied ? t("Copied") : t("Copy link")}
           </Button>
         }
       >
         <label className="read-only-field">
-          <span>Direct video URL</span>
+          <span>{t("Direct video URL")}</span>
           <input value={activeUrl} readOnly />
         </label>
         {!isOwner ? (
           <p>
             {party.ownerPresent
-              ? `Only ${party.ownerName}, the room owner, can replace this link.`
-              : `This link stays locked until ${party.ownerName} returns.`}
+              ? t('Only {name}, the room owner, can replace this link.', { name: party.ownerName })
+              : t('This link stays locked until {name} returns.', { name: party.ownerName })}
           </p>
         ) : null}
       </Dialog>
 
       <Dialog
         open={leaveOpen}
-        title="Leave this party?"
+        title={t("Leave this party?")}
         onClose={() => setLeaveOpen(false)}
         actions={
           <>
             <Button variant="text" onClick={() => setLeaveOpen(false)}>
-              Stay
-            </Button>
+              {t("Stay")}</Button>
             <Button variant="danger" onClick={onLeave} disabled={live?.leaving}>
-              {live?.leaving ? 'Leaving…' : 'Leave party'}
+              {live?.leaving ? t("Leaving…") : t("Leave party")}
             </Button>
           </>
         }
       >
         <p>
           {isOwner
-            ? 'Your playback will stop. If others remain, the room stays open until you rejoin.'
-            : 'Your playback will stop and you will return home.'}
+            ? t("Your playback will stop. If others remain, the room stays open until you rejoin.")
+            : t("Your playback will stop and you will return home.")}
         </p>
       </Dialog>
 
       <Dialog
         open={abortOpen}
-        title="End the stream for everyone?"
+        title={t("End the stream for everyone?")}
         onClose={() => !aborting && setAbortOpen(false)}
         actions={
           aborting ? (
-            <LoadingIndicator label="Ending stream" />
+            <LoadingIndicator label={t("Ending stream")} />
           ) : (
             <>
               <Button variant="text" onClick={() => setAbortOpen(false)}>
-                Cancel
-              </Button>
+                {t("Cancel")}</Button>
               <Button
                 variant="danger"
                 onClick={async () => {
@@ -505,16 +499,13 @@ export function PartyScreen({
                   setUrlDraft('');
                 }}
               >
-                End for everyone
-              </Button>
+                {t("End for everyone")}</Button>
             </>
           )
         }
       >
         <p>
-          This is different from pausing. The video will stop for every person in
-          the room.
-        </p>
+          {t("This is different from pausing. The video will stop for every person in the room.")}</p>
       </Dialog>
     </div>
   );
@@ -544,8 +535,8 @@ function StreamEntry({
       <div className="empty-cinema empty-cinema--loading">
         <CinemaScene quiet />
         <div className="empty-cinema__content">
-          <LoadingIndicator label="Preparing the cinema" />
-          <p>Opening the video on each device.</p>
+          <LoadingIndicator label={t("Preparing the cinema")} />
+          <p>{t("Opening the video on each device.")}</p>
         </div>
       </div>
     );
@@ -556,11 +547,11 @@ function StreamEntry({
       <div className="empty-cinema">
         <CinemaScene quiet />
         <div className="empty-cinema__content">
-          <span className="eyebrow">Waiting room</span>
+          <span className="eyebrow">{t("Waiting room")}</span>
           <h2>
             {ownerPresent
-              ? `${ownerName} is choosing the next video`
-              : `Waiting for ${ownerName} to return`}
+              ? t('{name} is choosing the next video', { name: ownerName })
+              : t('Waiting for {name} to return', { name: ownerName })}
           </h2>
         </div>
       </div>
@@ -571,17 +562,17 @@ function StreamEntry({
     <div className="empty-cinema">
       <CinemaScene quiet />
       <div className="empty-cinema__content">
-        <span className="eyebrow">Your cinema is empty</span>
-        <h2>Bring in a direct video link</h2>
+        <span className="eyebrow">{t("Your cinema is empty")}</span>
+        <h2>{t("Bring in a direct video link")}</h2>
         <TextField
-          label="Direct video URL"
+          label={t("Direct video URL")}
           value={url}
           onChange={onUrlChange}
           placeholder="https://media.example.org/film.mp4"
           inputMode="url"
-          error={status === 'error' ? 'Enter a complete web address for the video.' : undefined}
+          error={status === 'error' ? t("Enter a complete web address for the video.") : undefined}
           trailing={
-            <IconButton icon={Clipboard} label="Paste video link" onClick={onPaste} />
+            <IconButton icon={Clipboard} label={t("Paste video link")} onClick={onPaste} />
           }
         />
         <Button
@@ -590,8 +581,7 @@ function StreamEntry({
           onClick={onStart}
           fullWidth
         >
-          Start stream
-        </Button>
+          {t("Start stream")}</Button>
       </div>
     </div>
   );
@@ -683,26 +673,26 @@ function CinemaPlayer({
     <div
       ref={playerRef}
       className={`cinema-player ${isFallbackFullscreen ? 'is-fullscreen' : ''}`}
-      aria-label="Aurora Station video player"
+      aria-label={t("Aurora Station video player")}
     >
       <div className="cinema-player__visual">
         <CinemaScene />
         {paused ? (
-          <button className="player-big-play" onClick={onTogglePlay} aria-label="Play video">
+          <button className="player-big-play" onClick={onTogglePlay} aria-label={t("Play video")}>
             <Play size={34} fill="currentColor" aria-hidden="true" />
           </button>
         ) : null}
         {buffering ? (
           <div className="player-buffering" role="status">
             <span className="md-loading__shape" aria-hidden="true" />
-            <span>Buffering</span>
+            <span>{t("Buffering")}</span>
           </div>
         ) : null}
       </div>
 
       <div className="player-controls">
         <label className="player-progress">
-          <span className="sr-only">Playback position</span>
+          <span className="sr-only">{t("Playback position")}</span>
           <input
             type="range"
             min="0"
@@ -718,25 +708,25 @@ function CinemaPlayer({
             {formatTime(position)} <span>/ {formatTime(TOTAL_SECONDS)}</span>
           </span>
 
-          <div className="transport" role="group" aria-label="Playback controls">
-            <IconButton icon={Rewind} label="Rewind 15 seconds" onClick={onSkipBack} />
+          <div className="transport" role="group" aria-label={t("Playback controls")}>
+            <IconButton icon={Rewind} label={t("Rewind 15 seconds")} onClick={onSkipBack} />
             <IconButton
               icon={paused ? Play : Pause}
-              label={paused ? 'Play' : 'Pause'}
+              label={paused ? t("Play") : t("Pause")}
               variant="filled"
               onClick={onTogglePlay}
             />
             <IconButton
               icon={FastForward}
-              label="Fast-forward 15 seconds"
+              label={t("Fast-forward 15 seconds")}
               onClick={onSkipForward}
             />
           </div>
 
           <div className="volume-control">
-            <IconButton icon={VolumeIcon} label={volume === 0 ? 'Unmute video' : 'Mute video'} onClick={onToggleMute} />
+            <IconButton icon={VolumeIcon} label={volume === 0 ? t("Unmute video") : t("Mute video")} onClick={onToggleMute} />
             <label>
-              <span className="sr-only">Volume</span>
+              <span className="sr-only">{t("Volume")}</span>
               <input
                 type="range"
                 min="0"
@@ -748,7 +738,7 @@ function CinemaPlayer({
             </label>
             <IconButton
               icon={isFullscreen ? Minimize2 : Fullscreen}
-              label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+              label={isFullscreen ? t("Exit fullscreen") : t("Enter fullscreen")}
               aria-pressed={isFullscreen}
               onClick={() => void toggleFullscreen()}
             />
@@ -773,7 +763,7 @@ function CinemaScene({ quiet = false }: { quiet?: boolean }) {
         <i />
         <i />
       </span>
-      {!quiet ? <strong>AURORA STATION</strong> : null}
+      {!quiet ? <strong>{t("AURORA STATION")}</strong> : null}
     </div>
   );
 }
@@ -783,8 +773,8 @@ function ParticipantStrip({ participants, voiceMembers }: { participants: Party[
     <section className="participant-section" aria-labelledby="participants-title">
       <div className="participant-section__heading">
         <div>
-          <span className="eyebrow">Voice party</span>
-          <h2 id="participants-title">In the room</h2>
+          <span className="eyebrow">{t("Voice party")}</span>
+          <h2 id="participants-title">{t("In the room")}</h2>
         </div>
         <span className="count-badge">{participants.length}</span>
       </div>

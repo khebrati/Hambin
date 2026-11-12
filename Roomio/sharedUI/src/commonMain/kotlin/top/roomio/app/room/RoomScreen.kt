@@ -917,6 +917,7 @@ private fun OwnerCinemaEntry(
         Text(stringResource(Res.string.bring_direct_video), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         OutlinedTextField(
             value = videoUrl,
+            textStyle = MaterialTheme.typography.bodyLarge.copy(textDirection = androidx.compose.ui.text.style.TextDirection.Ltr),
             onValueChange = onVideoUrlChange,
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
@@ -2102,6 +2103,7 @@ private fun InviteShareOption(
             val field: @Composable (Modifier) -> Unit = { fieldModifier ->
                 OutlinedTextField(
                     value = value,
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(textDirection = androidx.compose.ui.text.style.TextDirection.Ltr),
                     onValueChange = {},
                     modifier = fieldModifier,
                     readOnly = true,
@@ -2187,6 +2189,7 @@ private fun CurrentVideoLinkDialog(
                 ) {
                     OutlinedTextField(
                         value = videoUrl,
+                        textStyle = MaterialTheme.typography.bodyLarge.copy(textDirection = androidx.compose.ui.text.style.TextDirection.Ltr),
                         onValueChange = {},
                         modifier = Modifier.weight(1f),
                         readOnly = true,

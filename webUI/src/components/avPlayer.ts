@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { plainCueText } from './subtitles';
 
 export type PlayerMedia = Pick<HTMLVideoElement, 'currentTime' | 'duration' | 'paused' | 'ended' | 'seeking' | 'readyState' | 'error' | 'buffered' | 'seekable' | 'volume' | 'muted' | 'play' | 'pause'>;
@@ -40,7 +41,7 @@ function script(src: string): Promise<void> {
     const element = document.createElement('script');
     element.src = src; element.async = true;
     element.onload = () => resolve();
-    element.onerror = () => { element.remove(); reject(new Error('Unable to load the video player. Check your connection, then retry.')); };
+    element.onerror = () => { element.remove(); reject(new Error(t("Unable to load the video player. Check your connection, then retry."))); };
     document.head.append(element);
   });
 }
@@ -50,13 +51,13 @@ function loadRuntime(): Promise<Runtime> {
     await script(`${base}cheap-polyfill.js`);
     await script(`${base}avplayer.js`);
     const constructor = (window as unknown as { AVPlayer?: Runtime }).AVPlayer;
-    if (!constructor) throw new Error('Unable to initialize the video player. Retry the video.');
+    if (!constructor) throw new Error(t("Unable to initialize the video player. Retry the video."));
     return constructor;
   })().catch(reason => { runtime = undefined; throw reason; });
   return runtime;
 }
 
-const emptyRanges: TimeRanges = { length: 0, start: () => { throw new DOMException('No buffered ranges', 'IndexSizeError'); }, end: () => { throw new DOMException('No buffered ranges', 'IndexSizeError'); } };
+const emptyRanges: TimeRanges = { length: 0, start: () => { throw new DOMException(t("No buffered ranges"), 'IndexSizeError'); }, end: () => { throw new DOMException(t("No buffered ranges"), 'IndexSizeError'); } };
 const textCodecs = new Set([94210, 94212, 94213, 94225, 94226, 94230, 94232]);
 export function usesIntegratedPlayer(url: string): boolean {
   try { return ['http:', 'https:'].includes(new URL(url).protocol); } catch { return false; }
@@ -109,7 +110,7 @@ export class AvMedia implements PlayerMedia {
     const video = this.video();
     if (!video || video === this.nativeVideo) return;
     this.removeNativeListeners?.(); this.nativeVideo = video;
-    video.setAttribute('aria-label', 'Room video');
+    video.setAttribute('aria-label', t("Room video"));
     if (this.localTrack && this.localTrack.parentElement !== video) video.append(this.localTrack);
     // The upstream paused-play path does not await its native play promise.
     // Handle its promise here; our adapter owns autoplay recovery below.
@@ -125,7 +126,7 @@ export class AvMedia implements PlayerMedia {
     };
     const waiting = () => { if (!this.closed && !this.pausedValue && !this.previewing) this.callbacks.state('buffering'); };
     const playing = () => { if (!this.closed && !this.previewing && !this.pendingSeeks) { this.pausedValue = false; this.callbacks.state('playing'); this.callbacks.update(); } };
-    const error = () => this.fail('Unable to play this video. Check the source connection and supported format, then retry.');
+    const error = () => this.fail(t("Unable to play this video. Check the source connection and supported format, then retry."));
     video.addEventListener('waiting', waiting); video.addEventListener('playing', playing); video.addEventListener('error', error);
     this.removeNativeListeners = () => { video.removeEventListener('waiting', waiting); video.removeEventListener('playing', playing); video.removeEventListener('error', error); };
   }
@@ -150,8 +151,8 @@ export class AvMedia implements PlayerMedia {
     listen('ended', () => { this.endedValue = true; this.pausedValue = true; this.callbacks.state('ended'); });
     listen('seeking', () => { this.seekingValue = true; if (!this.pausedValue) this.callbacks.state('buffering'); });
     listen('seeked', () => { if (this.pendingSeeks) return; this.seekingValue = false; this.callbacks.state(this.pausedValue ? 'paused' : 'playing'); this.callbacks.update(); });
-    player.on('error', () => this.fail('Unable to play this video. Check browser codec support and the source connection, then retry.'));
-    player.on('timeout', () => this.fail('The video source timed out. Check your connection, then retry.'));
+    player.on('error', () => this.fail(t("Unable to play this video. Check browser codec support and the source connection, then retry.")));
+    player.on('timeout', () => this.fail(t("The video source timed out. Check your connection, then retry.")));
     await player.load(url, { http: { credentials: 'omit' } });
     if (this.closed) return;
     this.loaded = true;
@@ -159,7 +160,7 @@ export class AvMedia implements PlayerMedia {
     this.manifest = /\.(m3u8|mpd)(?:$|[?#])/i.test(url);
     const streams = player.getStreams();
     const choices = (items: Stream[]) => items.map(stream => ({ id: `av:${stream.id}`, name: [stream.metadata.title, stream.metadata.language === 'und' ? '' : stream.metadata.language].filter(Boolean).join(' · ') || `${stream.mediaType} ${stream.id + 1}` }));
-    const subtitles = streams.filter(stream => stream.mediaType === 'Subtitle');
+    const subtitles = streams.filter(stream => stream.mediaType === t("Subtitle"));
     const supported = subtitles.filter(stream => textCodecs.has(stream.codecparProxy.codecId));
     const automatic = player.getSelectedAudioStreamId();
     if (this.manifest) {
@@ -169,8 +170,8 @@ export class AvMedia implements PlayerMedia {
       // manifest renditions. Preserve working hls.js/native track controls.
       if (audio.list.length > 1 || subtitles.list.length > 0) throw new Error('This manifest needs browser playback for track selection.');
       const tracks = (list: { lang: string }[], kind: string) => list.map((track, index) => ({ id: `avh:${index}`, name: track.lang || `${kind} ${index + 1}` }));
-      this.callbacks.tracks(tracks(audio.list, 'Audio'), tracks(subtitles.list, 'Subtitles'), audio.selectedIndex >= 0 ? `avh:${audio.selectedIndex}` : null, 0);
-    } else this.callbacks.tracks(choices(streams.filter(stream => stream.mediaType === 'Audio')), choices(supported), automatic >= 0 ? `av:${automatic}` : null, subtitles.length - supported.length);
+      this.callbacks.tracks(tracks(audio.list, t("Audio")), tracks(subtitles.list, t("Subtitles")), audio.selectedIndex >= 0 ? `avh:${audio.selectedIndex}` : null, 0);
+    } else this.callbacks.tracks(choices(streams.filter(stream => stream.mediaType === t("Audio"))), choices(supported), automatic >= 0 ? `av:${automatic}` : null, subtitles.length - supported.length);
     this.callbacks.update();
   }
   private enqueue<T>(action: (player: RuntimePlayer) => Promise<T>): Promise<T | undefined> {
@@ -190,14 +191,14 @@ export class AvMedia implements PlayerMedia {
       const aborted = () => finish(new DOMException('Video closed', 'AbortError'));
       const check = () => { if (this.closed) aborted(); else if (predicate()) finish(); };
       const poll = window.setInterval(check, 50);
-      const timeout = window.setTimeout(() => finish(new Error('The video source took too long to seek.')), 30_000);
+      const timeout = window.setTimeout(() => finish(new Error(t("The video source took too long to seek."))), 30_000);
       this.lifetime.signal.addEventListener('abort', aborted, { once: true });
       check();
     });
   }
   get currentTime() { return this.loaded ? this.video()?.currentTime ?? Number(this.player?.currentTime ?? 0n) / 1000 : 0; }
   set currentTime(value: number) {
-    void this.seekTo(value).catch(() => this.fail('Unable to seek this video. Retry the video.'));
+    void this.seekTo(value).catch(() => this.fail(t("Unable to seek this video. Retry the video.")));
   }
   private seekTo(target: number | (() => number), audioId?: number): Promise<unknown> {
     const revision = audioId === undefined ? ++this.seekRevision : this.seekRevision;
@@ -272,10 +273,10 @@ export class AvMedia implements PlayerMedia {
       await player.play();
       await this.video()?.play();
       // MSE uses a real media element: preserve browser autoplay recovery.
-      if (this.video()?.paused) throw new DOMException('Select Play to start video', 'NotAllowedError');
+      if (this.video()?.paused) throw new DOMException(t("Select Play to start video"), 'NotAllowedError');
     });
   }
-  pause() { void this.enqueue(player => player.pause()).catch(() => this.fail('Unable to pause this video. Retry the video.')); }
+  pause() { void this.enqueue(player => player.pause()).catch(() => this.fail(t("Unable to pause this video. Retry the video."))); }
   async selectAudio(id: string) {
     if (id.startsWith('avh:')) await this.enqueue(player => player.selectAudio(Number(id.slice(4))));
     else await this.seekTo(() => this.currentTime, Number(id.slice(3)));
@@ -294,7 +295,7 @@ export class AvMedia implements PlayerMedia {
     await this.ready;
     if (this.closed) return;
     const video = this.video();
-    if (!video) throw new Error('Wait for the video to load, then choose the subtitle file again.');
+    if (!video) throw new Error(t("Wait for the video to load, then choose the subtitle file again."));
     this.clearLocal();
     const track = this.localTrack = document.createElement('track');
     track.kind = 'subtitles'; track.label = name;
@@ -303,7 +304,7 @@ export class AvMedia implements PlayerMedia {
     await new Promise<void>((resolve, reject) => {
       this.rejectLocal = reject;
       track.onload = () => { this.rejectLocal = null; resolve(); };
-      track.onerror = () => { this.rejectLocal = null; reject(new Error('Unable to display that subtitle file. Choose another file.')); };
+      track.onerror = () => { this.rejectLocal = null; reject(new Error(t("Unable to display that subtitle file. Choose another file."))); };
       video.append(track); track.track.mode = 'showing';
     });
   }

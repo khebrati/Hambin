@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { Check } from 'lucide-react';
 import { themeColors, type useThemePalette } from '../theme';
 import type { CSSProperties } from 'react';
@@ -33,8 +34,8 @@ export function SettingsScreen({
   return (
     <div className="screen settings-screen screen-enter">
       <AppBar
-        title="Your profile"
-        subtitle="Shown inside every party"
+        title={t("Your profile")}
+        subtitle={t("Shown inside every party")}
         canGoBack
         onBack={onBack}
         theme={theme}
@@ -42,11 +43,11 @@ export function SettingsScreen({
       />
 
       <main className="form-page">
-        <section className="profile-spotlight" aria-label="Profile preview">
-          <Avatar avatarId={draft.avatarId} label={trimmedName || 'Your avatar'} size="large" />
+        <section className="profile-spotlight" aria-label={t("Profile preview")}>
+          <Avatar avatarId={draft.avatarId} label={trimmedName || t("Your avatar")} size="large" />
           <div>
-            <span>Ready to watch</span>
-            <strong>{trimmedName || 'Add your name'}</strong>
+            <span>{t("Ready to watch")}</span>
+            <strong>{trimmedName || t("Add your name")}</strong>
           </div>
         </section>
 
@@ -54,16 +55,16 @@ export function SettingsScreen({
           <div className="section-heading">
             <span>01</span>
             <div>
-              <h2 id="identity-heading">Name</h2>
-              <p>Keep it recognizable to friends.</p>
+              <h2 id="identity-heading">{t("Name")}</h2>
+              <p>{t("Keep it recognizable to friends.")}</p>
             </div>
           </div>
           <TextField
-            label="Display name"
+            label={t("Display name")}
             value={draft.name}
             onChange={(name) => setDraft((current) => ({ ...current, name }))}
             placeholder="Nika"
-            supportingText={!trimmedName ? 'A name is needed before saving.' : undefined}
+            supportingText={!trimmedName ? t("A name is needed before saving.") : undefined}
           />
         </section>
 
@@ -71,11 +72,11 @@ export function SettingsScreen({
           <div className="section-heading">
             <span>02</span>
             <div>
-              <h2 id="avatar-heading">Avatar</h2>
-              <p>Pick the face friends will see in the room.</p>
+              <h2 id="avatar-heading">{t("Avatar")}</h2>
+              <p>{t("Pick the face friends will see in the room.")}</p>
             </div>
           </div>
-          <div className="avatar-picker" role="radiogroup" aria-label="Choose an avatar">
+          <div className="avatar-picker" role="radiogroup" aria-label={t("Choose an avatar")}>
             {avatarOptions.map((avatar) => {
               const selected = draft.avatarId === avatar.id;
               return (
@@ -90,11 +91,11 @@ export function SettingsScreen({
                 >
                   <Avatar
                     avatarId={avatar.id}
-                    label={avatar.label}
+                    label={t(avatar.label)}
                     selected={selected}
                     size="large"
                   />
-                  <span>{avatar.label}</span>
+                  <span>{t(avatar.label)}</span>
                   {selected ? <Check size={16} aria-hidden="true" /> : null}
                 </button>
               );
@@ -105,35 +106,36 @@ export function SettingsScreen({
         <section className="form-section" aria-labelledby="color-heading">
           <div className="section-heading">
             <span>03</span>
-            <div><h2 id="color-heading">Color theme</h2><p>Choose a color to make Roomio yours. Applies immediately.</p></div>
+            <div><h2 id="color-heading">{t("Color theme")}</h2><p>{t("Choose a color to make Roomio yours. Applies immediately.")}</p></div>
           </div>
-          <div className="theme-color-picker" role="group" aria-label="Color theme">
-            {[{ id: 'roomio', name: 'Roomio default', seed: '#8F3B49' }, ...themeColors].map(color => (
+          <div className="theme-color-picker" role="group" aria-label={t("Color theme")}>
+            {[{ id: 'roomio', name: t("Roomio default"), seed: '#8F3B49' }, ...themeColors].map(color => (
               <button key={color.id} type="button" className="theme-color-choice"
                 aria-pressed={palette.colorId === color.id}
                 style={{ '--seed-color': color.seed } as CSSProperties}
                 onClick={() => palette.selectColor(color.id)}>
                 <span className="theme-color-swatch" aria-hidden="true" />
-                <span>{color.name}</span>
+                <span>{t(color.name)}</span>
                 {palette.colorId === color.id && <Check size={18} aria-hidden="true" />}
               </button>
             ))}
           </div>
-          {palette.saveFailed && <p role="alert">Color applied for now. Couldn’t remember it on this device. Select it again to retry.</p>}
+          {palette.saveFailed && <p role="alert">{t("Color applied for now. Couldn’t remember it on this device. Select it again to retry.")}</p>}
         </section>
 
         <section className="form-section" aria-labelledby="language-heading">
           <div className="section-heading">
             <span>04</span>
             <div>
-              <h2 id="language-heading">Language</h2>
-              <p>English is selected for this design pass.</p>
+              <h2 id="language-heading">{t("Language")}</h2>
+              <p>{t('Choose your app language. Applies after saving.')}</p>
             </div>
           </div>
           <label className="md-select">
-            <span>App language</span>
-            <select value={draft.language} disabled aria-label="App language">
-              <option>English</option>
+            <span>{t("App language")}</span>
+            <select value={draft.language} onChange={event => setDraft(current => ({ ...current, language: event.target.value as Identity['language'] }))} aria-label={t("App language")}>
+              <option value="English" lang="en">English</option>
+              <option value="فارسی" lang="fa">فارسی</option>
             </select>
           </label>
         </section>
@@ -144,7 +146,7 @@ export function SettingsScreen({
             disabled={!trimmedName || [...trimmedName].length > 48 || saving}
             onClick={() => onSave({ ...draft, name: trimmedName })}
           >
-            {saving ? 'Saving…' : 'Save profile'}
+            {saving ? t("Saving…") : t("Save profile")}
           </Button>
         </div>
       </main>

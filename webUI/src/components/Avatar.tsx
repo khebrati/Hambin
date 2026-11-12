@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { Mic, MicOff, Star } from 'lucide-react';
 import { avatarImageById } from '../data/avatarCatalog';
 import type { AvatarId, Participant } from '../types';
@@ -21,7 +22,7 @@ export function Avatar({
     <span
       className={`avatar avatar--${avatarId} avatar--${size} ${selected ? 'is-selected' : ''} ${speaking ? 'is-speaking' : ''}`}
       role="img"
-      aria-label={`${label}${speaking ? ', speaking' : ''}`}
+      aria-label={speaking ? t('{name}, speaking', { name: label }) : label}
     >
       <img
         className="avatar__image"
@@ -49,18 +50,17 @@ export function ParticipantItem({ participant, voiceConnection }: { participant:
         </span>
       </div>
       <div className="participant__copy">
-        <strong>{participant.isSelf ? 'You' : participant.name}</strong>
+        <strong>{participant.isSelf ? t("You") : participant.name}</strong>
         <span>
-          {voiceConnection === 'reconnecting' ? 'Reconnecting voice' : voiceConnection === 'unavailable' ? 'Voice unavailable' : participant.present === false ? 'Away' : participant.isOwner ? (
+          {voiceConnection === 'reconnecting' ? t("Reconnecting voice") : voiceConnection === 'unavailable' ? t("Voice unavailable") : participant.present === false ? t("Away") : participant.isOwner ? (
             <>
-              <Star size={12} aria-hidden="true" /> Host
-            </>
+              <Star size={12} aria-hidden="true" /> {t("Host")}</>
           ) : participant.isSpeaking ? (
-            'Speaking'
+            t("Speaking")
           ) : participant.isMuted ? (
-            'Muted'
+            t("Muted")
           ) : (
-            'Listening'
+            t("Listening")
           )}
         </span>
       </div>

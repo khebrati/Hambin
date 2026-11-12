@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { useEffect, useRef, useState } from 'react';
 import { Button, Dialog, StatusCard } from './Material';
 import { errorMessage, request } from '../data/api';
@@ -26,13 +27,13 @@ export function BugReportDialog({ open, roomId, onClose, onSent, enabled }: {ope
     } catch (failure) { setError(errorMessage(failure)); }
     finally { inFlight.current = false; setSending(false); }
   };
-  return <Dialog className="bug-report-dialog" open={open} title="Report a bug" onClose={() => { if (!inFlight.current) onClose(); }} actions={<>
-    <Button variant="text" disabled={sending} onClick={onClose}>Cancel</Button>
-    <Button disabled={!enabled || !description.trim() || sending || !online} onClick={() => void send()}>{sending ? 'Sending…' : 'Send'}</Button>
+  return <Dialog className="bug-report-dialog" open={open} title={t("Report a bug")} onClose={() => { if (!inFlight.current) onClose(); }} actions={<>
+    <Button variant="text" disabled={sending} onClick={onClose}>{t("Cancel")}</Button>
+    <Button disabled={!enabled || !description.trim() || sending || !online} onClick={() => void send()}>{sending ? t("Sending…") : t("Send")}</Button>
   </>}>
-    <label className="bug-report-field"><span>What went wrong?</span><textarea autoFocus rows={7} maxLength={8000} value={description} disabled={sending} onChange={event => { setDescription(event.target.value); setError(''); }} placeholder="Describe the bug and what you were doing…" /></label>
-    {!enabled && <p role="status">Reports can be sent from a connected room.</p>}
-    {!online && <p role="status">You’re offline. Your draft is kept. Reconnect to send.</p>}
-    {error && <StatusCard title="Report wasn’t sent" tone="error">{error} Your draft is kept; try Send again.</StatusCard>}
+    <label className="bug-report-field"><span>{t("What went wrong?")}</span><textarea dir="auto" autoFocus rows={7} maxLength={8000} value={description} disabled={sending} onChange={event => { setDescription(event.target.value); setError(''); }} placeholder={t("Describe the bug and what you were doing…")} /></label>
+    {!enabled && <p role="status">{t("Reports can be sent from a connected room.")}</p>}
+    {!online && <p role="status">{t("You’re offline. Your draft is kept. Reconnect to send.")}</p>}
+    {error && <StatusCard title={t("Report wasn’t sent")} tone="error">{error} {t("Your draft is kept; try Send again.")}</StatusCard>}
   </Dialog>;
 }

@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import {
   useEffect,
   useId,
@@ -102,6 +103,7 @@ export function TextField({
           placeholder={placeholder}
           disabled={disabled}
           inputMode={inputMode}
+          dir={inputMode === 'url' ? 'ltr' : 'auto'}
           autoComplete={autoComplete}
           aria-invalid={Boolean(error)}
           aria-describedby={error || supportingText ? supportingId : undefined}
@@ -150,7 +152,7 @@ export function Dialog({ open, title, children, actions, onClose, className = ''
     >
       <div className="md-dialog__header">
         <h2 id={titleId}>{title}</h2>
-        <IconButton icon={X} label="Close" onClick={onClose} />
+        <IconButton icon={X} label={t("Close")} onClick={onClose} />
       </div>
       <div className="md-dialog__content">{children}</div>
       <div className="md-dialog__actions">{actions}</div>
@@ -170,7 +172,7 @@ export function Snackbar({ message, onDismiss, action }: SnackbarProps) {
     <div className="md-snackbar" role="status" aria-live="polite">
       <span>{message}</span>
       {action && <Button variant="text" className="md-snackbar__action" onClick={action.onClick} disabled={action.disabled}>{action.label}</Button>}
-      <IconButton icon={X} label="Dismiss" onClick={onDismiss} />
+      <IconButton icon={X} label={t("Dismiss")} onClick={onDismiss} />
     </div>
   );
 }

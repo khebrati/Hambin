@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import {
   ArrowRight,
   CircleStop,
@@ -33,16 +34,16 @@ export function RoomPreviewScreen({
   const canJoin = preview.availability === 'available';
   const unavailableCopy =
     preview.availability === 'full'
-      ? 'This room has reached its participant limit.'
+      ? t("This room has reached its participant limit.")
       : preview.availability === 'ended'
-        ? 'This party has ended and is no longer accepting guests.'
+        ? t("This party has ended and is no longer accepting guests.")
         : '';
 
   return (
     <div className="screen room-preview-screen screen-enter">
       <AppBar
-        title="Room preview"
-        subtitle="Check the party before joining"
+        title={t("Room preview")}
+        subtitle={t("Check the party before joining")}
         canGoBack
         onBack={onBack}
         theme={theme}
@@ -62,30 +63,30 @@ export function RoomPreviewScreen({
 
           <div className="room-preview-heading">
             <div>
-              <span className="eyebrow">Party {preview.id}</span>
+              <span className="eyebrow">{t("Party")} <bdi dir="ltr">{preview.id}</bdi></span>
               <h2 id="room-preview-title">{preview.title}</h2>
             </div>
             <span className={`room-status-pill room-status-pill--${preview.availability}`}>
               {preview.availability === 'available'
-                ? 'Open'
+                ? t("Open")
                 : preview.availability === 'full'
-                  ? 'Full'
-                  : 'Ended'}
+                  ? t("Full")
+                  : t("Ended")}
             </span>
           </div>
 
           <dl className="room-facts">
             <div>
-              <dt><DoorOpen size={19} aria-hidden="true" /> Owner</dt>
-              <dd>{preview.ownerPresent ? preview.ownerName : `${preview.ownerName} is away`}</dd>
+              <dt><DoorOpen size={19} aria-hidden="true" /> {t("Owner")}</dt>
+              <dd>{preview.ownerPresent ? preview.ownerName : t('{name} is away', { name: preview.ownerName })}</dd>
             </div>
             <div>
-              <dt><Users size={19} aria-hidden="true" /> In the room</dt>
-              <dd>{preview.participantCount} {preview.participantCount === 1 ? 'person' : 'people'}</dd>
+              <dt><Users size={19} aria-hidden="true" /> {t("In the room")}</dt>
+              <dd>{t(preview.participantCount === 1 ? '{count} person' : '{count} people', { count: preview.participantCount })}</dd>
             </div>
             <div>
-              <dt><Clock3 size={19} aria-hidden="true" /> Stream</dt>
-              <dd>{preview.streamStatus === 'playing' ? 'Playing now' : 'Waiting to start'}</dd>
+              <dt><Clock3 size={19} aria-hidden="true" /> {t("Stream")}</dt>
+              <dd>{preview.streamStatus === 'playing' ? t("Playing now") : t("Waiting to start")}</dd>
             </div>
           </dl>
 
@@ -93,8 +94,8 @@ export function RoomPreviewScreen({
             <div className="room-notice" role="status">
               <LockKeyhole size={22} aria-hidden="true" />
               <div>
-                <strong>No owner in the room</strong>
-                <span>You can watch and use local controls, but the video stays locked until {preview.ownerName} returns.</span>
+                <strong>{t("No owner in the room")}</strong>
+                <span>{t('You can watch and use local controls, but the video stays locked until {name} returns.', { name: preview.ownerName })}</span>
               </div>
             </div>
           ) : null}
@@ -103,28 +104,26 @@ export function RoomPreviewScreen({
             <div className="room-notice room-notice--unavailable" role="status">
               <CircleStop size={22} aria-hidden="true" />
               <div>
-                <strong>Joining is unavailable</strong>
+                <strong>{t("Joining is unavailable")}</strong>
                 <span>{unavailableCopy}</span>
               </div>
             </div>
           ) : null}
 
-          {errorMessage && <StatusCard title="Unable to join the party" tone="error">{errorMessage}</StatusCard>}
+          {errorMessage && <StatusCard title={t("Unable to join the party")} tone="error">{errorMessage}</StatusCard>}
 
           <div className="room-preview-actions">
             <Button variant="text" onClick={onBack} disabled={joinStatus === 'loading'}>
-              Not now
-            </Button>
+              {t("Not now")}</Button>
             {joinStatus === 'loading' ? (
-              <LoadingIndicator label={`Joining ${preview.title}`} />
+              <LoadingIndicator label={t('Joining {name}', { name: preview.title })} />
             ) : (
               <Button
                 icon={<ArrowRight size={19} aria-hidden="true" />}
                 onClick={onJoin}
                 disabled={!canJoin}
               >
-                Join party
-              </Button>
+                {t("Join party")}</Button>
             )}
           </div>
         </section>

@@ -35,7 +35,6 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -56,6 +55,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -70,15 +70,12 @@ import roomio.sharedui.generated.resources.create_party
 import roomio.sharedui.generated.resources.edit_profile
 import roomio.sharedui.generated.resources.friends_no_owner
 import roomio.sharedui.generated.resources.friends_count
-import roomio.sharedui.generated.resources.home_supporting_copy
 import roomio.sharedui.generated.resources.join_with_code
 import roomio.sharedui.generated.resources.return_to_last_room
 import roomio.sharedui.generated.resources.last_room
-import roomio.sharedui.generated.resources.movie_night_tagline
 import roomio.sharedui.generated.resources.open_party_manager
-import roomio.sharedui.generated.resources.ready_when_everyone_is
 import roomio.sharedui.generated.resources.rejoin_as_owner
-import roomio.sharedui.generated.resources.roomio
+import roomio.sharedui.generated.resources.stream_and_chill
 import roomio.sharedui.generated.resources.settings
 import roomio.sharedui.generated.resources.theme
 import roomio.sharedui.generated.resources.watching_as
@@ -119,13 +116,6 @@ internal fun HomeScreen(
 
     Scaffold(
         modifier = modifier.windowInsetsPadding(WindowInsets.safeDrawing),
-        topBar = {
-            HomeTopBar(
-                isDark = isDark,
-                onSettings = { onAction(HomeAction.SettingsClicked) },
-                onToggleTheme = { isDark = !isDark },
-            )
-        },
     ) { contentPadding ->
         BoxWithConstraints(
             modifier = Modifier
@@ -141,61 +131,71 @@ internal fun HomeScreen(
                 RoomioDesignSystem.spacing.small
             }
 
-            if (expanded) {
-                Row(
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .widthIn(max = 1040.dp)
-                        .fillMaxWidth()
-                        .heightIn(min = maxHeight)
-                        .padding(
-                            horizontal = horizontalPadding,
-                            vertical = RoomioDesignSystem.spacing.extraLarge,
-                        ),
-                    horizontalArrangement = Arrangement.spacedBy(RoomioDesignSystem.spacing.large),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    HomeStage(
-                        identityName = state.identityName,
-                        identityAvatar = state.identityAvatar,
-                        actionsHorizontal = true,
-                        onSettings = { onAction(HomeAction.SettingsClicked) },
-                        onCreate = { onAction(HomeAction.CreatePartyClicked) },
-                        onJoin = { onAction(HomeAction.JoinPartyClicked) },
-                        modifier = Modifier.weight(1.45f),
-                    )
-                    if (state.roomPreview != null) {
-                        HomeRoomCard(
-                            room = state.roomPreview,
-                            expanded = true,
-                            onClick = { onAction(HomeAction.OpenRoomClicked) },
-                            modifier = Modifier.weight(.75f),
+            Column(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .widthIn(max = if (expanded) 1040.dp else 720.dp)
+                    .fillMaxWidth(),
+            ) {
+                HomeControls(
+                    isDark = isDark,
+                    onSettings = { onAction(HomeAction.SettingsClicked) },
+                    onToggleTheme = { isDark = !isDark },
+                    modifier = Modifier.padding(horizontal = horizontalPadding, vertical = RoomioDesignSystem.spacing.extraSmall),
+                )
+                if (expanded) {
+                    Row(
+                        modifier = Modifier
+                            .widthIn(max = 1040.dp)
+                            .fillMaxWidth()
+                            .padding(
+                                horizontal = horizontalPadding,
+                                vertical = RoomioDesignSystem.spacing.extraLarge,
+                            ),
+                        horizontalArrangement = Arrangement.spacedBy(RoomioDesignSystem.spacing.large),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        HomeStage(
+                            identityName = state.identityName,
+                            identityAvatar = state.identityAvatar,
+                            actionsHorizontal = true,
+                            onSettings = { onAction(HomeAction.SettingsClicked) },
+                            onCreate = { onAction(HomeAction.CreatePartyClicked) },
+                            onJoin = { onAction(HomeAction.JoinPartyClicked) },
+                            modifier = Modifier.weight(1.45f),
                         )
+                        if (state.roomPreview != null) {
+                            HomeRoomCard(
+                                room = state.roomPreview,
+                                expanded = true,
+                                onClick = { onAction(HomeAction.OpenRoomClicked) },
+                                modifier = Modifier.weight(.75f),
+                            )
+                        }
                     }
-                }
-            } else {
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .widthIn(max = 720.dp)
-                        .fillMaxWidth()
-                        .padding(horizontal = horizontalPadding, vertical = RoomioDesignSystem.spacing.medium),
-                    verticalArrangement = Arrangement.spacedBy(RoomioDesignSystem.spacing.large),
-                ) {
-                    HomeStage(
-                        identityName = state.identityName,
-                        identityAvatar = state.identityAvatar,
-                        actionsHorizontal = mediumOrWider,
-                        onSettings = { onAction(HomeAction.SettingsClicked) },
-                        onCreate = { onAction(HomeAction.CreatePartyClicked) },
-                        onJoin = { onAction(HomeAction.JoinPartyClicked) },
-                    )
-                    if (state.roomPreview != null) {
-                        HomeRoomCard(
-                            room = state.roomPreview,
-                            expanded = false,
-                            onClick = { onAction(HomeAction.OpenRoomClicked) },
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .widthIn(max = 720.dp)
+                            .fillMaxWidth()
+                            .padding(horizontal = horizontalPadding, vertical = RoomioDesignSystem.spacing.medium),
+                        verticalArrangement = Arrangement.spacedBy(RoomioDesignSystem.spacing.large),
+                    ) {
+                        HomeStage(
+                            identityName = state.identityName,
+                            identityAvatar = state.identityAvatar,
+                            actionsHorizontal = mediumOrWider,
+                            onSettings = { onAction(HomeAction.SettingsClicked) },
+                            onCreate = { onAction(HomeAction.CreatePartyClicked) },
+                            onJoin = { onAction(HomeAction.JoinPartyClicked) },
                         )
+                        if (state.roomPreview != null) {
+                            HomeRoomCard(
+                                room = state.roomPreview,
+                                expanded = false,
+                                onClick = { onAction(HomeAction.OpenRoomClicked) },
+                            )
+                        }
                     }
                 }
             }
@@ -204,81 +204,26 @@ internal fun HomeScreen(
 }
 
 @Composable
-private fun HomeTopBar(
+private fun HomeControls(
     isDark: Boolean,
     onSettings: () -> Unit,
     onToggleTheme: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    Surface(color = MaterialTheme.colorScheme.surface) {
-        Column {
-            Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center,
-            ) {
-                Row(
-                    modifier = Modifier
-                        .widthIn(max = 1120.dp)
-                        .fillMaxWidth()
-                        .heightIn(min = 72.dp)
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(RoomioDesignSystem.spacing.extraSmall),
-                ) {
-                    RoomioBrandMark()
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            text = stringResource(Res.string.roomio),
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        Text(
-                            text = stringResource(Res.string.movie_night_tagline),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    HomeIconButton(
-                        icon = Icons.Filled.Settings,
-                        label = stringResource(Res.string.settings),
-                        onClick = onSettings,
-                    )
-                    HomeIconButton(
-                        icon = if (isDark) Icons.Filled.LightMode else Icons.Filled.DarkMode,
-                        label = stringResource(Res.string.theme),
-                        onClick = onToggleTheme,
-                    )
-                }
-            }
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-        }
-    }
-}
-
-@Composable
-private fun RoomioBrandMark() {
-    val primary = MaterialTheme.colorScheme.primary
-    val secondary = MaterialTheme.colorScheme.secondary
-    val container = MaterialTheme.colorScheme.primaryContainer
-    Canvas(
-        modifier = Modifier
-            .size(48.dp)
-            .clip(MaterialTheme.shapes.large)
-            .background(container),
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(RoomioDesignSystem.spacing.extraSmall, Alignment.End),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        drawCircle(
-            color = primary,
-            radius = size.minDimension * .23f,
-            center = Offset(size.width * .42f, size.height * .40f),
+        HomeIconButton(
+            icon = if (isDark) Icons.Filled.LightMode else Icons.Filled.DarkMode,
+            label = stringResource(Res.string.theme),
+            onClick = onToggleTheme,
         )
-        drawCircle(
-            color = container,
-            radius = size.minDimension * .20f,
-            center = Offset(size.width * .66f, size.height * .65f),
-        )
-        drawCircle(
-            color = secondary,
-            radius = size.minDimension * .16f,
-            center = Offset(size.width * .66f, size.height * .65f),
+        HomeIconButton(
+            icon = Icons.Filled.Settings,
+            label = stringResource(Res.string.settings),
+            onClick = onSettings,
         )
     }
 }
@@ -311,19 +256,12 @@ private fun HomeStage(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(RoomioDesignSystem.spacing.large),
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(
-                text = stringResource(Res.string.ready_when_everyone_is).uppercase(),
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            Text(
-                text = stringResource(Res.string.home_supporting_copy),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+        Text(
+            text = stringResource(Res.string.stream_and_chill),
+            style = MaterialTheme.typography.displaySmall,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.semantics { heading() },
+        )
         IdentityPill(
             identityName = identityName,
             identityAvatar = identityAvatar,

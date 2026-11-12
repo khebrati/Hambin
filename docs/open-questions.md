@@ -62,8 +62,7 @@ Resolved questions are preserved with their answers for traceability.
    - Design decision affected: Do not design visible ahead/behind indicators, participant timelines, or drift badges.
 
 8. [Resolved] Does language selection need RTL examples now?
-   - Answer: No. Proceed only with English in designs.
-   - Design decision affected: Current design examples can be English-only. This conflicts with repository guidance that asks for RTL support, so RTL status remains a project-level uncertainty.
+   - Answer: Superseded by DD-049 (2026-11-12): the stakeholder requested Persian in browser and Android. Both now support English and Persian with RTL presentation.
 
 9. [Resolved] Should the product include an invite/share flow?
    - Answer: Yes. Current party members can use a prominent action to copy the party code or a mock invite link.
@@ -112,7 +111,7 @@ Resolved questions are preserved with their answers for traceability.
 ## Remaining Uncertainty Summary
 
 - Production runtime is still unspecified, even though the design target is cross-platform mobile.
-- RTL is currently excluded from designs, but repository guidance still asks for RTL support.
+- [Resolved, DD-049] Persian and RTL are included in browser and Android.
 - [Resolved, DD-031] Voice is explicit muted opt-in with independent per-peer recovery; physical audio and deployment/load acceptance remain open.
 - Initial owner assignment is still inferred from party creation, but the owner-absent and returning-owner lifecycle is defined.
 - Desktop and iOS playback engines are not yet implemented; the Android player (DD-013) is the approved reference seam for extending them.

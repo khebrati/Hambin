@@ -21,6 +21,7 @@ class PreferencesProfileRepository(
     override fun saveProfile(profile: UserProfile): Result<Unit> = runCatching {
         settings.putString(NAME_KEY, profile.name)
         settings.putString(AVATAR_KEY, profile.avatar.name)
+        settings.putString("profile.language", profile.language.tag)
         mutableProfile.value = profile
     }
 
@@ -35,6 +36,7 @@ class PreferencesProfileRepository(
         return UserProfile(
             name = storedName,
             avatar = avatar,
+            language = top.roomio.domain.profile.AppLanguage.fromTag(settings.getString("profile.language", "en")),
         )
     }
 

@@ -436,6 +436,7 @@ private fun JoinPartyPanel(
             )
             OutlinedTextField(
                 value = code,
+            textStyle = MaterialTheme.typography.bodyLarge.copy(textDirection = androidx.compose.ui.text.style.TextDirection.Ltr),
                 onValueChange = onCodeChange,
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !loading,

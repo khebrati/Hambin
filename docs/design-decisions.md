@@ -411,3 +411,32 @@ deployment evidence remains historical.
 - **Recovery:** Preserve the saved theme if launcher switching fails and show a Retry/dismiss snackbar. A new theme cancels an obsolete pending retry; reopening the app reconciles the saved color again. Failed theme storage leaves the preceding theme/icon selected. Unsupported platforms skip synchronization.
 - **Limits:** Launcher refresh timing, OEM behavior and themed-icon overrides retain the limits documented in [Android launcher icons](android-launcher-icons.md).
 - **Validation:** Android debug assembly and app JVM graph compilation passed. Nine focused tests passed, including Compose checks for restored/live color changes, dark-mode recomposition without switching, and snackbar Retry, plus mapping/failure/cancellation cases. Physical Android launcher refresh remains unverified; no device is connected.
+
+
+## DD-047: Simplified Browser Home
+
+- **Date:** 2026-11-12
+- **Scope:** Browser client only, as requested by the stakeholder.
+- **Decision:** Remove decorative app icons throughout the web UI, including design previews. Home has no app bar, app name, or tagline; place the theme and Settings icon buttons in the page content above the main headline. Remove “Ready when everyone is” and “Your next watch party is one room away.” Use “Stream and chill” as the home headline. Retain the profile, party actions, download link, and last-room shortcut.
+- **States:** Existing theme switching, keyboard focus, pressed states, and settings navigation remain available. The controls require no network or loading/empty state. Native presentation remains governed by its existing decisions.
+
+
+## DD-048: Simplified Native Home
+
+- **Date:** 2026-11-12
+- **Decision:** Extend DD-047's simplified home to Android through the shared native Compose screen, also used by iOS and desktop. Remove the home app bar, decorative brand mark, name, tagline, eyebrow and supporting copy. Use “Stream and chill” as the headline. Place theme and Settings controls in the scrollable content above it, aligned to the logical end.
+- **Layout and states:** Retain safe drawing insets, 48dp icon targets, semantic themes, compact/expanded layouts and scrolling for smaller windows or large text. Retain the profile, Create/Join actions and Last room shortcut, including their existing offline behavior. The local header has no loading, empty or error state.
+- **Scope:** This removes the native home’s decorative app branding; no other native in-app brand mark was found. Android launcher icons and saved-theme icon switching remain unchanged.
+
+- **Validation:** Android debug assembly passed. Existing Compose suite passed 10 tests with one existing skip. Temporary Compose renderer checks passed and screenshots were reviewed at 390×844 light, 1280×800 dark, and 360×800 dark/RTL/1.8× text; theme toggling worked and Create/Join remained visible. No Android device was connected; physical-device and iOS validation were not performed.
+
+
+## DD-049: Persian Language in Browser and Android
+
+- **Date:** 2026-11-12
+- **Decision:** Enable English and فارسی in Settings for both clients. Save applies the choice with the profile; Back discards an unsaved language choice. Existing and unsupported preferences use English. This supersedes DD-007's disabled language field and the earlier English-only design scope.
+- **Persistence:** Browser maps the profile choice to the existing backend `en`/`fa` language field and caches the saved language for startup and recovery messages. Native stores the language in its local profile, observes it above navigation, and sends its tag when creating/joining/restoring the guest session. No service contract change is required.
+- **Presentation:** Translate application copy, recovery messages, player/voice actions, labels, and named color/avatar choices. Persian uses RTL layout with mirrored navigation arrows. Keep URLs, room codes, playback timelines, and media content in their appropriate original direction. Do not translate guest names, room titles, track metadata or subtitle cues. Android foreground-service notification strings follow the selected process language.
+- **States:** The bundled language choices are available offline with radio/select selection, keyboard/focus and pressed feedback. Native local Save failures retain the preceding applied language and show the existing retry error. Browser profile Save uses its existing loading, failure/draft retention and retry behavior; language applies only after server acceptance. Loading/empty states do not apply to the fixed language catalog.
+- **Platform boundary:** Use Compose resource qualifiers with a small platform locale environment; shared native resources also become available to desktop/iOS. Android and JVM compilation/tests are checked locally; iOS runtime remains unverified on Linux.
+- **Validation:** Browser production build and all 87 unit tests passed. Four Chrome Persian checks passed: saved language/reload/English recovery, draft discard and failed Save, compact dark/large-text and expanded light layouts across Home, Settings, party manager, preview and room. Screenshots reviewed. Android debug assembly and app JVM graph compilation passed; shared Compose language/resource/RTL switching test and all five profile persistence tests passed. All 255 native resource keys and format arguments match the Persian catalog. Android locale setup preserves the Activity context for fullscreen and sharing. Physical Android and iOS runtime checks were not performed. Changes remain local; no release or deployment was requested.

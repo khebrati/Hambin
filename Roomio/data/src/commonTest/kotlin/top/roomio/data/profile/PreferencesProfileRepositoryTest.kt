@@ -50,4 +50,14 @@ class PreferencesProfileRepositoryTest {
         assertEquals("Mira", restoredProfile.name)
         assertEquals(ProfileAvatarId.MINT, restoredProfile.avatar)
     }
+    @Test
+    fun persianLanguagePersistsAndUnknownTagsFallBackToEnglish() {
+        val settings = MapSettings()
+        val repository = PreferencesProfileRepository(settings)
+        val profile = repository.currentProfile().copy(language = top.roomio.domain.profile.AppLanguage.PERSIAN)
+        repository.saveProfile(profile).getOrThrow()
+        assertEquals(profile, PreferencesProfileRepository(settings).currentProfile())
+        settings.putString("profile.language", "unknown")
+        assertEquals(top.roomio.domain.profile.AppLanguage.ENGLISH, PreferencesProfileRepository(settings).currentProfile().language)
+    }
 }

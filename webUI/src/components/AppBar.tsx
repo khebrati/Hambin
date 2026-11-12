@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { ArrowLeft, Moon, Sun } from 'lucide-react';
 import { IconButton } from './Material';
 
@@ -22,13 +23,8 @@ export function AppBar({
 }: AppBarProps) {
   return (
     <header className="app-bar">
-      {canGoBack ? (
-        <IconButton icon={ArrowLeft} label="Back" onClick={onBack} />
-      ) : (
-        <span className="brand-mark" aria-hidden="true">
-          <span />
-          <span />
-        </span>
+      {canGoBack && (
+        <IconButton className="directional-icon" icon={ArrowLeft} label={t("Back")} onClick={onBack} />
       )}
       <div className="app-bar__title">
         <h1>{title}</h1>
@@ -38,7 +34,7 @@ export function AppBar({
         {actions}
         <IconButton
           icon={theme === 'dark' ? Sun : Moon}
-          label={theme === 'dark' ? 'Use light theme' : 'Use dark theme'}
+          label={theme === 'dark' ? t("Use light theme") : t("Use dark theme")}
           className="theme-toggle"
           onClick={onToggleTheme}
         />

@@ -107,7 +107,7 @@ internal class PartyManagerViewModel(
                 // Sync the backend identity with the saved profile first so the
                 // owner membership uses the current name and avatar.
                 profileRepository.currentProfile().let { profile ->
-                    sessionRepository.ensureSession(name = profile.name, avatar = profile.avatar.name)
+                    sessionRepository.ensureSession(name = profile.name, avatar = profile.avatar.name, language = profile.language.tag)
                 }
                 val room = roomRepository.createRoom(title = "")
                 mutableState.update { it.copy(isLoading = false) }

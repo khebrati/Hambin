@@ -1,3 +1,4 @@
+import { t, setLanguage, useLanguage } from './i18n';
 import { useThemePalette } from './theme';
 import { useEffect, useMemo, useState } from 'react';
 import { Snackbar } from './components/Material';
@@ -37,8 +38,10 @@ export function PreviewApp() {
   const preview = previewStates[params.get('preview') || ''];
   const inviteCode = params.get('invite');
   const invitedRoom = inviteCode ? getMockPartyPreview(inviteCode) : null;
+  const language = useLanguage();
   const initialIdentity: Identity = {
     ...defaultIdentity,
+    language: language === 'fa' ? 'فارسی' : 'English',
     ...preview?.identity,
   };
 
@@ -138,7 +141,7 @@ export function PreviewApp() {
       const normalizedUrl = await fakePartyRepository.startStream(url);
       setParty({ ...party, streamUrl: normalizedUrl });
       setStreamStatus('playing');
-      setSnackbar('Stream started for the room');
+      setSnackbar(t("Stream started for the room"));
     } catch {
       setStreamStatus('error');
     }
@@ -150,7 +153,7 @@ export function PreviewApp() {
     setParty((current) => (current ? { ...current, streamUrl: '' } : current));
     setStreamStatus('empty');
     setAborting(false);
-    setSnackbar('Stream ended for everyone');
+    setSnackbar(t("Stream ended for everyone"));
   };
 
   const leaveParty = () => {
@@ -167,8 +170,8 @@ export function PreviewApp() {
     setScreen('home');
     setSnackbar(
       party?.role === 'owner'
-        ? 'Your room stays open until you return'
-        : 'You left the party',
+        ? t("Your room stays open until you return")
+        : t("You left the party"),
     );
   };
 
@@ -193,7 +196,7 @@ export function PreviewApp() {
     setStreamStatus(returnableParty.streamUrl ? 'playing' : 'empty');
     setReturnableParty(null);
     setScreen('party');
-    setSnackbar('You are back as the room owner');
+    setSnackbar(t("You are back as the room owner"));
   };
 
   return (
@@ -219,9 +222,10 @@ export function PreviewApp() {
           onToggleTheme={toggleTheme}
           onBack={() => setScreen('home')}
           onSave={(nextIdentity) => {
+            setLanguage(nextIdentity.language);
             setIdentity(nextIdentity);
             setScreen('home');
-            setSnackbar('Profile updated');
+            setSnackbar(t("Profile updated"));
           }}
         />
       ) : null}

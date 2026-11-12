@@ -48,7 +48,7 @@ internal class HomeViewModel(
                 fun top.roomio.domain.party.Room.toCard() = HomeRoomPreview(title, 0, true, code)
                 lastRoom.value = roomRepository.lastRoom()?.toCard()
                 val profile = profileRepository.currentProfile()
-                sessionRepository.ensureSession(profile.name, profile.avatar.name)
+                sessionRepository.ensureSession(profile.name, profile.avatar.name, profile.language.tag)
                 val saved = roomRepository.lastRoom() ?: return@launch
                 lastRoom.value = saved.toCard()
                 val preview = roomRepository.preview(saved.code)

@@ -80,7 +80,7 @@ internal class RoomPreviewViewModel(
             try {
                 // An invite can be the first screen on a fresh installation.
                 val profile = profileRepository.currentProfile()
-                sessionRepository.ensureSession(name = profile.name, avatar = profile.avatar.name)
+                sessionRepository.ensureSession(name = profile.name, avatar = profile.avatar.name, language = profile.language.tag)
                 val preview = roomRepository.preview(partyCode)
                 mutableState.update { it.copy(model = preview.toPresentation(), isLoading = false) }
             } catch (error: PartyException) {
@@ -99,7 +99,7 @@ internal class RoomPreviewViewModel(
                 // Sync the backend identity with the saved profile first so the
                 // new membership uses the current name and avatar.
                 profileRepository.currentProfile().let { profile ->
-                    sessionRepository.ensureSession(name = profile.name, avatar = profile.avatar.name)
+                    sessionRepository.ensureSession(name = profile.name, avatar = profile.avatar.name, language = profile.language.tag)
                 }
                 val room = roomRepository.join(partyCode)
                 mutableState.update { it.copy(isLoading = false) }

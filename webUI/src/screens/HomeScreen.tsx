@@ -1,6 +1,6 @@
-import { ArrowRight, Plus, Settings, Ticket } from 'lucide-react';
+import { t } from '../i18n';
+import { ArrowRight, Moon, Plus, Settings, Sun, Ticket } from 'lucide-react';
 import type { Identity, Party } from '../types';
-import { AppBar } from '../components/AppBar';
 import { Avatar } from '../components/Avatar';
 import { Button, IconButton } from '../components/Material';
 import { AndroidDownloadRow } from '../components/AndroidDownloadRow';
@@ -32,33 +32,28 @@ export function HomeScreen({
 }: HomeScreenProps) {
   return (
     <div className="screen home-screen screen-enter">
-      <AppBar
-        title="Roomio"
-        subtitle="Movie night, in your room"
-        theme={theme}
-        onToggleTheme={onToggleTheme}
-        actions={
-          <IconButton icon={Settings} label="Settings" onClick={onSettings} />
-        }
-      />
-
       <main className="home-main">
+        <div className="home-tools" role="group" aria-label={t("Page settings")}>
+          <IconButton
+            icon={theme === 'dark' ? Sun : Moon}
+            label={theme === 'dark' ? t("Use light theme") : t("Use dark theme")}
+            className="theme-toggle"
+            onClick={onToggleTheme}
+          />
+          <IconButton icon={Settings} label={t("Settings")} onClick={onSettings} />
+        </div>
         <section className="home-stage" aria-labelledby="home-title">
           <div className="home-stage__copy">
-            <p className="eyebrow">Ready when everyone is</p>
-            <h2 id="home-title">Bring the film. Keep your own pace.</h2>
-            <p className="home-stage__body">
-              Your next watch party is one room away.
-            </p>
+            <h1 id="home-title">{t("Stream and chill")}</h1>
           </div>
 
           <div className="identity-pill">
             <Avatar avatarId={identity.avatarId} label={identity.name} size="large" />
             <div>
-              <span>Watching as</span>
-              <strong>{identity.name || 'Choose a name'}</strong>
+              <span>{t("Watching as")}</span>
+              <strong>{identity.name || t("Choose a name")}</strong>
             </div>
-            <IconButton icon={Settings} label="Edit profile" onClick={onSettings} />
+            <IconButton icon={Settings} label={t("Edit profile")} onClick={onSettings} />
           </div>
 
           <div className="home-actions">
@@ -69,8 +64,7 @@ export function HomeScreen({
               disabled={busy}
               fullWidth
             >
-              Create a party
-            </Button>
+              {t("Create a party")}</Button>
             <Button
               variant="tonal"
               icon={<Ticket size={20} aria-hidden="true" />}
@@ -78,15 +72,14 @@ export function HomeScreen({
               disabled={busy}
               fullWidth
             >
-              Join with code
-            </Button>
+              {t("Join with code")}</Button>
           </div>
           <AndroidDownloadRow />
         </section>
 
         {(!live || returnableParty) && <section
           className={`home-room-preview ${returnableParty ? 'home-room-preview--returnable' : ''}`}
-          aria-label="Last room"
+          aria-label={t("Last room")}
         >
           <div className="home-room-preview__scene" aria-hidden="true">
             <span className="mini-scene__moon" />
@@ -95,18 +88,17 @@ export function HomeScreen({
           </div>
           <div className="home-room-preview__copy">
             <span className="eyebrow">
-              Last room
-            </span>
+              {t("Last room")}</span>
             <strong>{returnableParty?.title || "Mira's late show"}</strong>
             <span role={busy && live ? 'status' : undefined}>
               {returnableParty
-                ? live ? busy ? 'Checking room…' : returnableParty.code : `${returnableParty.participants.length} friends`
-                : '4 friends'}
+                ? live ? busy ? t("Checking room…") : returnableParty.code : t('{count} friends', { count: returnableParty.participants.length })
+                : t('{count} friends', { count: 4 })}
             </span>
           </div>
           <IconButton
-            icon={ArrowRight}
-            label={returnableParty ? 'Return to last room' : 'Open party manager'}
+            className="directional-icon" icon={ArrowRight}
+            label={returnableParty ? t("Return to last room") : t("Open party manager")}
             variant={returnableParty ? 'tonal' : 'standard'}
             onClick={returnableParty ? onReturnToParty : onJoin}
             disabled={busy}

@@ -27,7 +27,7 @@ export type AvatarId =
 
 export interface Identity {
   name: string;
-  language: 'English';
+  language: 'English' | 'فارسی';
   avatarId: AvatarId;
 }
 

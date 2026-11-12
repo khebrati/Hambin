@@ -12,8 +12,8 @@ export interface RoomEvent { topic: string; eventId: string; sequence: number; p
 export interface SyncResult { requestId: string; status: 'APPLIED' | 'ALREADY_LEADING' | 'UNAVAILABLE'; targetPositionMs: number }
 
 export const avatarId = (value: string): AvatarId => avatarOptions.some(a => a.id === value) ? value as AvatarId : 'comet';
-export const identityModel = (value: IdentityDto): Identity => ({ name: value.name, avatarId: avatarId(value.avatar), language: 'English' });
-export const profileBody = (value: Identity) => ({ name: value.name.trim(), avatar: value.avatarId, language: 'en' });
+export const identityModel = (value: IdentityDto): Identity => ({ name: value.name, avatarId: avatarId(value.avatar), language: value.language === 'fa' ? 'فارسی' : 'English' });
+export const profileBody = (value: Identity) => ({ name: value.name.trim(), avatar: value.avatarId, language: value.language === 'فارسی' ? 'fa' : 'en' });
 export const previewModel = (value: PreviewDto): PartyPreview => ({ id: value.code, title: value.title, ownerName: value.ownerName, ownerPresent: value.ownerPresent, participantCount: value.participantCount, availability: value.availability === 'OPEN' ? 'available' : value.availability === 'FULL' ? 'full' : 'ended', streamStatus: value.streamState === 'ACTIVE' ? 'playing' : 'waiting' });
 export function partyModel(value: Snapshot, identityId: string): Party {
   const owner = value.members.find(m => m.isOwner);
