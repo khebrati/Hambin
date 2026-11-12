@@ -87,3 +87,8 @@ Confirmed product voice and information (2026-11-12):
 1. Use short, friendly, casual English and Persian throughout all clients, including future UI copy.
 2. Omit overly informative or redundant helper sentences, captions and cards when the interface already communicates the meaning. Do not reintroduce explanations the stakeholder removed.
 3. Retain concise action consequences and recovery guidance when needed to make a meaningful decision. Prefer clear action labels and brief, recipient-specific feedback over explanatory paragraphs. See `docs/design-principles.md` and DD-067.
+
+Confirmed party/chat refinements (2026-11-12):
+1. Automatic Persian party titles use «دورهمی {name}». Preserve explicit custom titles.
+2. Empty chat uses a chat icon and a short heading, without the extra conversation-starting helper sentence in either language.
+3. Keep the party invitation/share action in the top bar and omit its duplicate below voice chat.

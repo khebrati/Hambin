@@ -256,7 +256,6 @@
 
     <string name="chat_title">Party chat</string>
     <string name="chat_empty_title">First word is yours</string>
-    <string name="chat_empty_copy">Say hi, share a thought, or start with 🍿.</string>
     <string name="chat_loading">Loading conversation…</string>
     <string name="chat_message_label">Message the party</string>
     <string name="chat_placeholder">Message the party…</string>

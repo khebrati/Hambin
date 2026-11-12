@@ -110,9 +110,8 @@ internal fun RoomChatPanel(state: RoomChatState, onAction: (RoomAction) -> Unit,
                             }
                         } else if (state.messages.isEmpty() && state.pending.isEmpty()) item(key = "empty") {
                             Column(Modifier.fillMaxWidth().padding(vertical = 40.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                Surface(shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.tertiaryContainer) { Icon(Icons.Default.AutoAwesome, null, Modifier.padding(20.dp).size(30.dp)) }
+                                Surface(shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.tertiaryContainer) { Icon(Icons.Default.ChatBubbleOutline, null, Modifier.padding(20.dp).size(30.dp)) }
                                 Text(stringResource(Res.string.chat_empty_title), style = MaterialTheme.typography.titleMedium)
-                                Text(stringResource(Res.string.chat_empty_copy), style = MaterialTheme.typography.bodyMedium)
                             }
                         }
                         itemsIndexed(state.messages, key = { _, message -> "message-${message.id}" }) { index, message ->

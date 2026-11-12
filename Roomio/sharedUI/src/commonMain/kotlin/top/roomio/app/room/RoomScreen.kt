@@ -494,7 +494,6 @@ internal fun RoomScreen(
                     ownerPresent = state.model.ownerPresent,
                     onJoinVoice = requestMicThenJoin,
                     onToggleMic = { onAction(RoomAction.ToggleMicClicked) },
-                    onInvite = { onAction(RoomAction.InviteClicked) },
                     onShowLink = { onAction(RoomAction.LinkClicked) },
                     onEndStream = { onAction(RoomAction.EndStreamClicked) },
                 )
@@ -1732,7 +1731,6 @@ private fun RoomSupportPanel(
     ownerPresent: Boolean,
     onJoinVoice: () -> Unit,
     onToggleMic: () -> Unit,
-    onInvite: () -> Unit,
     onShowLink: () -> Unit,
     onEndStream: () -> Unit,
 ) {
@@ -1756,11 +1754,6 @@ private fun RoomSupportPanel(
             if (voiceFailureCode == "VOICE_SERVICE_UNAVAILABLE" || voiceFailureCode == "VOICE_AUDIO_DEVICE_FAILED") {
                 Text(stringResource(if (voiceFailureCode == "VOICE_SERVICE_UNAVAILABLE") Res.string.voice_service_failed else Res.string.voice_audio_device_failed),
                     color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
-            }
-            OutlinedButton(onClick = onInvite, modifier = Modifier.fillMaxWidth()) {
-                Icon(Icons.Filled.PersonAdd, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(Res.string.invite_friends))
             }
             if (streamActive) {
                 HorizontalDivider(color = DividerDefaults.color)

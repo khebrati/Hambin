@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ArrowDown, Check, ChevronDown, ChevronUp, Columns2, MessageCircle, PanelBottom, PanelsTopLeft, Send, Sparkles, WifiOff } from 'lucide-react';
+import { ArrowDown, Check, ChevronDown, ChevronUp, Columns2, MessageCircle, PanelBottom, PanelsTopLeft, Send, WifiOff } from 'lucide-react';
 import { Avatar } from '../components/Avatar';
 import { Button, IconButton, LoadingIndicator, Snackbar } from '../components/Material';
 import { PartyScreen } from '../screens/PartyScreen';
@@ -127,7 +127,7 @@ export default function ChatDesigns() {
         <div ref={feed} className="chat-feed" role="log" aria-label={copy('Chat messages', 'پیام‌های گپ')} aria-live="off" tabIndex={0}
           onScroll={event => { const el = event.currentTarget; setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 40); }}>
           {scene === 'loading' ? <div className="chat-empty"><LoadingIndicator label={copy('Loading conversation…', 'در حال بارگذاری گپ…')} /><Button variant="text" onClick={() => changeScene('populated')}>{copy('Finish loading', 'نمایش گپ')}</Button></div>
-            : messages.length === 0 ? <div className="chat-empty"><span className="chat-empty__icon"><Sparkles size={30} aria-hidden="true" /></span><h3>{copy('First word is yours', 'اولین پیام با تو')}</h3><p>{copy('Say hi, share a thought, or start with 🍿.', 'سلام کن، نظرت را بگو یا با 🍿 شروع کن.')}</p></div>
+            : messages.length === 0 ? <div className="chat-empty"><span className="chat-empty__icon"><MessageCircle size={30} aria-hidden="true" /></span><h3>{copy('First word is yours', 'اولین پیام با تو')}</h3></div>
             : <><div className="chat-start"><span />{copy('Tonight’s conversation', 'گپ امشب')}<span /></div>
               {messages.map(message => <article key={message.id} className={`chat-message ${message.self ? 'chat-message--self' : ''}`}>
                 {!message.self && <Avatar avatarId={message.avatar} label={message.name} size="small" />}

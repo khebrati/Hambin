@@ -256,7 +256,6 @@
 
     <string name="chat_title">گپ دورهمی</string>
     <string name="chat_empty_title">اولین پیام با تو</string>
-    <string name="chat_empty_copy">سلام کن، نظرت را بگو یا با 🍿 شروع کن.</string>
     <string name="chat_loading">در حال بارگذاری گپ…</string>
     <string name="chat_message_label">پیام به دورهمی</string>
     <string name="chat_placeholder">پیامی برای دورهمی…</string>

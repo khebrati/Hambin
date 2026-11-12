@@ -613,3 +613,10 @@ deployment evidence remains historical.
 - **Existing users:** Preserve stored avatar/color choices, including Ice Queen and the original brand palette. Existing sessions without an explicit color retain the original palette. Recover existing guest sessions before choosing any registration avatar; never replace an established identity to randomize appearance.
 - **Boundary:** Clients send the chosen avatar through the existing guest-session/profile fields; the backend retains its authoritative localized-name derivation. Theme color stays a device preference. No HTTP/realtime schema change, new identity reset or randomization of historical chat is required.
 - **Names:** Rename the stable cloud, ember and orbit characters to TV Boy, Alien Employee and Wolf Barista. Matching Persian names are پسر تلویزیونی، کارمند فضایی، گرگ باریستا. Update current profile/membership display names while retaining avatar IDs, identity/room ownership and historical message snapshots.
+
+## DD-068: Persian Party Titles and Concise Chat Entry
+
+- **Date:** 2026-11-12
+- **Decision:** Automatic Persian party titles use «دورهمی {name}», for example «دورهمی فرانکی». English automatic titles keep “{name}'s party”; explicit user-entered titles retain their content.
+- **Chat empty state:** Use a chat icon and the existing empty-state heading. Remove “Say hi, share a thought, or start with 🍿.” and its Persian counterpart from browser, previews and shared native presentation.
+- **Invitation:** Keep the invitation/share icon in the party top bar. Remove the duplicate full-width invitation button below voice chat across clients.

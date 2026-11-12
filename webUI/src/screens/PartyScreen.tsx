@@ -356,16 +356,7 @@ export function PartyScreen({
           </section>
           {live && retryVoiceAvailable && <Button variant="outlined" fullWidth onClick={live.onRetryVoice}>{t("Retry voice connections")}</Button>}
           {live?.voice.error?.includes('playback was blocked') && <Button variant="outlined" fullWidth onClick={live.onResumeVoice}>{t("Resume voice audio")}</Button>}
-          <Button
-            variant="outlined"
-            icon={<UserPlus size={18} aria-hidden="true" />}
-            onClick={() => {
-              setInviteCopyState('idle');
-              setInviteOpen(true);
-            }}
-            fullWidth
-          >
-            {t("Invite friends")}</Button>
+
 
           {hasPlayer ? (
             <section className="source-row" aria-label={t("Current video source")}>

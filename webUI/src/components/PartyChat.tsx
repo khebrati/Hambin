@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ArrowDown, Check, ChevronDown, ChevronUp, MessageCircle, Send, Sparkles, WifiOff } from 'lucide-react';
+import { ArrowDown, Check, ChevronDown, ChevronUp, MessageCircle, Send, WifiOff } from 'lucide-react';
 import { t, useLanguage } from '../i18n';
 import { errorMessage } from '../data/api';
 import { avatarId, type ChatMessage, type ChatPage } from '../data/contracts';
@@ -94,7 +94,7 @@ export function PartyChat({ chat, connected }: { chat: ChatControls; connected: 
       <div className="chat-feed-wrap"><div ref={feed} className="chat-feed" role="log" aria-label={t('Chat messages')} aria-live="off" tabIndex={0} onScroll={event => { const el = event.currentTarget; setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 40); }}>
         {!chat.history ? <div className="chat-empty"><LoadingIndicator label={t('Loading conversation…')} /><Button variant="text" disabled={!connected || loadingMore} onClick={() => void history(true)}>{t('Retry')}</Button></div> : <>
           {chat.history.hasMore && <div className="chat-history"><Button variant="text" disabled={!connected || loadingMore} onClick={() => void history(remote.length >= 500)}>{loadingMore ? t('Loading…') : remote.length >= 500 ? t('Return to latest messages') : t('Load earlier messages')}</Button></div>}
-          {confirmed.length === 0 && unsent.length === 0 && <div className="chat-empty"><span className="chat-empty__icon"><Sparkles aria-hidden="true" size={30} /></span><h3>{t('First word is yours')}</h3><p>{t('Say hi, share a thought, or start with 🍿.')}</p></div>}
+          {confirmed.length === 0 && unsent.length === 0 && <div className="chat-empty"><span className="chat-empty__icon"><MessageCircle aria-hidden="true" size={30} /></span><h3>{t('First word is yours')}</h3></div>}
           {confirmed.map((message, index) => {
             const self = message.identityId === chat.identityId;
             const first = confirmed[index - 1]?.identityId !== message.identityId;
