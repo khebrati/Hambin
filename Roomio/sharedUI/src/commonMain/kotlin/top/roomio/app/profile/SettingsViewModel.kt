@@ -1,5 +1,7 @@
 package top.roomio.app.profile
 
+import top.roomio.app.diagnostics.logHandledException
+
 import top.roomio.domain.profile.ThemeColor
 import top.roomio.domain.profile.ThemePreferencesRepository
 import androidx.lifecycle.ViewModel
@@ -64,7 +66,7 @@ internal class SettingsViewModel(
             is SettingsAction.ColorSelected -> {
                 themePreferencesRepository.selectColor(action.color).fold(
                     onSuccess = { mutableState.update { it.copy(themeColor = action.color, colorSaveFailed = false) } },
-                    onFailure = { mutableState.update { it.copy(colorSaveFailed = true) } },
+                    onFailure = { logHandledException("Settings.selectColor", it); mutableState.update { it.copy(colorSaveFailed = true) } },
                 )
             }
             is SettingsAction.LanguageSelected -> mutableState.update { it.copy(draftLanguage = action.language, saveFailed = false) }
@@ -88,6 +90,7 @@ internal class SettingsViewModel(
                 mutableEffects.tryEmit(SettingsEffect.PROFILE_SAVED)
             },
             onFailure = {
+                logHandledException("Settings.saveProfile", it)
                 mutableState.update { it.copy(saveFailed = true) }
             },
         )

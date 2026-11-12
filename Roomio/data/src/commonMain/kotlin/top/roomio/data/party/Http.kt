@@ -1,5 +1,8 @@
 package top.roomio.data.party
 
+import top.roomio.data.diagnostics.logHandledException
+import top.roomio.data.diagnostics.loggedRunCatching
+
 import io.ktor.client.call.body
 import io.ktor.client.statement.HttpResponse
 import io.ktor.http.isSuccess
@@ -11,8 +14,9 @@ import top.roomio.domain.party.PartyException
 internal suspend inline fun <reified T> HttpResponse.bodyOrThrow(): T {
     if (status.isSuccess()) {
         return try { body() }
-        catch (cancel: CancellationException) { throw cancel }
+        catch (cancel: CancellationException) { logHandledException("Http.catch1", cancel);  throw cancel }
         catch (error: Exception) {
+            logHandledException("Http.catch2", error)
             co.touchlab.kermit.Logger.withTag("HTTP").w("http.decode_failure status=${status.value} route=${diagnosticRoute(call.request.url.encodedPath)}")
             throw error
         }
@@ -21,7 +25,7 @@ internal suspend inline fun <reified T> HttpResponse.bodyOrThrow(): T {
 }
 
 internal suspend fun HttpResponse.toPartyException(): PartyException {
-    val error = runCatching { body<ErrorDto>() }.getOrNull()
+    val error = loggedRunCatching("Http.run3") { body<ErrorDto>() }.getOrNull()
     val code = when (error?.code) {
         "AUTH_UNAVAILABLE" -> PARTY_CODE_NETWORK
         null -> if (status.value == 503) PARTY_CODE_NETWORK else "HTTP_${status.value}"

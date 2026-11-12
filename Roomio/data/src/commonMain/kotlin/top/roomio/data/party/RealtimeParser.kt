@@ -1,5 +1,7 @@
 package top.roomio.data.party
 
+import top.roomio.data.diagnostics.loggedRunCatching
+
 import co.touchlab.kermit.Logger
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -23,7 +25,7 @@ import top.roomio.domain.party.SyncStatus
 private val log = Logger.withTag("RealtimeParser")
 
 internal fun parseRealtimeFrame(json: Json, text: String): RealtimeEvent {
-    val element = runCatching { json.parseToJsonElement(text).jsonObject }.getOrNull()
+    val element = loggedRunCatching("RealtimeParser.run1") { json.parseToJsonElement(text).jsonObject }.getOrNull()
     if (element == null) {
         log.w("unparseable frame (${text.length} chars)")
         return RealtimeEvent.Ignored
@@ -63,7 +65,7 @@ internal fun parseRealtimeFrame(json: Json, text: String): RealtimeEvent {
 }
 
 private fun parseEvent(json: Json, element: JsonObject, text: String): RealtimeEvent {
-    val dto = runCatching {
+    val dto = loggedRunCatching("RealtimeParser.run2") {
         json.decodeFromJsonElement(EventMessageDto.serializer(), element)
     }.getOrNull()
     if (dto == null) {
@@ -105,14 +107,14 @@ private fun memberEvent(
 
 private fun memberEventPayload(json: Json, payload: JsonObject?): MemberSummaryDto? {
     if (payload == null) return null
-    return runCatching {
+    return loggedRunCatching("RealtimeParser.run3") {
         json.decodeFromJsonElement(MemberEventPayload.serializer(), payload).member
     }.getOrNull()
 }
 
 private fun ownerPresence(json: Json, payload: JsonObject?): Boolean {
     if (payload == null) return false
-    return runCatching {
+    return loggedRunCatching("RealtimeParser.run4") {
         json.decodeFromJsonElement(OwnerPresencePayload.serializer(), payload).present
     }.getOrDefault(false)
 }
@@ -123,7 +125,7 @@ private fun streamEvent(
     factory: (StreamEventPayload) -> RealtimeEvent,
 ): RealtimeEvent {
     if (payload == null) return RealtimeEvent.Ignored
-    return runCatching {
+    return loggedRunCatching("RealtimeParser.run5") {
         factory(json.decodeFromJsonElement(StreamEventPayload.serializer(), payload))
     }.getOrElse { RealtimeEvent.Ignored }
 }

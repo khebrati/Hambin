@@ -1,3 +1,4 @@
+import { logHandledException } from '../data/sessionLog';
 import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 import type { Snapshot } from '../data/contracts';
 import type { RoomConnection } from '../data/realtime';
@@ -31,11 +32,11 @@ export function useGroupSync(o:Options) {
    if(next&&stateRef.current&&next.requestId!==stateRef.current.requestId&&next.createdAtMs<stateRef.current.createdAtMs)return;
    if(next&&stateRef.current?.requestId===next.requestId&&next.revision<=version.current)return;
    version.current=next?.revision??-1;stateRef.current=next;setState(next);
-   if(!next){if(saved.current)void restore().catch(()=>{});return;}
+   if(!next){if(saved.current)void restore().catch((handledError)=>{ logHandledException("useGroupSync.useGroupSync.1", handledError); });return;}
    if(applied.current!==next.requestId){applied.current=next.requestId;if(next.phase==='INVITING')setOpen(true);}
    const mine=next.participants.find(x=>x.membershipId===self?.membershipId);
    if(next.phase==='INVITING'&&mine?.response==='ACCEPTED'&& !saved.current && bridge.current){saved.current=bridge.current.info();void bridge.current.pause();setEngaged(true);}
-   if(next.phase==='CANCELLED'){setOpen(false);void restore().catch(()=>{});o.notify(t('Sync cancelled'));}
+   if(next.phase==='CANCELLED'){setOpen(false);void restore().catch((handledError)=>{ logHandledException("useGroupSync.useGroupSync.2", handledError); });o.notify(t('Sync cancelled'));}
    if(next.phase==='FAILED'){fail(t('Sync stopped. You can keep watching.'));}
    if(mine?.response==='EXCLUDED'&&saved.current){fail(t('You couldn’t join this sync. You can keep watching.'));}
    if(next.phase==='SCHEDULED')setOpen(false);
@@ -45,25 +46,26 @@ export function useGroupSync(o:Options) {
  useEffect(()=>{
    const s=stateRef.current,player=bridge.current;if(!s||!player||!included||!activeSync(s))return;
    if(s.phase!=='PREPARING'&&s.phase!=='SCHEDULED')return;
-   if(prepared.current!==s.requestId){failed.current='';prepared.current=s.requestId;lastReady.current=null;setEngaged(true);if(player.prepare)void player.prepare(s.targetPositionMs).catch(()=>{void invoke('failed',{requestId:s.requestId,reason:'PREPARATION_FAILED'}).catch(()=>{});});else{void player.pause();player.seek(s.targetPositionMs);}}
+   if(prepared.current!==s.requestId){failed.current='';prepared.current=s.requestId;lastReady.current=null;setEngaged(true);if(player.prepare)void player.prepare(s.targetPositionMs).catch((handledError)=>{ logHandledException("useGroupSync.useGroupSync.3", handledError); void invoke('failed',{requestId:s.requestId,reason:'PREPARATION_FAILED'}).catch((handledError)=>{ logHandledException("useGroupSync.useGroupSync.4", handledError); });});else{void player.pause();player.seek(s.targetPositionMs);}}
    const info=player.info();
-   if(info.error||!Number.isNaN(info.durationMs)&&(!Number.isFinite(info.durationMs)||info.durationMs<=0)){if(failed.current!==s.requestId){failed.current=s.requestId;void invoke('failed',{reason:'UNSUPPORTED_PLAYER'}).catch(()=>{});}return;}
+   if(info.error||!Number.isNaN(info.durationMs)&&(!Number.isFinite(info.durationMs)||info.durationMs<=0)){if(failed.current!==s.requestId){failed.current=s.requestId;void invoke('failed',{reason:'UNSUPPORTED_PLAYER'}).catch((handledError)=>{ logHandledException("useGroupSync.useGroupSync.5", handledError); });}return;}
    const ready=readyForSync(info,s.targetPositionMs);
-   if(s.phase==='PREPARING'&&ready!==lastReady.current){lastReady.current=ready;void invoke('ready',{ready}).catch(()=>{lastReady.current=null;});}
+   if(s.phase==='PREPARING'&&ready!==lastReady.current){lastReady.current=ready;void invoke('ready',{ready}).catch((handledError)=>{ logHandledException("useGroupSync.useGroupSync.6", handledError); lastReady.current=null;});}
    if(s.phase==='SCHEDULED'&&s.startAtMs){
      if(!o.connected){started.current=s.requestId;fail(t('Sync stopped. You can keep watching.'));return;}
      const remaining=s.startAtMs-(o.connection.current?.syncClock.now()??Date.now());
-     if(!ready&&remaining>0){if(failed.current===s.requestId)return;failed.current=s.requestId;void invoke('failed',{reason:'READINESS_LOST'}).catch(()=>{});return;}
-     if(remaining<=0&&started.current!==s.requestId){started.current=s.requestId;if(remaining< -750){void invoke('failed',{reason:'LATE_START'}).catch(()=>{});fail(t('Sync stopped. You can keep watching.'));return;}void player.play().then(()=>{saved.current=null;setEngaged(false);}).catch(()=>{void invoke('failed',{reason:'PLAYBACK_DENIED'}).catch(()=>{});fail(t('Select Play to start the video on this device.'));});}
+     if(!ready&&remaining>0){if(failed.current===s.requestId)return;failed.current=s.requestId;void invoke('failed',{reason:'READINESS_LOST'}).catch((handledError)=>{ logHandledException("useGroupSync.useGroupSync.7", handledError); });return;}
+     if(remaining<=0&&started.current!==s.requestId){started.current=s.requestId;if(remaining< -750){void invoke('failed',{reason:'LATE_START'}).catch((handledError)=>{ logHandledException("useGroupSync.useGroupSync.8", handledError); });fail(t('Sync stopped. You can keep watching.'));return;}void player.play().then(()=>{saved.current=null;setEngaged(false);}).catch((handledError)=>{ logHandledException("useGroupSync.useGroupSync.9", handledError); void invoke('failed',{reason:'PLAYBACK_DENIED'}).catch((handledError)=>{ logHandledException("useGroupSync.useGroupSync.10", handledError); });fail(t('Select Play to start the video on this device.'));});}
    }
  },[tick,included]);
  useEffect(()=>{
    if(!engaged)return;
    const wait=o.connected?Math.max(1000,(state?.deadlineMs??Date.now()+130000)-(o.connection.current?.syncClock.now()??Date.now())+5000):12000;
-   const timeout=setTimeout(()=>{void restore().catch(()=>{});setOpen(false);o.notify(t('Sync stopped. You can keep watching.'));},wait);
+   const timeout=setTimeout(()=>{void restore().catch((handledError)=>{
+     logHandledException("useGroupSync.useGroupSync.timeout.11", handledError); });setOpen(false);o.notify(t('Sync stopped. You can keep watching.'));},wait);
    return()=>clearTimeout(timeout);
  },[engaged,o.connected,state?.phase,state?.deadlineMs]);
- const run=async(operation:()=>Promise<void>)=>{if(busy)return;setBusy(true);try{await operation();}catch{if(saved.current&&!activeSync(stateRef.current))await restore().catch(()=>{});o.notify(t('Sync unavailable. Try again.'));}finally{setBusy(false);}};
+ const run=async(operation:()=>Promise<void>)=>{if(busy)return;setBusy(true);try{await operation();}catch (handledError){ logHandledException("useGroupSync.useGroupSync.run.12", handledError); if(saved.current&&!activeSync(stateRef.current))await restore().catch((handledError)=>{ logHandledException("useGroupSync.useGroupSync.run.13", handledError); });o.notify(t('Sync unavailable. Try again.'));}finally{setBusy(false);}};
  const ask=()=>void run(async()=>{const p=bridge.current;if(!p)throw Error('PLAYER_UNAVAILABLE');saved.current=p.info();await p.pause();setEngaged(true);attempt.current=crypto.randomUUID();await invoke('invite',{requestId:attempt.current,positionMs:Math.round(p.info().positionMs)});});
  const respond=(response:'ACCEPTED'|'DECLINED'|'WITHDRAWN')=>void run(async()=>{
    if(response==='ACCEPTED'){const p=bridge.current;if(!p)throw Error('PLAYER_UNAVAILABLE');saved.current=p.info();await p.pause();setEngaged(true);}

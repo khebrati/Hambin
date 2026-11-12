@@ -1,5 +1,7 @@
 package top.roomio.data.party
 
+import top.roomio.data.diagnostics.logHandledException
+
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 
@@ -8,6 +10,7 @@ internal suspend fun deliverPeerSignal(send: suspend () -> Unit, rejected: (Thro
     try {
         send()
     } catch (error: Exception) {
+        logHandledException("PeerSignalDelivery.catch1", error)
         currentCoroutineContext().ensureActive()
         rejected(error)
     }

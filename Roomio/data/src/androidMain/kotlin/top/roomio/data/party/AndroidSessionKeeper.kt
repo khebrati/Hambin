@@ -1,5 +1,8 @@
 package top.roomio.data.party
 
+import top.roomio.data.diagnostics.logHandledException
+import top.roomio.data.diagnostics.loggedRunCatching
+
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -46,7 +49,7 @@ internal class AndroidSessionKeeper(
         binder = null
         binding?.completeExceptionally(PartyException("VOICE_SERVICE_UNAVAILABLE", "Microphone service disconnected"))
         binding = null
-        if (bound) { runCatching { context.unbindService(connection) }; bound = false }
+        if (bound) { loggedRunCatching("AndroidSessionKeeper.run3") { context.unbindService(connection) }; bound = false }
         if (current != null) mutableActions.tryEmit(SessionAction.MicrophoneServiceLost)
     }
 
@@ -54,7 +57,7 @@ internal class AndroidSessionKeeper(
         current = room
         val expectedRevision = ++revision
         scope.launch {
-            runCatching {
+            loggedRunCatching("AndroidSessionKeeper.run4") {
                 val service = service(room)
                 if (revision == expectedRevision && current?.roomId == room.roomId) service.update(room)
             }.onFailure {
@@ -71,6 +74,7 @@ internal class AndroidSessionKeeper(
         try {
             withTimeout(5_000) { service(room).confirmMicrophone(room) }
         } catch (error: Throwable) {
+            logHandledException("AndroidSessionKeeper.catch1", error)
             currentCoroutineContext().ensureActive()
             throw PartyException("VOICE_SERVICE_UNAVAILABLE", "Microphone foreground service could not start")
         }
@@ -95,6 +99,7 @@ internal class AndroidSessionKeeper(
             check(bound) { "Room service binding rejected" }
             return pending.await()
         } catch (error: Throwable) {
+            logHandledException("AndroidSessionKeeper.catch2", error)
             pending.completeExceptionally(error)
             if (binding === pending) binding = null
             throw error
@@ -109,7 +114,7 @@ internal class AndroidSessionKeeper(
             binder = null
             binding?.cancel()
             binding = null
-            if (bound) { runCatching { context.unbindService(connection) }; bound = false }
+            if (bound) { loggedRunCatching("AndroidSessionKeeper.run5") { context.unbindService(connection) }; bound = false }
             context.stopService(Intent(context, RoomSessionService::class.java))
         }
     }
@@ -119,7 +124,7 @@ internal class AndroidSessionKeeper(
         current = null
         val leavingRevision = ++revision
         scope.launch {
-            if (room != null) withTimeoutOrNull(5_000) { runCatching { roomRepository.leave(room.roomId) } }
+            if (room != null) withTimeoutOrNull(5_000) { loggedRunCatching("AndroidSessionKeeper.run6") { roomRepository.leave(room.roomId) } }
             if (revision == leavingRevision && current == null) stop()
         }
     }

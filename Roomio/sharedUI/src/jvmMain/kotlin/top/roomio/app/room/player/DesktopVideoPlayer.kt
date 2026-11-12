@@ -1,5 +1,7 @@
 package top.roomio.app.room.player
 
+import top.roomio.app.diagnostics.loggedRunCatching
+
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.awt.SwingPanel
@@ -56,7 +58,7 @@ internal class DesktopPlayer(private val changed: (VideoPlayerState) -> Unit) : 
 internal actual fun rememberPlatformVideoPlayer(onStateChanged:(VideoPlayerState)->Unit):VideoPlayerHandle? {
     val latest by rememberUpdatedState(onStateChanged)
     val error=stringResource(Res.string.group_sync_desktop_player)
-    val handle=remember {runCatching {check(NativeDiscovery().discover());DesktopPlayer {latest(it)}}.getOrNull()}
+    val handle=remember {loggedRunCatching("DesktopVideoPlayer.run1") {check(NativeDiscovery().discover());DesktopPlayer {latest(it)}}.getOrNull()}
     LaunchedEffect(handle){if(handle==null)latest(VideoPlayerState(VideoPlayerStatus.ERROR,error=error))else while(true){handle.publish();delay(100)}}
     DisposableEffect(handle){onDispose{handle?.close()}}
     return handle

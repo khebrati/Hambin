@@ -1,5 +1,8 @@
 package top.roomio.data.party
 
+import top.roomio.data.diagnostics.logHandledException
+import top.roomio.data.diagnostics.loggedRunCatching
+
 import co.touchlab.kermit.Logger
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
@@ -110,6 +113,7 @@ class KtorRoomRepository(
                 if (it.availability == top.roomio.domain.party.RoomAvailability.ENDED) forget(code)
             }
         } catch (error: PartyException) {
+            logHandledException("KtorRoomRepository.catch1", error)
             if (error.code in setOf("ROOM_ENDED", "ROOM_NOT_FOUND")) forget(code)
             throw error
         }
@@ -119,6 +123,7 @@ class KtorRoomRepository(
         try {
             http.post("${config.baseUrl}/v1/rooms/$code/join").bodyOrThrow<RoomAndMembershipDto>().room.toDomain().let { remember(it) }.also { observability.track("room_joined") }
         } catch (error: PartyException) {
+            logHandledException("KtorRoomRepository.catch2", error)
             if (error.code in setOf("ROOM_ENDED", "ROOM_NOT_FOUND")) forget(code)
             throw error
         }
@@ -154,14 +159,16 @@ class KtorRoomRepository(
     private suspend fun <T> authed(block: suspend () -> T): T = try {
         block()
     } catch (cancellation: CancellationException) {
+        logHandledException("KtorRoomRepository.catch3", cancellation)
         throw cancellation
     } catch (error: Throwable) {
+        logHandledException("KtorRoomRepository.catch4", error)
         val partyError = error.asPartyException()
         if (partyError.isAuthFailure()) {
             // A token refresh can itself fail while offline; surface the original
             // auth error instead of crashing.
             log.e("request auth failure code=${partyError.code}; refreshing session")
-            if (runCatching { sessions.refresh() }.isSuccess) {
+            if (loggedRunCatching("KtorRoomRepository.run5") { sessions.refresh() }.isSuccess) {
                 block()
             } else {
                 throw partyError

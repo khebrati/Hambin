@@ -22,9 +22,38 @@ export function diagnosticRoute(path: string): string {
   return '[other]';
 }
 export function diagnosticError(error: unknown): string {
-  // Never serialize exception messages: they may contain chat text, media URLs, SDP or filenames.
+  // A compact category for state/events; logHandledException retains redacted details separately.
   if (error && typeof error === 'object' && 'code' in error && typeof error.code === 'string' && /^[A-Z][A-Z_]{1,63}$/.test(error.code)) return error.code;
   return error instanceof Error && ['AbortError', 'TimeoutError', 'NotAllowedError', 'NotFoundError', 'NotReadableError', 'TypeError', 'SyntaxError'].includes(error.name) ? error.name : 'UNKNOWN';
+}
+/** Called at recovery boundaries, including failures that never reach the console. */
+export function logHandledException(operation: string, error: unknown): void {
+  // Logging must not turn an otherwise handled failure into an application failure.
+  try {
+    const seen = new Set<unknown>();
+    const details = (value: unknown, depth = 0): Record<string, unknown> => {
+      if (depth > 5 || seen.has(value)) return { message: '[cause cycle or depth limit]' };
+      seen.add(value);
+      if (value instanceof Error) return {
+        name: value.name, message: redactLog(value.message),
+        // Preserve source filename/line/column while removing origins, queries and private paths.
+        stack: redactLog((value.stack || '').replace(/(?:https?|file|blob):[^\s)]+/gi, url => {
+          const location = url.split(/[?#]/, 1)[0];
+          return '[source]/' + location.substring(location.lastIndexOf('/') + 1);
+        })),
+        ...(value.cause === undefined ? {} : { cause: details(value.cause, depth + 1) }),
+        ...(value instanceof AggregateError ? { errors: value.errors.slice(0, 10).map(cause => details(cause, depth + 1)) } : {}),
+      };
+      // Do not serialize arbitrary payload objects (e.g. HTTP bodies, SDP or user content).
+      if (value && typeof value === 'object') {
+        const item = value as { name?: unknown; message?: unknown; code?: unknown };
+        return { name: typeof item.name === 'string' ? redactLog(item.name) : 'NonError',
+          message: typeof item.message === 'string' ? redactLog(item.message) : '[non-Error exception]', code: diagnosticError(value) };
+      }
+      return { name: 'NonError', message: redactLog(String(value)) };
+    };
+    appLog(JSON.stringify({ event: 'exception.handled', operation, ...details(error) }));
+  } catch { /* The logging boundary cannot recursively log its own failure. */ }
 }
 export function sessionLog() { return lines.join('\n'); }
 export function browserInfo(): Record<string, string> {

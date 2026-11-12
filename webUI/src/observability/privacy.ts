@@ -1,3 +1,4 @@
+import { logHandledException } from '../data/sessionLog';
 /** Keep stack locations, while removing fields that can contain product content or credentials. */
 export function sanitizeErrorEvent<T extends {
   request?: unknown; user?: unknown; extra?: unknown; contexts?: unknown; breadcrumbs?: unknown;
@@ -14,7 +15,7 @@ export function sanitizeErrorEvent<T extends {
         const value = frame[key];
         if (value) {
           try { const url = new URL(value); frame[key] = url.origin + url.pathname; }
-          catch { frame[key] = value.split(/[?#]/)[0]; }
+          catch (handledError) { logHandledException("privacy.sanitizeErrorEvent.1", handledError);  frame[key] = value.split(/[?#]/)[0]; }
         }
       }
     }

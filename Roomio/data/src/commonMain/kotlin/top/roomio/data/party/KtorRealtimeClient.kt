@@ -1,5 +1,8 @@
 package top.roomio.data.party
 
+import top.roomio.data.diagnostics.logHandledException
+import top.roomio.data.diagnostics.loggedRunCatching
+
 import co.touchlab.kermit.Logger
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
@@ -77,6 +80,7 @@ class KtorRealtimeClient(
             connection.awaitOpen()
             connection.connectNamespace(ticket.namespace, ticket.ticket).also { log.i("room.connected") }
         } catch (error: Throwable) {
+            logHandledException("KtorRealtimeClient.catch1", error)
             connection.close()
             throw error
         }
@@ -85,8 +89,10 @@ class KtorRealtimeClient(
     private suspend fun issueTicket(roomId: String): RealtimeTicketDto = try {
         fetchTicket(roomId)
     } catch (cancellation: CancellationException) {
+        logHandledException("KtorRealtimeClient.catch2", cancellation)
         throw cancellation
     } catch (error: Throwable) {
+        logHandledException("KtorRealtimeClient.catch3", error)
         val partyError = error.asPartyException()
         if (!partyError.isAuthFailure()) throw partyError
         sessions.refresh() ?: throw partyError
@@ -152,7 +158,7 @@ private class KtorRealtimeSession(
         log.i("room.close requested")
         closed = true
         scope.cancel()
-        namespaceMutex.withLock { runCatching { namespace.close() } }
+        namespaceMutex.withLock { loggedRunCatching("KtorRealtimeClient.run10") { namespace.close() } }
         output.close()
     }
 
@@ -175,13 +181,15 @@ private class KtorRealtimeSession(
                 }
                 if (!closed) throw IllegalStateException("Socket.IO namespace ended")
             } catch (cancellation: CancellationException) {
+                logHandledException("KtorRealtimeClient.catch4", cancellation)
                 throw cancellation
             } catch (error: Throwable) {
+                logHandledException("KtorRealtimeClient.catch5", error)
                 if (closed) break
                 val failure = error.asPartyException()
                 log.w("room.disconnected code=${failure.code}")
                 output.trySend(RealtimeEvent.Failure(failure.code.ifBlank { PARTY_CODE_NETWORK }, failure.message.orEmpty()))
-                runCatching { namespaceMutex.withLock { namespace.close() } }
+                loggedRunCatching("KtorRealtimeClient.run11") { namespaceMutex.withLock { namespace.close() } }
                 attempts = (attempts + 1).coerceAtMost(MAX_RECONNECT_ATTEMPTS)
                 val base = (RECONNECT_BASE_MS shl (attempts - 1)).coerceAtMost(RECONNECT_MAX_MS)
                 log.i("room.retry_scheduled attempt=$attempts baseDelayMs=$base")
@@ -191,8 +199,10 @@ private class KtorRealtimeSession(
                     namespaceMutex.withLock { namespace = replacement }
                     log.i("room.reconnected attempt=$attempts")
                 } catch (reconnectError: CancellationException) {
+                    logHandledException("KtorRealtimeClient.catch6", reconnectError)
                     throw reconnectError
                 } catch (reconnectError: Throwable) {
+                    logHandledException("KtorRealtimeClient.catch7", reconnectError)
                     output.trySend(RealtimeEvent.Failure(reconnectError.asPartyException().code, reconnectError.message.orEmpty()))
                 }
             }
@@ -216,8 +226,10 @@ private class KtorRealtimeSession(
                 val code = obj?.get("code")?.jsonPrimitive?.contentOrNull
                 if (code != null) throw PartyException(code, "Realtime authentication refresh was rejected")
             } catch (cancellation: CancellationException) {
+                logHandledException("KtorRealtimeClient.catch8", cancellation)
                 throw cancellation
             } catch (error: Throwable) {
+                logHandledException("KtorRealtimeClient.catch9", error)
                 val partyError = error.asPartyException()
                 log.w("room.auth_refresh failure code=${partyError.code}")
                 if (partyError.code != PARTY_CODE_NETWORK) {

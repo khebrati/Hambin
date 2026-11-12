@@ -1,3 +1,4 @@
+import { logHandledException } from './data/sessionLog';
 import { useGroupSync } from './components/useGroupSync';
 import type { SyncStateFrame } from './data/groupSync';
 import { t, setLanguage } from './i18n';
@@ -79,6 +80,7 @@ export default function LiveApp() {
       if (value.availability === 'ENDED') { forgetLastRoom(identityId, code); setReturnableParty(current => current?.code === code ? null : current); }
       setRoomPreview(previewModel(value)); setScreen('room-preview'); setJoinStatus('idle');
     } catch (error) {
+      logHandledException("LiveApp.LiveApp.loadPreview.1", error);
       if (error instanceof ApiError && ['ROOM_ENDED', 'ROOM_NOT_FOUND'].includes(error.code)) { forgetLastRoom(identityId, code); setReturnableParty(current => current?.code === code ? null : current); }
       setJoinStatus('error'); setJoinError(errorMessage(error)); notify(errorMessage(error));
     }
@@ -106,6 +108,7 @@ export default function LiveApp() {
           }
           localStorage.removeItem(legacyCodeKey);
         } catch (error) {
+          logHandledException("LiveApp.LiveApp.3", error);
           if (active && readLastRoom(value.identity.id)?.code === savedRoom?.code && error instanceof ApiError && ['ROOM_ENDED', 'ROOM_NOT_FOUND'].includes(error.code)) {
             forgetLastRoom(value.identity.id, savedCode); localStorage.removeItem(legacyCodeKey); setReturnableParty(null);
           }
@@ -114,7 +117,8 @@ export default function LiveApp() {
       const invite = new URLSearchParams(location.search).get('invite');
       if (active && !invite && sessionStorage.getItem(activeCodeKey)) { await enterRoom(`/v1/rooms/${encodeURIComponent(sessionStorage.getItem(activeCodeKey)!)}/join`, value.identity.id); }
       if (active && invite) { setManagerMode('join'); setScreen('party-manager'); await loadPreview(invite); }
-    }).catch(error => { if (active) { setInitialError(errorMessage(error)); setResetAllowed(canResetIdentity(error)); } });
+    }).catch(error => {
+      logHandledException("LiveApp.LiveApp.2", error);  if (active) { setInitialError(errorMessage(error)); setResetAllowed(canResetIdentity(error)); } });
     return () => { active = false; };
   }, [attempt]);
 
@@ -136,8 +140,10 @@ export default function LiveApp() {
     } });
     realtime.current = session;
     const unsubscribe = watchToken(accessToken => {
-      void session.refreshAuth(accessToken).catch(e => notify(errorMessage(e)));
-      void voice.current?.refreshAuth(accessToken).catch(e => notify(errorMessage(e)));
+      void session.refreshAuth(accessToken).catch(e => {
+        logHandledException("LiveApp.LiveApp.unsubscribe.4", e); return notify(errorMessage(e)); });
+      void voice.current?.refreshAuth(accessToken).catch(e => {
+        logHandledException("LiveApp.LiveApp.unsubscribe.5", e); return notify(errorMessage(e)); });
     }, error => {
       notify(errorMessage(error));
       if (canResetIdentity(error)) { setReady(false); setInitialError(errorMessage(error)); setResetAllowed(true); session.close(); voice.current?.disconnect(); }
@@ -162,6 +168,7 @@ export default function LiveApp() {
       localStorage.removeItem(legacyCodeKey);
       setReturnableParty(null); setSnackbar(null);
     } catch (error) {
+      logHandledException("LiveApp.LiveApp.enterRoom.6", error);
       setJoinStatus('error'); setJoinError(errorMessage(error));
       setSnackbar({ message: errorMessage(error), partyCode: error instanceof ApiError ? error.activePartyCode : undefined });
       if (error instanceof ApiError && ['ROOM_ENDED', 'ROOM_NOT_FOUND'].includes(error.code)) {
@@ -176,7 +183,7 @@ export default function LiveApp() {
   const saveProfile = async (value: Identity) => {
     setSaving(true);
     try { const result = await request<{identity: IdentityDto}>('/v1/guest-sessions/profile', profileBody(value), 'PATCH'); rememberProfile(result.identity); setLanguage(result.identity.language); setIdentity(identityModel(result.identity)); setScreen('home'); notify(t("Profile updated")); }
-    catch (error) { notify(errorMessage(error)); }
+    catch (error) { logHandledException("LiveApp.LiveApp.saveProfile.7", error);  notify(errorMessage(error)); }
     finally { setSaving(false); }
   };
   const startStream = async (url: string) => {
@@ -184,12 +191,12 @@ export default function LiveApp() {
     try {
       await mutations.current.run<{stream: StreamDto}>(`/v1/rooms/${roomId}/stream/start`, { url });
       await realtime.current?.recover();
-    } catch (error) { setStreamStatus('error'); notify(errorMessage(error)); }
+    } catch (error) { logHandledException("LiveApp.LiveApp.startStream.8", error);  setStreamStatus('error'); notify(errorMessage(error)); }
   };
   const abortStream = async () => {
     setAborting(true);
     try { await mutations.current.run(`/v1/rooms/${roomId}/stream/abort`, { revision: snapshot?.stream.revision }); await realtime.current?.recover(); notify(t("Stream ended for everyone")); }
-    catch (error) { notify(errorMessage(error)); }
+    catch (error) { logHandledException("LiveApp.LiveApp.abortStream.9", error);  notify(errorMessage(error)); }
     finally { setAborting(false); }
   };
   const leave = async () => {
@@ -204,6 +211,7 @@ export default function LiveApp() {
       else { setReturnableParty(null); if (party?.code) forgetLastRoom(identityId, party.code); }
       sessionStorage.removeItem(activeCodeKey); realtime.current?.close(); setRoomId(''); setSnapshot(null); setStreamStatus('empty'); setScreen('home'); notify(result.roomClosed ? t("The party has ended") : t("You left the party"));
     } catch (error) {
+      logHandledException("LiveApp.LiveApp.leave.10", error);
       if (error instanceof ApiError && ['NOT_A_MEMBER', 'ROOM_ENDED', 'ROOM_NOT_FOUND'].includes(error.code)) {
         if (error.code !== 'NOT_A_MEMBER' && snapshot?.room.code) forgetLastRoom(identityId, snapshot.room.code);
         setReturnableParty(readLastRoom(identityId));
@@ -219,7 +227,7 @@ export default function LiveApp() {
         voice.current = client;
         await client.join();
       } else await voice.current.setMuted(!voiceState.muted);
-    } catch { /* MeshVoice publishes failure state; the voice pane owns recovery. */ }
+    } catch (handledError) { logHandledException("LiveApp.LiveApp.toggleVoice.11", handledError);  /* MeshVoice publishes failure state; the voice pane owns recovery. */ }
   };
   const resetGuest = async () => {
     if (resetting || !window.confirm(t("Reset your guest identity? You will lose ownership of your existing parties."))) return;
@@ -231,7 +239,7 @@ export default function LiveApp() {
       setRoomId(''); setSnapshot(null); setReturnableParty(null); setVoiceState(voiceOff);
       setIdentity(defaultIdentity); setIdentityId(''); setScreen('home'); setReady(false);
       setAttempt(value => value + 1);
-    } catch (error) { setInitialError(errorMessage(error)); }
+    } catch (error) { logHandledException("LiveApp.LiveApp.resetGuest.12", error);  setInitialError(errorMessage(error)); }
     finally { setResetting(false); }
   };
   const toggleTheme = () => setTheme(v => v === 'light' ? 'dark' : 'light');
@@ -248,7 +256,7 @@ export default function LiveApp() {
         send: async (messageId, text) => (await request<{ message: ChatMessage }>(`/v1/rooms/${roomId}/chat/messages`, { messageId, text })).message,
         loadEarlier: async () => { if (!realtime.current) throw new ApiError('NETWORK'); await realtime.current.loadEarlierChat(); },
         refresh: async () => { if (!realtime.current) throw new ApiError('NETWORK'); await realtime.current.recover(); },
-      }, voice: voiceState, onToggleVoice: toggleVoice, onRetryVoice: () => voice.current?.retryConnections(), onResumeVoice: () => { void voice.current?.resumeAudio().catch(e => notify(e.message)); }, onSync: groupSync.openSync, syncing:groupSync.busy, syncTarget, groupSync, onReport: (positionMs, playing) => { playback.current = {positionMs,playing}; realtime.current?.report(positionMs, playing); } }} /></>}
+      }, voice: voiceState, onToggleVoice: toggleVoice, onRetryVoice: () => voice.current?.retryConnections(), onResumeVoice: () => { void voice.current?.resumeAudio().catch(e => { logHandledException("LiveApp.LiveApp.13", e); return notify(e.message); }); }, onSync: groupSync.openSync, syncing:groupSync.busy, syncTarget, groupSync, onReport: (positionMs, playing) => { playback.current = {positionMs,playing}; realtime.current?.report(positionMs, playing); } }} /></>}
     </>}
     <Snackbar message={snackbar?.message || ''} onDismiss={() => setSnackbar(null)} action={snackbar?.partyCode ? { label: t("Return to party"), disabled: joinStatus === 'loading', onClick: () => { void enterRoom(`/v1/rooms/${encodeURIComponent(snackbar.partyCode!)}/join`); } } : undefined} />
   </div>;

@@ -1,5 +1,8 @@
 package top.roomio.data.party
 
+import top.roomio.data.diagnostics.logHandledException
+import top.roomio.data.diagnostics.loggedRunCatching
+
 import android.Manifest
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
@@ -123,6 +126,7 @@ internal class MeshVoiceClient(
             active = session
             session
         } catch (error: Throwable) {
+            logHandledException("MeshVoiceClient.catch1", error)
             withContext(NonCancellable) { session.disconnect() }
             throw error
         }
@@ -210,6 +214,7 @@ private class MeshVoiceSession(
             namespace = engine.connectNamespace(descriptor.namespace, descriptor.ticket, protocolVersion = 4)
             voiceLog.i("Voice signaling connected; waiting for peer audio")
         } catch (error: Throwable) {
+            logHandledException("MeshVoiceClient.catch2", error)
             engine.close()
             throw error
         }
@@ -252,7 +257,7 @@ private class MeshVoiceSession(
             if (closed) return@withLock
             // Let Android pair the microphone with the selected communication output.
             (audioDevice as? JavaAudioDeviceModule)?.setPreferredInputDevice(null)
-            runCatching { audioRoute.update() }
+            loggedRunCatching("MeshVoiceClient.run12") { audioRoute.update() }
                 .onFailure { voiceLog.w("Voice output route update failed", it) }
         } }
     }
@@ -283,8 +288,10 @@ private class MeshVoiceSession(
                 if (closed) break
                 throw PartyException("VOICE_DISCONNECTED", "Voice signaling disconnected")
             } catch (cancel: CancellationException) {
+                logHandledException("MeshVoiceClient.catch3", cancel)
                 throw cancel
             } catch (error: Throwable) {
+                logHandledException("MeshVoiceClient.catch4", error)
                 if (closed) break
                 val partyError = error as? PartyException
                 if (partyError?.code?.let { it in PERMANENT_VOICE_ERRORS } == true) {
@@ -295,8 +302,10 @@ private class MeshVoiceSession(
                 try {
                     reconnectSignaling(reconnectAttempt++)
                 } catch (cancel: CancellationException) {
+                    logHandledException("MeshVoiceClient.catch5", cancel)
                     throw cancel
                 } catch (reconnectError: Throwable) {
+                    logHandledException("MeshVoiceClient.catch6", reconnectError)
                     val reconnectPartyError = reconnectError as? PartyException
                     if (reconnectPartyError?.code?.let { it in PERMANENT_VOICE_ERRORS } == true) {
                         fail("Voice session ended")
@@ -317,6 +326,7 @@ private class MeshVoiceSession(
                 setBody(VoiceConfigurationRequest(descriptor.voiceSessionId, "resume"))
             }.bodyOrThrow<VoiceConfigurationDto>()
         } catch (error: PartyException) {
+            logHandledException("MeshVoiceClient.catch7", error)
             if (error.code != "VOICE_SESSION_EXPIRED") throw error
             http.post("${backend.baseUrl}/v1/rooms/${descriptor.roomId}/voice/config").bodyOrThrow<VoiceConfigurationDto>()
         }
@@ -346,6 +356,7 @@ private class MeshVoiceSession(
             // Peers and microphone capture stay alive. applyRoster is the first
             // event reader for this namespace and owns all new negotiation.
         } catch (error: Throwable) {
+            logHandledException("MeshVoiceClient.catch8", error)
             engine.close()
             throw error
         }
@@ -514,6 +525,7 @@ private class MeshVoiceSession(
             state.peer.setDescription(local = true, offer)
             sendSignal(state.member, sdp = offer)
         } catch (error: Throwable) {
+            logHandledException("MeshVoiceClient.catch9", error)
             if (error is CancellationException) throw error
             peers[id]?.let { scheduleRetry(id, it, RETRY_DELAY_MS) }
         }
@@ -524,7 +536,7 @@ private class MeshVoiceSession(
         val from = envelope["from"]?.jsonPrimitive?.contentOrNull ?: return
         val message = envelope["msg"]?.jsonPrimitive?.contentOrNull ?: return
         if (message.length > MAX_SIGNAL_CHARS) return
-        val parsed = runCatching { json.parseToJsonElement(message).jsonObject }.getOrNull() ?: return
+        val parsed = loggedRunCatching("MeshVoiceClient.run13") { json.parseToJsonElement(message).jsonObject }.getOrNull() ?: return
         var state = peers[from] ?: return
         val senderGeneration = parsed["generation"]?.jsonPrimitive?.contentOrNull ?: return
         val targetGeneration = parsed["targetGeneration"]?.jsonPrimitive?.contentOrNull ?: return
@@ -650,7 +662,7 @@ private class MeshVoiceSession(
         linkState.disconnected(id, state.localPeerGeneration)
         val nextAttempt = linkState.retry(id, state.localPeerGeneration) ?: run { publishStatus(); return }
         val member = memberStates[id] ?: return
-        if (notifyRemote) runCatching { sendSignal(member, restart = true) }
+        if (notifyRemote) loggedRunCatching("MeshVoiceClient.run14") { sendSignal(member, restart = true) }
         retryJobs.remove(id)?.cancel()
         peers.remove(id)
         state.peer.close(); state.peer.dispose()
@@ -666,7 +678,7 @@ private class MeshVoiceSession(
                 // Fresh requester epochs fence repeated manual retries even if
                 // the initial negotiation never learned its offerer's epoch.
                 replaceFailedPeer(id, observed)
-                if (descriptor.membershipId > id) runCatching {
+                if (descriptor.membershipId > id) loggedRunCatching("MeshVoiceClient.run15") {
                     sendSignal(observed.member, requestOffer = true)
                 }.onFailure { voiceLog.w("Voice offer request rejected") }
             }
@@ -726,6 +738,7 @@ private class MeshVoiceSession(
                 output.trySend(VoiceEvent.MicrophoneChanged(capture))
             }
         } catch (error: Throwable) {
+            logHandledException("MeshVoiceClient.catch10", error)
             if (error is CancellationException) throw error
             microphoneEnabled = false
             microphoneIntent.suspendCapture(::applyCapture)
@@ -748,6 +761,7 @@ private class MeshVoiceSession(
                     throw PartyException("VOICE_DISCONNECTED", "Voice signaling was replaced or closed")
                 return@withLock response
             } catch (error: Throwable) {
+                logHandledException("MeshVoiceClient.catch11", error)
                 // ACK timeout cancels only the request child, not the session owner.
                 kotlinx.coroutines.currentCoroutineContext().ensureActive()
                 lastError = error
@@ -882,10 +896,10 @@ private class MeshVoiceSession(
                 audioRoute.close()
             }
         }
-        withTimeoutOrNull(1_000L) { runCatching {
+        withTimeoutOrNull(1_000L) { loggedRunCatching("MeshVoiceClient.run16") {
             namespace?.emit("voice.leave", buildJsonObject {})?.let { validateVoiceAcknowledgement("voice.leave", it) }
         } }
-        withTimeoutOrNull(1_000L) { runCatching { namespace?.close() }; connection?.close() }
+        withTimeoutOrNull(1_000L) { loggedRunCatching("MeshVoiceClient.run17") { namespace?.close() }; connection?.close() }
         output.close()
         onReleased(this@MeshVoiceSession)
     }

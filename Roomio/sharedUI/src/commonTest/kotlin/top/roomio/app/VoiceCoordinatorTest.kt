@@ -13,6 +13,7 @@ class VoiceCoordinatorTest {
     @Test
     fun serviceConfirmationPrecedesCaptureAndFailureOffersRetry() = runTest {
         val order = mutableListOf<String>()
+        val failures = mutableListOf<Pair<String, Throwable>>()
         var fail = true
         val keeper = object : SessionKeeper {
             override fun start(room: RoomSession) = Unit
@@ -29,13 +30,15 @@ class VoiceCoordinatorTest {
                 return session
             }
         }
-        val coordinator = DefaultVoiceCoordinator(testRoomRepository, client, keeper, backgroundScope)
+        val coordinator = DefaultVoiceCoordinator(testRoomRepository, client, keeper, backgroundScope) { operation, error -> failures.add(operation to error) }
         coordinator.enter(room)
         coordinator.join("room")
         runCurrent()
         assertEquals(listOf("service"), order)
         assertEquals(VoiceSessionState.FAILED, coordinator.state.value.state)
         assertEquals("VOICE_SERVICE_UNAVAILABLE", coordinator.state.value.failureCode)
+        assertEquals("VoiceCoordinator.startConnection", failures.single().first)
+        assertEquals("blocked", failures.single().second.message)
         fail = false
         coordinator.join("room")
         runCurrent()
@@ -55,7 +58,7 @@ class VoiceCoordinatorTest {
             }
         }
         val keeper = RecordingKeeper()
-        val coordinator = DefaultVoiceCoordinator(testRoomRepository, client, keeper, backgroundScope)
+        val coordinator = DefaultVoiceCoordinator(testRoomRepository, client, keeper, backgroundScope, { _, _ -> })
         coordinator.enter(room)
         coordinator.join("room")
         runCurrent()
@@ -152,7 +155,7 @@ class VoiceCoordinatorTest {
     private fun TestScope.coordinator(session: RecordingSession, keeper: SessionKeeper = RecordingKeeper()) =
         DefaultVoiceCoordinator(testRoomRepository, object : VoiceClient {
             override suspend fun connect(configuration: VoiceConfiguration) = session
-        }, keeper, backgroundScope)
+        }, keeper, backgroundScope, { _, _ -> })
 
     private class RecordingKeeper : SessionKeeper {
         val commands = MutableSharedFlow<SessionAction>(extraBufferCapacity = 8)

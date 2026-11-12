@@ -1,5 +1,7 @@
 package top.roomio.data.party
 
+import top.roomio.data.diagnostics.logHandledException
+
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -87,6 +89,7 @@ class RoomSessionService : Service() {
                         intent.getBooleanExtra(EXTRA_VOICE_ACTIVE, false),
                         intent.getBooleanExtra(EXTRA_MIC_MUTED, true)))
                 } catch (error: Throwable) {
+                    logHandledException("RoomSessionService.catch1", error)
                     log.e("service.start_failed type=${error::class.simpleName}")
                     startupFailure = error
                     voiceActive = false

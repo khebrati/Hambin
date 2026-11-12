@@ -37,9 +37,9 @@ class HttpDiagnosticsTest {
         } finally { client.close() }
     }
 
-    @Test fun logsTransportFailuresAndPreservesCancellationWithoutExceptionMessages() = runTest {
+    @Test fun logsRedactedTransportFailuresAndPreservesCancellation() = runTest {
         AppSessionLog.install()
-        for (failure in listOf(IllegalStateException("exception-private-marker"), CancellationException("cancel-private-marker"))) {
+        for (failure in listOf(IllegalStateException("Transport failed ticket=exception-private-marker"), CancellationException("Cancelled token=cancel-private-marker"))) {
             val before = AppSessionLog.snapshot().length
             val client = HttpClient(MockEngine { throw failure }) { install(httpDiagnosticsPlugin(config)) }
             try {
@@ -48,6 +48,8 @@ class HttpDiagnosticsTest {
                 if (failure is CancellationException) assertTrue(thrown is CancellationException)
                 val captured = AppSessionLog.snapshot().substring(before)
                 assertTrue(captured.contains(if (failure is CancellationException) "http.cancelled" else "http.failure"))
+                assertTrue(captured.contains("exception.handled"))
+                assertTrue(captured.contains("HttpDiagnosticsTest.kt:"))
                 assertFalse(captured.contains("private-marker"))
             } finally { client.close() }
         }

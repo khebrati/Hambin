@@ -1,5 +1,8 @@
 package top.roomio.app.room
 
+import top.roomio.app.diagnostics.logHandledException
+import top.roomio.app.diagnostics.loggedRunCatching
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import co.touchlab.kermit.Logger
@@ -341,8 +344,9 @@ internal class RoomViewModel(
                 val accepted = roomRepository.sendChatMessage(roomId, pending.id, text)
                 if (accepted.roomId == roomId) mutableState.update { it.copy(chat = it.chat.receive(accepted)) }
                 else throw PartyException("UNAVAILABLE", "Unexpected chat room")
-            } catch (cancelled: CancellationException) { throw cancelled
+            } catch (cancelled: CancellationException) { logHandledException("RoomViewModel.catch1", cancelled);  throw cancelled
             } catch (error: Throwable) {
+                logHandledException("RoomViewModel.catch2", error)
                 val code = (error as? PartyException)?.code ?: "NETWORK"
                 mutableState.update { it.copy(chat = it.chat.copy(pending = it.chat.pending.map { message ->
                     if (message.id == pending.id) message.copy(state = ChatSendState.FAILED, error = code) else message
@@ -371,8 +375,9 @@ internal class RoomViewModel(
                             pending = it.chat.pending.filterNot { pending -> all.any { message -> message.id == pending.id } }, loading = false))
                     }
                 }
-            } catch (cancelled: CancellationException) { throw cancelled
+            } catch (cancelled: CancellationException) { logHandledException("RoomViewModel.catch3", cancelled);  throw cancelled
             } catch (error: Throwable) {
+                logHandledException("RoomViewModel.catch4", error)
                 if (version == chatVersion) mutableState.update { it.copy(chat = it.chat.copy(error = (error as? PartyException)?.code ?: "NETWORK", loading = false)) }
             } finally {
                 if (version == chatVersion) mutableState.update { it.copy(chat = it.chat.copy(loadingMore = false)) }
@@ -388,8 +393,9 @@ internal class RoomViewModel(
             try {
                 roomRepository.reportBug(roomId, current.bugDescription)
                 mutableState.update { it.copy(bugSending = false, bugDescription = "", bugSent = true) }
-            } catch (cancelled: CancellationException) { throw cancelled
+            } catch (cancelled: CancellationException) { logHandledException("RoomViewModel.catch5", cancelled);  throw cancelled
             } catch (error: Throwable) {
+                logHandledException("RoomViewModel.catch6", error)
                 mutableState.update { it.copy(bugSending = false, bugError = (error as? PartyException)?.code ?: "UNAVAILABLE") }
             }
         }
@@ -398,21 +404,23 @@ internal class RoomViewModel(
     override fun onCleared() {
         val session = realtime
         realtime = null
-        viewModelScope.launch { runCatching { session?.close() } }
+        viewModelScope.launch { loggedRunCatching("RoomViewModel.run13") { session?.close() } }
         voiceCoordinator.leave(roomId)
     }
 
     private suspend fun connect() {
         identityId = sessionRepository.currentSession()?.identity?.id
-            ?: runCatching { sessionRepository.ensureSession("Guest", "COMET").identity.id }.getOrNull()
+            ?: loggedRunCatching("RoomViewModel.run14") { sessionRepository.ensureSession("Guest", "COMET").identity.id }.getOrNull()
         log.i("room.connect asOwner=$asOwner")
         try {
             applySnapshot(roomRepository.snapshot(roomId))
             // Keep the session alive in the background once the room is joined.
             voiceCoordinator.enter(RoomSession(roomId, asOwner, voiceActive = false, micMuted = true))
         } catch (cancellation: CancellationException) {
+            logHandledException("RoomViewModel.catch7", cancellation)
             throw cancellation
         } catch (error: Throwable) {
+            logHandledException("RoomViewModel.catch8", error)
             val connectivity = error is PartyException && error.isConnectivity()
             // The network snapshot can fail while offline (DNS, connection, timeout).
             // Map it to an error state and an offline snackbar instead of crashing.
@@ -433,8 +441,10 @@ internal class RoomViewModel(
                 session.events.collect { event -> handleEvent(event) }
                 log.w("realtime event flow ended")
             } catch (cancellation: CancellationException) {
+                logHandledException("RoomViewModel.catch9", cancellation)
                 throw cancellation
             } catch (error: Throwable) {
+                logHandledException("RoomViewModel.catch10", error)
                 // Retry below; the server resends a snapshot on reconnect.
                 log.e("realtime connect failed: ${(error as? PartyException)?.code ?: "UNKNOWN"}")
             } finally {
@@ -643,8 +653,10 @@ internal class RoomViewModel(
                 log.i("startStream applied session=${stream.sessionId}")
                 mutableState.update { it.copy(playback = RoomPlaybackState.PLAYING) }
             } catch (cancellation: CancellationException) {
+                logHandledException("RoomViewModel.catch11", cancellation)
                 throw cancellation
             } catch (error: Throwable) {
+                logHandledException("RoomViewModel.catch12", error)
                 val connectivity = error is PartyException && error.isConnectivity()
                 log.e("startStream failed: ${(error as? PartyException)?.code ?: "UNKNOWN"} connectivity=$connectivity")
                 mutableState.update { it.copy(playback = RoomPlaybackState.ERROR) }
@@ -656,7 +668,7 @@ internal class RoomViewModel(
     private fun abortStream() {
         mutableState.update { it.copy(abortOpen = false) }
         viewModelScope.launch {
-            runCatching { roomRepository.abortStream(roomId) }
+            loggedRunCatching("RoomViewModel.run15") { roomRepository.abortStream(roomId) }
         }
     }
 
@@ -710,7 +722,7 @@ internal class RoomViewModel(
                 }
                 log.i("sync requested stream=$streamId position=${current.positionMs}ms requestId=$requestId")
                 viewModelScope.launch {
-                    runCatching { session.requestSync(streamId, current.positionMs, requestId) }
+                    loggedRunCatching("RoomViewModel.run16") { session.requestSync(streamId, current.positionMs, requestId) }
                         .onFailure { error ->
                             log.e("sync request failed: ${(error as? PartyException)?.code ?: "UNKNOWN"}")
                             if (pendingSyncRequestId == requestId) {
@@ -742,7 +754,7 @@ internal class RoomViewModel(
             }
             skipLogged = false
             log.d("report> stream=$streamId pos=${current.positionMs}ms playing=${current.playback == RoomPlaybackState.PLAYING}")
-            runCatching {
+            loggedRunCatching("RoomViewModel.run17") {
                 session.reportPlayback(streamId, current.positionMs, current.playback == RoomPlaybackState.PLAYING)
             }.onFailure { error -> log.e("report failed: ${(error as? PartyException)?.code ?: "UNKNOWN"}") }
         }

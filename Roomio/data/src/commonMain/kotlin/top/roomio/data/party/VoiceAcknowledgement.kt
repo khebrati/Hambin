@@ -1,5 +1,7 @@
 package top.roomio.data.party
 
+import top.roomio.data.diagnostics.loggedRunCatching
+
 import kotlin.time.Instant
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -24,7 +26,7 @@ internal fun validateVoiceAcknowledgement(name: String, response: JsonElement): 
         "auth.refresh" -> {
             val expires = (body["expiresAt"] as? JsonPrimitive)?.takeIf { it.isString }?.content
                 ?: invalidVoiceAcknowledgement()
-            if (runCatching { Instant.parse(expires) }.isFailure) invalidVoiceAcknowledgement()
+            if (loggedRunCatching("VoiceAcknowledgement.run1") { Instant.parse(expires) }.isFailure) invalidVoiceAcknowledgement()
         }
         else -> invalidVoiceAcknowledgement()
     }

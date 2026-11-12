@@ -1,5 +1,7 @@
 package top.roomio.app.navigation
 
+import top.roomio.app.diagnostics.loggedRunCatching
+
 import io.ktor.http.URLBuilder
 import io.ktor.http.URLProtocol
 import io.ktor.http.Url
@@ -12,7 +14,7 @@ internal object RoomInviteLinks {
 
     fun codeFrom(url: String): String? {
         if (url.length > 2048) return null
-        val parsed = runCatching { Url(url) }.getOrNull() ?: return null
+        val parsed = loggedRunCatching("RoomInviteLinks.run1") { Url(url) }.getOrNull() ?: return null
         if (parsed.protocol != URLProtocol.HTTPS || parsed.host != "watchparty.top" ||
             parsed.port != 443 || parsed.user != null || parsed.password != null ||
             parsed.encodedPath !in listOf("", "/")

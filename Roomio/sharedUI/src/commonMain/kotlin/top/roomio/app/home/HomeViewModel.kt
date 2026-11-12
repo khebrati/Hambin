@@ -1,5 +1,7 @@
 package top.roomio.app.home
 
+import top.roomio.app.diagnostics.logHandledException
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.zacsweers.metro.Inject
@@ -54,8 +56,10 @@ internal class HomeViewModel(
                 val preview = roomRepository.preview(saved.code)
                 lastRoom.value = if (preview.availability == RoomAvailability.ENDED) null else saved.toCard().copy(title = preview.title)
             } catch (cancelled: CancellationException) {
+                logHandledException("HomeViewModel.catch1", cancelled)
                 throw cancelled
             } catch (error: Exception) {
+                logHandledException("HomeViewModel.catch2", error)
                 if (error is PartyException && error.code in setOf("ROOM_ENDED", "ROOM_NOT_FOUND")) lastRoom.value = null
                 // Keep the cached card offline; opening it offers preview retry.
             }

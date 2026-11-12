@@ -26,6 +26,10 @@ No names, backend identities, room IDs/codes, invitation URLs, chat messages, me
 
 Automatic errors preserve stack locations while removing request payloads, user fields, extras, breadcrumbs and free-form exception text. Android/JVM sanitization uses the native SDK callback because the KMP adapter does not apply all exception-field edits. Native integrations live in `data`; domain and presentation remain independent of SDKs.
 
+Handled exceptions are also retained in browser/native session logs and backend operator logs. Every recovery boundary records `exception.handled`, a fixed source/operation label, exception type, redacted message and stack; JavaScript causes and aggregate failures are included with cycle/depth bounds. Browser stack URLs retain source filename/line/column without the origin or query. Payload objects, request bodies and headers are never appended. Existing credential/resource-URL redaction applies before retention. These local diagnostics enter Sentry through an explicit manual report attachment; automatic Sentry event sanitization remains separate. Coroutine cancellation is logged at debug severity and keeps its existing propagation/Result semantics. Logging failures cannot interrupt application recovery or recursively report themselves.
+
+Run `node scripts/check-exception-logging.cjs` from the repository root after installing backend dev dependencies to audit active browser, native and Node backend catch/rejection boundaries. Native `runCatching` uses a logging adapter; the pure domain coordinator receives its logging callback from the production data binding. Historical backend sources and isolated design studies are outside the runtime audit.
+
 ## Manual reports
 
 The existing report endpoint and acknowledgement semantics remain unchanged. New report insertion also initializes delivery state within the same transaction. Earlier reports remain unqueued. Every five seconds the single-runtime worker selects up to five due reports, forwards feedback plus `session.log`, and marks delivery only after Sentry's HTTP acceptance. The report UUID, without hyphens, is the stable Sentry event ID across retries.

@@ -1,3 +1,4 @@
+import { logHandledException } from '../data/sessionLog';
 import type { PlayerSyncBridge } from './playerSync';
 import type { MutableRefObject, ReactNode } from 'react';
 import { diagnosticEvent } from '../data/sessionLog';
@@ -228,6 +229,7 @@ function MediaPlayer({ url, sessionId, syncBridge, syncLocked, syncOverlay, onRe
     const autoplay = () => {
       if (handoff.current && !handoff.current.playing) return;
       void media()!.play().catch((reason: unknown) => {
+        logHandledException("VideoPlayer.MediaPlayer.autoplay.1", reason);
         if (!active || failed) return;
         if (reason instanceof DOMException && reason.name === 'AbortError') return;
         if (reason instanceof DOMException && reason.name === 'NotAllowedError') { diagnosticEvent('player.autoplay_blocked'); setBlocked(true); setStatus('paused'); }
@@ -277,7 +279,8 @@ function MediaPlayer({ url, sessionId, syncBridge, syncLocked, syncOverlay, onRe
         update, error: fail,
       });
       engineRef.current = engine;
-      void engine.ready.then(() => { if (active && !failed) autoplay(); }).catch(() => {
+      void engine.ready.then(() => { if (active && !failed) autoplay(); }).catch((handledError) => {
+        logHandledException("VideoPlayer.MediaPlayer.2", handledError);
         if (active) fail(navigator.onLine ? t("Unable to load this video. The source may block access or use an unsupported format. Retry or use browser playback.") : t("You are offline. Reconnect, then retry the video."));
       });
       const startupTimer = window.setTimeout(() => {
@@ -349,14 +352,14 @@ function MediaPlayer({ url, sessionId, syncBridge, syncLocked, syncOverlay, onRe
     const next = syncPosition(video.currentTime, syncTarget.positionMs, end);
     if (next !== null) {
       if (live && (!video.seekable.length || next < video.seekable.start(0))) { callbacks.current.onNotify(t("That position is outside the live window.")); return; }
-      try { video.currentTime = next; } catch { callbacks.current.onNotify(t("This video cannot seek to that position.")); }
+      try { video.currentTime = next; } catch (handledError) { logHandledException("VideoPlayer.MediaPlayer.3", handledError);  callbacks.current.onNotify(t("This video cannot seek to that position.")); }
     }
   }, [syncTarget, ready, live]);
 
   const play = async () => {
     if(syncLocked)return;
     try { await media()?.play(); setBlocked(false); }
-    catch { setBlocked(true); callbacks.current.onNotify(t("Playback could not start. Try Play again or retry the video.")); }
+    catch (handledError) { logHandledException("VideoPlayer.MediaPlayer.play.4", handledError);  setBlocked(true); callbacks.current.onNotify(t("Playback could not start. Try Play again or retry the video.")); }
   };
   const seek = (value: number) => {
     if(syncLocked)return;
@@ -364,13 +367,14 @@ function MediaPlayer({ url, sessionId, syncBridge, syncLocked, syncOverlay, onRe
     const video = media();
     if (!video || !ready || !Number.isFinite(video.duration) || live) return;
     try { const target = Math.max(0, Math.min(value, video.duration)); video.currentTime = target; setPosition(target); }
-    catch { callbacks.current.onNotify(t("Seeking is unavailable for this video.")); }
+    catch (handledError) { logHandledException("VideoPlayer.MediaPlayer.seek.5", handledError);  callbacks.current.onNotify(t("Seeking is unavailable for this video.")); }
   };
   const selectSubtitle = (value: string) => {
     subtitleSelection.current = value;
     setSubtitleId(value);
     if (engineRef.current) {
-      void engineRef.current.selectSubtitle(value).catch(() => { setSubtitleError(t("Unable to select that subtitle track. Choose another track or a local file.")); setTrackDialog('subtitles'); });
+      void engineRef.current.selectSubtitle(value).catch((handledError) => {
+        logHandledException("VideoPlayer.MediaPlayer.selectSubtitle.6", handledError);  setSubtitleError(t("Unable to select that subtitle track. Choose another track or a local file.")); setTrackDialog('subtitles'); });
       return;
     }
     const video = videoRef.current;
@@ -386,7 +390,8 @@ function MediaPlayer({ url, sessionId, syncBridge, syncLocked, syncOverlay, onRe
     audioSelection.current = value;
     setAudioId(value);
     if (engineRef.current) {
-      void engineRef.current.selectAudio(value === 'automatic' ? automaticAudioId.current || 'av:1' : value).catch(() => callbacks.current.onNotify(t("Unable to select that audio track. Choose another track.")));
+      void engineRef.current.selectAudio(value === 'automatic' ? automaticAudioId.current || 'av:1' : value).catch((handledError) => {
+        logHandledException("VideoPlayer.MediaPlayer.selectAudio.7", handledError); return callbacks.current.onNotify(t("Unable to select that audio track. Choose another track.")); });
       setTrackDialog(null);
       return;
     }
@@ -423,6 +428,7 @@ function MediaPlayer({ url, sessionId, syncBridge, syncLocked, syncOverlay, onRe
       } else setLocalSubtitle({ url: URL.createObjectURL(new Blob([content], { type: 'text/vtt' })), name: file.name });
       subtitleSelection.current = 'local'; setSubtitleId('local'); setTrackDialog(null);
     } catch (reason) {
+      logHandledException("VideoPlayer.MediaPlayer.importSubtitle.8", reason);
       if (generation === importGeneration.current) setSubtitleError(reason instanceof Error ? reason.message : t("Unable to read that subtitle file."));
     } finally { if (generation === importGeneration.current) setImporting(false); }
   };
@@ -432,7 +438,7 @@ function MediaPlayer({ url, sessionId, syncBridge, syncLocked, syncOverlay, onRe
       if (document.fullscreenElement === containerRef.current) await document.exitFullscreen();
       else if (containerRef.current?.requestFullscreen) await containerRef.current.requestFullscreen();
       else setFallbackFullscreen(true);
-    } catch { setFallbackFullscreen(true); }
+    } catch (handledError) { logHandledException("VideoPlayer.MediaPlayer.toggleFullscreen.9", handledError);  setFallbackFullscreen(true); }
     revealControls();
   };
   const seekable = ready && Number.isFinite(duration) && duration > 0 && !live;

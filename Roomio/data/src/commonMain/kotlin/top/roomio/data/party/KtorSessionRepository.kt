@@ -1,5 +1,7 @@
 package top.roomio.data.party
 
+import top.roomio.data.diagnostics.logHandledException
+
 import co.touchlab.kermit.Logger
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
@@ -75,10 +77,12 @@ class KtorSessionRepository(
                             if (it.status.value != 204) throw it.toPartyException()
                         }
                     } catch (error: PartyException) {
+                        logHandledException("KtorSessionRepository.catch1", error)
                         if (error.code !in setOf("SESSION_REVOKED", "SESSION_EXPIRED", "INVALID_TOKEN", "UNAUTHENTICATED")) throw error
                     }
                 }
             } catch (error: PartyException) {
+                logHandledException("KtorSessionRepository.catch2", error)
                 if (error.code != "INVALID_TOKEN") throw error
             }
             tokens.clear()
@@ -96,6 +100,7 @@ class KtorSessionRepository(
         val identity = try {
             patchProfile(name, avatar, language)
         } catch (error: PartyException) {
+            logHandledException("KtorSessionRepository.catch3", error)
             if (!error.isAuthFailure()) throw error
             tokens.saveCredentials(auth.refresh(tokens.credentials()!!))
             patchProfile(name, avatar, language)
@@ -120,9 +125,9 @@ class KtorSessionRepository(
     }
 
     private suspend fun <T> normalized(block: suspend () -> T): T = try { block() }
-    catch (cancellation: CancellationException) { throw cancellation }
-    catch (error: PartyException) { log.w("auth.failure code=${error.code}"); throw error }
-    catch (_: Throwable) { log.w("auth.failure code=NETWORK"); throw PartyException(PARTY_CODE_NETWORK, "Guest session request failed; please retry") }
+    catch (cancellation: CancellationException) { logHandledException("KtorSessionRepository.catch4", cancellation);  throw cancellation }
+    catch (error: PartyException) { logHandledException("KtorSessionRepository.catch5", error);  log.w("auth.failure code=${error.code}"); throw error }
+    catch (handledError: Throwable) { logHandledException("KtorSessionRepository.catch6", handledError);  log.w("auth.failure code=NETWORK"); throw PartyException(PARTY_CODE_NETWORK, "Guest session request failed; please retry") }
 
     private companion object { const val REFRESH_EARLY_MS = 60 * 1000L }
 }

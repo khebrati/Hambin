@@ -1,5 +1,7 @@
 package top.roomio.data.party
 
+import top.roomio.data.diagnostics.logHandledException
+
 import android.util.Base64
 import top.roomio.domain.party.PartyException
 import com.russhwolf.settings.Settings
@@ -19,7 +21,8 @@ private class AndroidSecureCredentialStorage : SecureCredentialStorage {
         val key = loadOrCreateKey()
         val payload = try {
             Base64.decode(encoded, Base64.NO_WRAP)
-        } catch (_: IllegalArgumentException) {
+        } catch (handledError: IllegalArgumentException) {
+            logHandledException("AndroidSecureCredentialStorage.catch1", handledError)
             throw PartyException("INVALID_TOKEN", "Saved guest credentials are unreadable; reset the guest identity")
         }
         if (payload.size < IV_BYTES + TAG_BITS / 8) {
@@ -31,7 +34,8 @@ private class AndroidSecureCredentialStorage : SecureCredentialStorage {
         cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(TAG_BITS, iv))
         return try {
             String(cipher.doFinal(encrypted), Charsets.UTF_8)
-        } catch (_: AEADBadTagException) {
+        } catch (handledError: AEADBadTagException) {
+            logHandledException("AndroidSecureCredentialStorage.catch2", handledError)
             // Tampering, corruption, or restore without the original Keystore key.
             throw PartyException("INVALID_TOKEN", "Saved guest credentials cannot be decrypted; reset the guest identity")
         }

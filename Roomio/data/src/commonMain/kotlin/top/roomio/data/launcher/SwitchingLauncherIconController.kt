@@ -1,5 +1,7 @@
 package top.roomio.data.launcher
 
+import top.roomio.data.diagnostics.loggedRunCatching
+
 import top.roomio.domain.launcher.LauncherIconColor
 import top.roomio.domain.launcher.LauncherIconController
 
@@ -16,15 +18,15 @@ internal class SwitchingLauncherIconController(
 ) : LauncherIconController {
     override val isSupported = true
 
-    override fun currentColor(): Result<LauncherIconColor> = runCatching {
+    override fun currentColor(): Result<LauncherIconColor> = loggedRunCatching("SwitchingLauncherIconController.run1") {
         val enabled = LauncherIconColor.entries.filter(components::isEnabled)
         check(enabled.size == 1) { "Launcher icon state needs repair: select a color again" }
         enabled.single()
     }
 
-    override fun selectColor(color: LauncherIconColor): Result<Unit> = runCatching {
+    override fun selectColor(color: LauncherIconColor): Result<Unit> = loggedRunCatching("SwitchingLauncherIconController.run2") {
         val enabled = LauncherIconColor.entries.filter(components::isEnabled)
-        if (enabled == listOf(color)) return@runCatching
+        if (enabled == listOf(color)) return@loggedRunCatching
         if (components.supportsAtomicChanges) {
             components.selectAtomically(color)
         } else {

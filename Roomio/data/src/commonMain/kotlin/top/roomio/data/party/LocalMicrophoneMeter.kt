@@ -1,5 +1,8 @@
 package top.roomio.data.party
 
+import top.roomio.data.diagnostics.logHandledException
+import top.roomio.data.diagnostics.loggedRunCatching
+
 /** Shares WebRTC's capture when peers exist; owns a recorder only while alone. */
 internal class LocalMicrophoneMeter(
     private val createCapture: () -> MicrophoneCapture,
@@ -43,7 +46,8 @@ internal class LocalMicrophoneMeter(
                     check(count >= 0)
                     level.samplePcm16(samples, count, now)
                 }
-            } catch (_: Exception) {
+            } catch (handledError: Exception) {
+                logHandledException("LocalMicrophoneMeter.catch1", handledError)
                 retryAt = now + 5_000
                 stopStandaloneLocked()
                 level.setEnabled(enabled)
@@ -56,7 +60,7 @@ internal class LocalMicrophoneMeter(
     private fun stopStandaloneLocked() {
         val capture = recorder ?: return
         recorder = null
-        runCatching { capture.close() }
+        loggedRunCatching("LocalMicrophoneMeter.run2") { capture.close() }
         samples.fill(0)
         level.setEnabled(enabled)
     }

@@ -1,3 +1,4 @@
+import { logHandledException } from './sessionLog';
 import type { Identity, Party, Participant, PartyPreview } from '../types';
 
 export const sampleVideoUrl =
@@ -135,7 +136,8 @@ export const fakePartyRepository = {
     let parsed: URL;
     try {
       parsed = new URL(url);
-    } catch {
+    } catch (handledError) {
+      logHandledException("fakeRepository.fakePartyRepository.startStream.1", handledError);
       throw new Error('INVALID_URL');
     }
     if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {

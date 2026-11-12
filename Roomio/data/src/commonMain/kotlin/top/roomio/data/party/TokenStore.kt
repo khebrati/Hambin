@@ -1,5 +1,7 @@
 package top.roomio.data.party
 
+import top.roomio.data.diagnostics.logHandledException
+
 import com.russhwolf.settings.Settings
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
@@ -27,6 +29,7 @@ class TokenStore(
     private var loadFailure: Throwable? = null
     private var pendingCredentials: BackendCredentials? = null
     private var credentialsRecord: BackendCredentials? = try { readCredentials() } catch (error: Throwable) {
+        logHandledException("TokenStore.catch1", error)
         loadFailure = error
         null
     }
@@ -46,6 +49,7 @@ class TokenStore(
         try {
             secureStorage.write(json.encodeToString(credentials))
         } catch (error: Throwable) {
+            logHandledException("TokenStore.catch2", error)
             pendingCredentials = credentials
             loadFailure = error
             throw error
@@ -73,7 +77,8 @@ class TokenStore(
 
     private fun readCredentials(): BackendCredentials? {
         val serialized = secureStorage.read() ?: return null
-        val objectValue = try { json.parseToJsonElement(serialized).jsonObject } catch (_: Exception) {
+        val objectValue = try { json.parseToJsonElement(serialized).jsonObject } catch (handledError: Exception) {
+            logHandledException("TokenStore.catch3", handledError)
             throw PartyException("INVALID_TOKEN", "Saved guest credentials need explicit reset")
         }
         // The accepted one-time cutover discards only recognizable old provider records.
@@ -81,7 +86,8 @@ class TokenStore(
             secureStorage.clear()
             return null
         }
-        val record = try { json.decodeFromString<BackendCredentials>(serialized) } catch (_: Exception) {
+        val record = try { json.decodeFromString<BackendCredentials>(serialized) } catch (handledError: Exception) {
+            logHandledException("TokenStore.catch4", handledError)
             throw PartyException("INVALID_TOKEN", "Saved guest credentials need explicit reset")
         }
         if (record.version != 1 || record.baseUrl != config.baseUrl.trimEnd('/') ||
@@ -103,9 +109,11 @@ class TokenStore(
                 mutableSession.value = toSession()
             }
         } catch (error: PartyException) {
+            logHandledException("TokenStore.catch5", error)
             loadFailure = error
             throw error
-        } catch (_: Exception) {
+        } catch (handledError: Exception) {
+            logHandledException("TokenStore.catch6", handledError)
             throw PartyException("NETWORK", "Secure guest storage is temporarily unavailable; retry")
         }
     }

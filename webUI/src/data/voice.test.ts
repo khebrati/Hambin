@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MeshVoice, PeerGenerationFence, audioOnlySdp, type VoiceState } from './voice'
+import { sessionLog } from './sessionLog'
 
 const sockets = vi.hoisted(() => [] as FakeSocket[])
 vi.mock('socket.io-client', () => ({ io: () => { const socket = new FakeSocket(); sockets.push(socket); return socket } }))
@@ -60,6 +61,26 @@ describe('microphone-only SDP', () => {
   })
 })
 describe('voice capture lifecycle', () => {
+  it('retains the original handled peer-construction exception in the manual-report log', async () => {
+    vi.useFakeTimers()
+    const error = new TypeError('Peer construction failed credential=private-credential')
+    vi.stubGlobal('RTCPeerConnection', class { constructor() { throw error } })
+    const { client, states } = setup()
+    const before = sessionLog().length
+    const joining = client.join(); await flush()
+    sockets[0].deliver('voice.roster', { members: [
+      { membershipId: 'a', voiceSessionId: 'g1', muted: true },
+      { membershipId: 'b', voiceSessionId: 'g2', muted: true },
+    ] })
+    await flush()
+    expect(states.at(-1)?.status).toBe('error')
+    const saved = sessionLog().slice(before)
+    expect(saved).toContain('Peer construction failed')
+    expect(saved).toContain('voice.test.ts:')
+    expect(saved).toContain('exception.handled')
+    expect(saved).not.toContain('private-credential')
+    client.disconnect(); await joining
+  })
   it('opts in muted, waits for roster, updates auth without replacing media, and stops capture on leave', async () => {
     const { client, track, states, request } = setup()
     const joining = client.join(); await flush()

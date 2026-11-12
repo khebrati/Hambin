@@ -1,5 +1,7 @@
 package top.roomio.app.room
 
+import top.roomio.app.diagnostics.loggedRunCatching
+
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -201,7 +203,7 @@ private fun ChatMessageRow(message: ChatMessage, self: Boolean, first: Boolean, 
         Column(Modifier.weight(1f), horizontalAlignment = if (self) Alignment.End else Alignment.Start, verticalArrangement = Arrangement.spacedBy(4.dp)) {
             if (first) Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(if (self) stringResource(Res.string.chat_you) else message.displayName, style = MaterialTheme.typography.labelMedium)
-                val localTime = remember(message.createdAt) { runCatching {
+                val localTime = remember(message.createdAt) { loggedRunCatching("RoomChatPanel.run1") {
                     val value = kotlin.time.Instant.parse(message.createdAt).toLocalDateTime(TimeZone.currentSystemDefault())
                     "${value.hour.toString().padStart(2, '0')}:${value.minute.toString().padStart(2, '0')}"
                 }.getOrDefault("") }

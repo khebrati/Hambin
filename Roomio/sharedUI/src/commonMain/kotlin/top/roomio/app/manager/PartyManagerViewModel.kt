@@ -1,5 +1,7 @@
 package top.roomio.app.manager
 
+import top.roomio.app.diagnostics.logHandledException
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import co.touchlab.kermit.Logger
@@ -113,6 +115,7 @@ internal class PartyManagerViewModel(
                 mutableState.update { it.copy(isLoading = false) }
                 mutableEffects.tryEmit(PartyManagerEffect.Created(room.id))
             } catch (error: PartyException) {
+                logHandledException("PartyManagerViewModel.catch1", error)
                 log.w("create failed: ${error.code} ${error.message}")
                 mutableState.update { it.copy(isLoading = false, canResetIdentity = error.code in RESET_CODES) }
                 mutableEffects.tryEmit(PartyManagerEffect.Error(error.isConnectivity()))
@@ -130,6 +133,7 @@ internal class PartyManagerViewModel(
                 mutableState.update { it.copy(isLoading = false) }
                 mutableEffects.tryEmit(PartyManagerEffect.PreviewReady(code))
             } catch (error: PartyException) {
+                logHandledException("PartyManagerViewModel.catch2", error)
                 log.w("preview failed: ${error.code} ${error.message}")
                 mutableState.update { it.copy(isLoading = false) }
                 if (error.code in RESET_CODES) {
@@ -153,6 +157,7 @@ internal class PartyManagerViewModel(
                 mutableState.update { it.copy(isLoading = false, canResetIdentity = false, hasCodeError = false) }
                 mutableEffects.tryEmit(PartyManagerEffect.IdentityReset)
             } catch (error: PartyException) {
+                logHandledException("PartyManagerViewModel.catch3", error)
                 mutableState.update { it.copy(isLoading = false) }
                 mutableEffects.tryEmit(PartyManagerEffect.Error(error.isConnectivity()))
             }

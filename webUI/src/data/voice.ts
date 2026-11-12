@@ -1,3 +1,4 @@
+import { logHandledException } from './sessionLog';
 import { diagnosticEvent, diagnosticError } from './sessionLog'
 import { io, type Socket } from 'socket.io-client'
 
@@ -100,7 +101,7 @@ export class MeshVoice {
       // Only this explicit opt-in operation requests capture; no camera is requested.
       const capture = navigator.mediaDevices.getUserMedia({ audio: true, video: false })
       let discarded = false
-      void capture.then(stream => { if (!this.current(run)) { discarded = true; stream.getTracks().forEach(track => track.stop()) } }).catch(() => {})
+      void capture.then(stream => { if (!this.current(run)) { discarded = true; stream.getTracks().forEach(track => track.stop()) } }).catch((handledError) => { logHandledException("voice.join.1", handledError); })
       const cancelled = new Promise<never>((_, reject) => { this.cancelCapture = () => reject(new Error('Voice capture cancelled')) })
       const stream = await Promise.race([capture, cancelled])
       this.cancelCapture = undefined
@@ -113,7 +114,7 @@ export class MeshVoice {
       if (!this.current(run)) return
       this.later(() => void this.refreshCredentials(run), 5 * 60_000)
       this.later(() => void this.poll(run), 200)
-    } catch (error) { if (this.current(run)) { this.fail(error, true); throw error } }
+    } catch (error) { logHandledException("voice.join.2", error);  if (this.current(run)) { this.fail(error, true); throw error } }
     finally { clearTimeout(startup); this.timers.delete(startup) }
   }
 
@@ -129,7 +130,7 @@ export class MeshVoice {
       this.state.muted = true; this.publish()
     }
     const run = this.run
-    const operation = this.muteSerial.catch(() => {}).then(async () => {
+    const operation = this.muteSerial.catch((handledError) => { logHandledException("voice.setMuted.operation.3", handledError); }).then(async () => {
       if (!this.current(run)) return
       try {
         const socket = this.socket
@@ -139,8 +140,9 @@ export class MeshVoice {
         this.state.muted = muted
         this.stream?.getAudioTracks().forEach(track => { track.enabled = !muted })
         this.publish()
-        if (this.blockedAudio) void this.resumeAudio().catch(() => {})
+        if (this.blockedAudio) void this.resumeAudio().catch((handledError) => { logHandledException("voice.setMuted.operation.4", handledError); })
       } catch (error) {
+        logHandledException("voice.setMuted.operation.5", error);
         if (!this.current(run)) return
         this.stream?.getAudioTracks().forEach(track => { track.enabled = false })
         this.state.muted = true
@@ -173,6 +175,7 @@ export class MeshVoice {
       this.authPaused = false
       this.updateStatus()
     } catch (error) {
+      logHandledException("voice.refreshAuth.6", error);
       if (!this.current(run) || socket !== this.socket) return
       this.authPaused = true; this.fail(error, permanent.has(code(error))); throw error
     }
@@ -242,6 +245,7 @@ export class MeshVoice {
     this.options.onState({ ...this.state, members })
   }
   private fail(error: unknown, fatal = false) {
+    logHandledException('voice.failure', error)
     diagnosticEvent('voice.failure', { code: diagnosticError(error), fatal })
     const message = error instanceof Error ? error.message : code(error) || 'Voice connection failed. Retry voice.'
     if (fatal) this.disconnect()
@@ -255,6 +259,7 @@ export class MeshVoice {
   private enqueue(action: () => Promise<void>) {
     const run = this.run
     this.serial = this.serial.then(async () => { if (this.current(run)) await action() }).catch(error => {
+      logHandledException("voice.enqueue.7", error);
       if (this.current(run)) this.fail(error, permanent.has(code(error)))
     })
   }
@@ -269,6 +274,7 @@ export class MeshVoice {
     if (reconnect && this.descriptor) {
       try { descriptor = await this.configuration(this.descriptor.voiceSessionId) }
       catch (error) {
+        logHandledException("voice.open.8", error);
         if (code(error) !== 'VOICE_SESSION_EXPIRED') throw error
         if (!this.current(run)) return
         descriptor = await this.configuration()
@@ -305,7 +311,7 @@ export class MeshVoice {
           this.updateStatus()
           // Server installs its authorized handlers before publishing the roster.
           // The transport connect event can arrive while that setup is still pending.
-          void this.setMuted(this.muteIntent).catch(() => {})
+          void this.setMuted(this.muteIntent).catch((handledError) => { logHandledException("voice.open.9", handledError); })
         }
         finish()
       }))
@@ -313,6 +319,7 @@ export class MeshVoice {
         if (this.socket === socket) await this.receive(payload)
       }))
       socket.on('connect_error', (error: Error & { data?: unknown }) => {
+        logHandledException('voice.socket.connect', error)
         finish(error.data || error)
         if (settled && this.current(run)) this.reconnect(run)
       })
@@ -334,6 +341,7 @@ export class MeshVoice {
         if (!this.current(run)) return
         this.reconnecting = false; this.updateStatus()
       } catch (error) {
+        logHandledException("voice.reconnect.retry.10", error);
         if (!this.current(run)) return
         if (permanent.has(code(error))) { this.reconnecting = false; this.fail(error, true); return }
         if (++attempt >= 6) { this.reconnecting = false; this.state = { ...this.state, status: 'degraded', error: 'Voice signaling is unavailable. Retry voice connections.' }; this.publish(); return }
@@ -384,7 +392,7 @@ export class MeshVoice {
       if (!this.live(peer)) return
       if (event.track.kind !== 'audio') { event.track.enabled = false; return }
       audio.srcObject = new MediaStream([event.track])
-      void audio.play().catch(() => { if (this.peers.get(member.membershipId) === peer) { this.blockedAudio = true; this.fail(new Error('Audio playback was blocked. Tap Resume voice audio.')) } })
+      void audio.play().catch((handledError) => { logHandledException("voice.createPeer.11", handledError);  if (this.peers.get(member.membershipId) === peer) { this.blockedAudio = true; this.fail(new Error('Audio playback was blocked. Tap Resume voice audio.')) } })
     }
     pc.onicecandidate = event => {
       if (!this.live(peer) || !event.candidate) return
@@ -431,7 +439,7 @@ export class MeshVoice {
       if (!this.live(peer)) return
       // The server budget is per member, shared by all seven peer links.
       // A per-peer FIFO alone bursts past that budget as a full mesh joins.
-      this.signalQueue = this.signalQueue.catch(() => {}).then(async () => {
+      this.signalQueue = this.signalQueue.catch((handledError) => { logHandledException("voice.send.13", handledError); }).then(async () => {
         const delay = Math.max(0, 60 - (Date.now() - this.lastSignalAt))
         if (delay) await new Promise(resolve => setTimeout(resolve, delay))
         if (!this.live(peer)) return
@@ -439,6 +447,7 @@ export class MeshVoice {
         for (let attempt = 0; ; attempt++) {
           try { await this.ack('signal', { to: peer.member.membershipId, msg: JSON.stringify(message) }); return }
           catch (error) {
+            logHandledException("voice.send.14", error);
             if ((code(error) && code(error) !== 'RATE_LIMITED') || attempt >= 2) throw error
             await new Promise(resolve => setTimeout(resolve, 250 * (attempt + 1)))
             if (!this.live(peer)) return
@@ -448,6 +457,7 @@ export class MeshVoice {
       })
       await this.signalQueue
     }).catch(error => {
+      logHandledException("voice.send.12", error);
       if (!this.live(peer) || code(error) === 'STALE_NEGOTIATION') return
       if (code(error) === 'SESSION_EXPIRED' || code(error) === 'AUTH_UNAVAILABLE') this.authPaused = true
       this.fail(error, permanent.has(code(error)))
@@ -456,7 +466,7 @@ export class MeshVoice {
   private async receive(payload: { from: string; msg: string }) {
     if (!payload || typeof payload.msg !== 'string' || new TextEncoder().encode(payload.msg).length > 65536) return
     let message: Signal
-    try { message = JSON.parse(payload.msg) as Signal } catch { return }
+    try { message = JSON.parse(payload.msg) as Signal } catch (handledError) { logHandledException("voice.receive.15", handledError);  return }
     let peer = this.peers.get(payload.from)
     if (!peer || !message || message.generation !== peer.member.voiceSessionId || message.targetGeneration !== this.descriptor!.voiceSessionId) return
     if (typeof message.negotiationId !== 'string') return
@@ -571,6 +581,7 @@ export class MeshVoice {
       this.peers.forEach(peer => peer.pc.setConfiguration({ iceServers: descriptor.iceServers }))
       this.updateStatus()
     } catch (error) {
+      logHandledException("voice.refreshCredentials.16", error);
       if (ownsSnapshot()) this.fail(error, permanent.has(code(error)))
       delay = 30_000
     } finally {
@@ -589,10 +600,10 @@ export class MeshVoice {
           analyser.fftSize = 2048
           source.connect(analyser) // No speaker connection: never monitor the mic audibly.
           this.localMeter = { context, source, analyser, samples: new Float32Array(analyser.fftSize) }
-        } catch (error) { void context.close().catch(() => {}); throw error }
+        } catch (error) { logHandledException("voice.prepareLocalMeter.17", error);  void context.close().catch((handledError) => { logHandledException("voice.prepareLocalMeter.18", handledError); }); throw error }
       }
-      if (this.localMeter?.context.state === 'suspended') void this.localMeter.context.resume().catch(() => {})
-    } catch { /* Optional metering must never prevent voice capture or transmission. */ }
+      if (this.localMeter?.context.state === 'suspended') void this.localMeter.context.resume().catch((handledError) => { logHandledException("voice.prepareLocalMeter.19", handledError); })
+    } catch (handledError) { logHandledException("voice.prepareLocalMeter.20", handledError);  /* Optional metering must never prevent voice capture or transmission. */ }
   }
 
   private closeLocalMeter() {
@@ -600,7 +611,7 @@ export class MeshVoice {
     this.localMeter = undefined
     if (!meter) return
     meter.source.disconnect(); meter.analyser.disconnect()
-    void meter.context.close().catch(() => {})
+    void meter.context.close().catch((handledError) => { logHandledException("voice.closeLocalMeter.21", handledError); })
   }
 
   private async poll(run: number) {
@@ -647,7 +658,7 @@ export class MeshVoice {
           this.activity.set(id, item)
         }
         this.publish()
-      } catch { /* A closed peer may reject an in-flight stats request. */ }
+      } catch (handledError) { logHandledException("voice.poll.22", handledError);  /* A closed peer may reject an in-flight stats request. */ }
       finally { if (this.run === run) this.pollBusy = false }
     }
     if (this.current(run)) this.later(() => void this.poll(run), 200)

@@ -1,3 +1,4 @@
+import { logHandledException } from '../data/sessionLog';
 import { t } from '../i18n';
 import { plainCueText } from './subtitles';
 
@@ -53,14 +54,15 @@ function loadRuntime(): Promise<Runtime> {
     const constructor = (window as unknown as { AVPlayer?: Runtime }).AVPlayer;
     if (!constructor) throw new Error(t("Unable to initialize the video player. Retry the video."));
     return constructor;
-  })().catch(reason => { runtime = undefined; throw reason; });
+  })().catch(reason => {
+    logHandledException("avPlayer.loadRuntime.1", reason);  runtime = undefined; throw reason; });
   return runtime;
 }
 
 const emptyRanges: TimeRanges = { length: 0, start: () => { throw new DOMException(t("No buffered ranges"), 'IndexSizeError'); }, end: () => { throw new DOMException(t("No buffered ranges"), 'IndexSizeError'); } };
 const textCodecs = new Set([94210, 94212, 94213, 94225, 94226, 94230, 94232]);
 export function usesIntegratedPlayer(url: string): boolean {
-  try { return ['http:', 'https:'].includes(new URL(url).protocol); } catch { return false; }
+  try { return ['http:', 'https:'].includes(new URL(url).protocol); } catch (handledError) { logHandledException("avPlayer.usesIntegratedPlayer.2", handledError);  return false; }
 }
 
 /** Keep engine commands ordered: AVPlayer does not allow overlapping asynchronous calls. */
@@ -119,10 +121,11 @@ export class AvMedia implements PlayerMedia {
       // Finish AVPlayer's MSE setup even when autoplay is denied. Our play()
       // checks the actual paused state afterward and owns the Play recovery.
       const result = play().catch(reason => {
+        logHandledException("avPlayer.attachNativeVideo.result.3", reason);
         if (reason instanceof DOMException && reason.name === 'NotAllowedError') return;
         throw reason;
       });
-      void result.catch(() => {}); return result;
+      void result.catch((handledError) => { logHandledException("avPlayer.attachNativeVideo.4", handledError); }); return result;
     };
     const waiting = () => { if (!this.closed && !this.pausedValue && !this.previewing) this.callbacks.state('buffering'); };
     const playing = () => { if (!this.closed && !this.previewing && !this.pendingSeeks) { this.pausedValue = false; this.callbacks.state('playing'); this.callbacks.update(); } };
@@ -175,7 +178,8 @@ export class AvMedia implements PlayerMedia {
     this.callbacks.update();
   }
   private enqueue<T>(action: (player: RuntimePlayer) => Promise<T>): Promise<T | undefined> {
-    const result = this.chain.catch(() => {}).then(() => this.closed || !this.player ? undefined : action(this.player));
+    const result = this.chain.catch((handledError) => {
+      logHandledException("avPlayer.enqueue.result.5", handledError); }).then(() => this.closed || !this.player ? undefined : action(this.player));
     this.chain = result;
     return result;
   }
@@ -198,7 +202,8 @@ export class AvMedia implements PlayerMedia {
   }
   get currentTime() { return this.loaded ? this.video()?.currentTime ?? Number(this.player?.currentTime ?? 0n) / 1000 : 0; }
   set currentTime(value: number) {
-    void this.seekTo(value).catch(() => this.fail(t("Unable to seek this video. Retry the video.")));
+    void this.seekTo(value).catch((handledError) => {
+      logHandledException("avPlayer.handler.6", handledError); return this.fail(t("Unable to seek this video. Retry the video.")); });
   }
   private seekTo(target: number | (() => number), audioId?: number): Promise<unknown> {
     const revision = audioId === undefined ? ++this.seekRevision : this.seekRevision;
@@ -276,7 +281,7 @@ export class AvMedia implements PlayerMedia {
       if (this.video()?.paused) throw new DOMException(t("Select Play to start video"), 'NotAllowedError');
     });
   }
-  pause() { return this.enqueue(player => player.pause()).catch(() => this.fail(t("Unable to pause this video. Retry the video."))); }
+  pause() { return this.enqueue(player => player.pause()).catch((handledError) => { logHandledException("avPlayer.pause.7", handledError); return this.fail(t("Unable to pause this video. Retry the video.")); }); }
   /** Keep the packet pump active while the native media element stays paused. */
   async prepareForSync(positionMs: number) {
     await this.seekTo(positionMs / 1000);
@@ -347,6 +352,7 @@ export class AvMedia implements PlayerMedia {
     this.clearLocal();
     this.container.hidden = true; this.video()?.pause();
     // destroy also interrupts the I/O loader during initialization or a seek.
-    void Promise.resolve(this.player?.destroy()).catch(() => {}).finally(() => this.container.remove());
+    void Promise.resolve(this.player?.destroy()).catch((handledError) => {
+      logHandledException("avPlayer.destroy.8", handledError); }).finally(() => this.container.remove());
   }
 }

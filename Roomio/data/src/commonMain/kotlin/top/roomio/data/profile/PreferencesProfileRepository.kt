@@ -1,5 +1,7 @@
 package top.roomio.data.profile
 
+import top.roomio.data.diagnostics.loggedRunCatching
+
 import com.russhwolf.settings.Settings
 import dev.zacsweers.metro.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,7 +22,7 @@ class PreferencesProfileRepository(
 
     override fun currentProfile(): UserProfile = mutableProfile.value
 
-    override fun saveProfile(profile: UserProfile): Result<Unit> = runCatching {
+    override fun saveProfile(profile: UserProfile): Result<Unit> = loggedRunCatching("PreferencesProfileRepository.run1") {
         val namedProfile = profile.copy(name = profile.avatar.displayName(profile.language))
         settings.putString(NAME_KEY, namedProfile.name)
         settings.putString(AVATAR_KEY, profile.avatar.name)

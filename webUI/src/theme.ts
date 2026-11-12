@@ -1,3 +1,4 @@
+import { logHandledException } from './data/sessionLog';
 import { useLayoutEffect, useState } from 'react';
 import { argbFromHex, hexFromArgb, Hct, SchemeTonalSpot } from '@material/material-color-utilities';
 
@@ -69,7 +70,7 @@ export function useThemePalette(dark: boolean) {
       if (new URLSearchParams(location.search).has('preview')) return resolveThemeColor(localStorage.getItem(themeColorKey))?.id || 'roomio';
       return initialThemeColor(localStorage);
     }
-    catch { return 'roomio'; }
+    catch (handledError) { logHandledException("theme.useThemePalette.[colorId, setColorId].1", handledError);  return 'roomio'; }
   });
   const [saveFailed, setSaveFailed] = useState(false);
   useLayoutEffect(() => {
@@ -84,7 +85,7 @@ export function useThemePalette(dark: boolean) {
     if (id !== 'roomio' && !resolveThemeColor(id)) return;
     setColorId(id);
     try { localStorage.setItem(themeColorKey, id); setSaveFailed(false); }
-    catch { setSaveFailed(true); }
+    catch (handledError) { logHandledException("theme.useThemePalette.selectColor.2", handledError);  setSaveFailed(true); }
   }
   return { colorId, selectColor, saveFailed };
 }

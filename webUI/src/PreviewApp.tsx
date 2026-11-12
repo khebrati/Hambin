@@ -1,3 +1,4 @@
+import { logHandledException } from './data/sessionLog';
 import { avatarName } from './data/avatarCatalog';
 import { t, setLanguage, useLanguage } from './i18n';
 import { useThemePalette } from './theme';
@@ -116,7 +117,8 @@ export function PreviewApp() {
       setPartyPreview(nextPreview);
       setJoinStatus('idle');
       setScreen('room-preview');
-    } catch {
+    } catch (handledError) {
+      logHandledException("PreviewApp.PreviewApp.previewParty.1", handledError);
       setJoinStatus('error');
     }
   };
@@ -130,7 +132,8 @@ export function PreviewApp() {
       setStreamStatus(joined.streamUrl ? 'playing' : 'empty');
       setJoinStatus('idle');
       setScreen('party');
-    } catch {
+    } catch (handledError) {
+      logHandledException("PreviewApp.PreviewApp.joinParty.2", handledError);
       setJoinStatus('error');
     }
   };
@@ -143,7 +146,8 @@ export function PreviewApp() {
       setParty({ ...party, streamUrl: normalizedUrl });
       setStreamStatus('playing');
       setSnackbar(t("Stream started for the room"));
-    } catch {
+    } catch (handledError) {
+      logHandledException("PreviewApp.PreviewApp.startStream.3", handledError);
       setStreamStatus('error');
     }
   };

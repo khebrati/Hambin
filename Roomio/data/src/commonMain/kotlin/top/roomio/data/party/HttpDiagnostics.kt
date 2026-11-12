@@ -1,5 +1,7 @@
 package top.roomio.data.party
 
+import top.roomio.data.diagnostics.logHandledException
+
 import co.touchlab.kermit.Logger
 import io.ktor.client.plugins.api.Send
 import io.ktor.client.plugins.api.createClientPlugin
@@ -11,7 +13,7 @@ import kotlin.time.TimeSource
 private val httpOperation = MutableStateFlow(0L)
 private val httpLog = Logger.withTag("HTTP")
 
-/** Never retain raw URLs, headers, query values, bodies or exception messages. */
+/** Fixed route labels omit raw URLs, headers, query values and bodies. */
 internal fun diagnosticRoute(path: String): String {
     val route = path.substringBefore('?').substringBefore('#')
     if (Regex("/v1/rooms/[^/]+(?:/(?:preview|join|leave|end|snapshot|realtime-ticket|bug-reports|stream/(?:start|abort)|voice/config|chat/messages))?").matches(route)) {
@@ -36,9 +38,11 @@ internal fun httpDiagnosticsPlugin(config: BackendConfig) = createClientPlugin("
             httpLog.i("http.response operation=$operation status=${response.response.status.value} elapsedMs=${started.elapsedNow().inWholeMilliseconds}")
             response
         } catch (cancel: CancellationException) {
+            logHandledException("HttpDiagnostics.catch1", cancel)
             httpLog.i("http.cancelled operation=$operation elapsedMs=${started.elapsedNow().inWholeMilliseconds}")
             throw cancel
         } catch (error: Exception) {
+            logHandledException("HttpDiagnostics.catch2", error)
             httpLog.w("http.failure operation=$operation code=TRANSPORT_ERROR type=${error::class.simpleName} elapsedMs=${started.elapsedNow().inWholeMilliseconds}")
             throw error
         }

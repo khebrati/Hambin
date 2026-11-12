@@ -106,7 +106,7 @@ internal fun testRoomViewModel(
     sessionKeeper: SessionKeeper,
 ): top.roomio.app.room.RoomViewModel {
     val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main.immediate)
-    val coordinator = top.roomio.domain.party.DefaultVoiceCoordinator(roomRepository, voiceClient, sessionKeeper, scope)
+    val coordinator = top.roomio.domain.party.DefaultVoiceCoordinator(roomRepository, voiceClient, sessionKeeper, scope, { _, _ -> })
     val vm = top.roomio.app.room.RoomViewModel(roomId, asOwner, sessionRepository, roomRepository, realtimeClient, coordinator)
     return vm
 }

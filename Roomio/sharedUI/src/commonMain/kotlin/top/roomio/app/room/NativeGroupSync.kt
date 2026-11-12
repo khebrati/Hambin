@@ -1,5 +1,8 @@
 package top.roomio.app.room
 
+import top.roomio.app.diagnostics.logHandledException
+import top.roomio.app.diagnostics.loggedRunCatching
+
 import kotlinx.coroutines.*
 import kotlin.math.abs
 import kotlin.time.Clock
@@ -32,7 +35,7 @@ internal class NativeGroupSync(
     suspend fun calibrate(transport: RealtimeSession) {
         repeat(4) {
             val start = TimeSource.Monotonic.markNow()
-            val time = runCatching { transport.syncClock() }.getOrNull() ?: return
+            val time = loggedRunCatching("NativeGroupSync.run3") { transport.syncClock() }.getOrNull() ?: return
             val rtt = start.elapsedNow().inWholeMilliseconds
             if (rtt <= bestRtt) { bestRtt = rtt; serverBase = time + rtt / 2; serverMark = TimeSource.Monotonic.markNow() }
         }
@@ -55,8 +58,8 @@ internal class NativeGroupSync(
         update { it.copy(syncBusy = true) }
         scope.launch {
             try { transport.groupSync(action,streamId,id,if(action=="invite")state().positionMs else null,response,ready,reason); after?.invoke() }
-            catch (error: CancellationException) { throw error }
-            catch (_: Throwable) { if(action=="ready")readySent=null; if (state().groupSync?.active != true) restore(); effect(RoomEffect.GroupSyncNotice(GroupSyncNotice.UNAVAILABLE)) }
+            catch (error: CancellationException) { logHandledException("NativeGroupSync.catch1", error);  throw error }
+            catch (handledError: Throwable) { logHandledException("NativeGroupSync.catch2", handledError);  if(action=="ready")readySent=null; if (state().groupSync?.active != true) restore(); effect(RoomEffect.GroupSyncNotice(GroupSyncNotice.UNAVAILABLE)) }
             finally { update { it.copy(syncBusy = false) } }
         }
     }

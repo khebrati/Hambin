@@ -1,5 +1,7 @@
 package top.roomio.app.room
 
+import top.roomio.app.diagnostics.loggedRunCatching
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -1933,7 +1935,7 @@ private fun InviteFriendsDialog(
     var shareFailed by remember(inviteLink) { mutableStateOf(false) }
 
     fun copy(value: String, target: InviteCopyTarget) {
-        runCatching { clipboard.setText(AnnotatedString(value)) }
+        loggedRunCatching("RoomScreen.run1") { clipboard.setText(AnnotatedString(value)) }
             .onSuccess {
                 onCopied(target)
             }
@@ -2191,7 +2193,7 @@ private fun CurrentVideoLinkDialog(
                     )
                     FilledTonalIconButton(
                         onClick = {
-                            runCatching { clipboard.setText(AnnotatedString(videoUrl)) }
+                            loggedRunCatching("RoomScreen.run2") { clipboard.setText(AnnotatedString(videoUrl)) }
                                 .onSuccess {
                                     copied = true
                                     copyFailed = false

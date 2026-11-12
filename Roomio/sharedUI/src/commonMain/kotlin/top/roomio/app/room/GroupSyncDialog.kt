@@ -1,5 +1,7 @@
 package top.roomio.app.room
 
+import top.roomio.app.diagnostics.loggedRunCatching
+
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -53,7 +55,7 @@ internal fun GroupSyncDialog(state: RoomUiState, onAction: (RoomAction) -> Unit)
                 val ink=if(accepted)MaterialTheme.colorScheme.onSecondaryContainer else if(declined)MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurface
                 Surface(color=color,contentColor=ink,shape=MaterialTheme.shapes.large,modifier=Modifier.fillMaxWidth()) {
                     Row(Modifier.padding(12.dp),horizontalArrangement=Arrangement.spacedBy(12.dp),verticalAlignment=Alignment.CenterVertically) {
-                        val avatar=runCatching{ProfileAvatar.valueOf(member?.avatar.orEmpty().uppercase())}.getOrDefault(ProfileAvatar.COMET)
+                        val avatar=loggedRunCatching("GroupSyncDialog.run1"){ProfileAvatar.valueOf(member?.avatar.orEmpty().uppercase())}.getOrDefault(ProfileAvatar.COMET)
                         Image(painterResource(avatar.resource),null,Modifier.size(40.dp).clip(CircleShape))
                         Column(Modifier.weight(1f)) {
                             Text(if(person.membershipId==state.syncSelfId)stringResource(Res.string.chat_you) else member?.displayName.orEmpty(),style=MaterialTheme.typography.titleSmall)

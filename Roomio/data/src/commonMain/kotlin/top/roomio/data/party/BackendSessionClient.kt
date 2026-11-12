@@ -1,5 +1,7 @@
 package top.roomio.data.party
 
+import top.roomio.data.diagnostics.loggedRunCatching
+
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
@@ -36,8 +38,8 @@ class BackendSessionClient(private val http: HttpClient, private val config: Bac
     }
 
     private fun SessionDto.credentials(): BackendCredentials {
-        val accessExpiry = runCatching { Instant.parse(accessExpiresAt).toEpochMilliseconds() }.getOrNull()
-        val refreshExpiry = runCatching { Instant.parse(refreshExpiresAt).toEpochMilliseconds() }.getOrNull()
+        val accessExpiry = loggedRunCatching("BackendSessionClient.run1") { Instant.parse(accessExpiresAt).toEpochMilliseconds() }.getOrNull()
+        val refreshExpiry = loggedRunCatching("BackendSessionClient.run2") { Instant.parse(refreshExpiresAt).toEpochMilliseconds() }.getOrNull()
         if (identity.id.isBlank() || accessToken.isBlank() || refreshToken.isBlank() ||
             accessExpiry == null || refreshExpiry == null || refreshExpiry < accessExpiry) {
             throw PartyException("INVALID_TOKEN", "The server returned an incomplete guest session")

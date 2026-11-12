@@ -1,5 +1,7 @@
 package top.roomio.app.room.player
 
+import top.roomio.app.diagnostics.loggedRunCatching
+
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -130,7 +132,7 @@ internal actual fun rememberPlatformSubtitlePicker(
     val currentOnSubtitlePicked by rememberUpdatedState(onSubtitlePicked)
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri ?: return@rememberLauncherForActivityResult
-        runCatching {
+        loggedRunCatching("AndroidVideoPlayer.run1") {
             context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         val name = uri.displayName(context.contentResolver)

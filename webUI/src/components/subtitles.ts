@@ -1,3 +1,4 @@
+import { logHandledException } from '../data/sessionLog';
 import { t } from '../i18n';
 /** Local imports are converted to browser WebVTT; styling and ASS drawings are not rendered. */
 interface Cue { start: number; end: number; text: string; settings?: string }
@@ -224,6 +225,6 @@ export async function subtitleFileToVtt(file: File): Promise<string> {
   const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
   if (!supportedExtensions.has(extension)) invalid(t("Choose an SRT, VTT, ASS, SSA, TTML, DFXP, or XML subtitle file."));
   let content: string;
-  try { content = await file.text(); } catch { invalid(t("Unable to read that subtitle file. Choose it again.")); }
+  try { content = await file.text(); } catch (handledError) { logHandledException("subtitles.subtitleFileToVtt.1", handledError);  invalid(t("Unable to read that subtitle file. Choose it again.")); }
   return subtitleTextToVtt(content, extension);
 }

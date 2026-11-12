@@ -1,5 +1,7 @@
 package top.roomio.app.preview
 
+import top.roomio.app.diagnostics.logHandledException
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import co.touchlab.kermit.Logger
@@ -84,6 +86,7 @@ internal class RoomPreviewViewModel(
                 val preview = roomRepository.preview(partyCode)
                 mutableState.update { it.copy(model = preview.toPresentation(), isLoading = false) }
             } catch (error: PartyException) {
+                logHandledException("RoomPreviewViewModel.catch1", error)
                 log.w("preview load failed: ${error.code} ${error.message}")
                 mutableState.update { it.copy(isLoading = false, errorMessage = error.code, isOffline = error.isConnectivity()) }
                 mutableEffects.tryEmit(RoomPreviewEffect.Error(error.isConnectivity()))
@@ -105,6 +108,7 @@ internal class RoomPreviewViewModel(
                 mutableState.update { it.copy(isLoading = false) }
                 mutableEffects.tryEmit(RoomPreviewEffect.Joined(room.id, room.ownerIdentityId == sessionRepository.currentSession()?.identity?.id))
             } catch (error: PartyException) {
+                logHandledException("RoomPreviewViewModel.catch2", error)
                 log.w("join failed: ${error.code} ${error.message}")
                 mutableState.update { it.copy(isLoading = false, errorMessage = error.code, isOffline = error.isConnectivity()) }
                 mutableEffects.tryEmit(RoomPreviewEffect.Error(error.isConnectivity()))

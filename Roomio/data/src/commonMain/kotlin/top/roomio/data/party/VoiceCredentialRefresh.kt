@@ -1,5 +1,7 @@
 package top.roomio.data.party
 
+import top.roomio.data.diagnostics.logHandledException
+
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
@@ -32,7 +34,8 @@ internal suspend fun refreshVoiceCredentials(active: () -> Boolean, refresh: sus
         nextDelay = try {
             refresh()
             5 * 60_000L
-        } catch (_: Throwable) {
+        } catch (handledError: Throwable) {
+            logHandledException("VoiceCredentialRefresh.catch1", handledError)
             // An operation timeout is recoverable; caller cancellation is not.
             currentCoroutineContext().ensureActive()
             30_000L

@@ -34,6 +34,7 @@ class DefaultVoiceCoordinator(
     private val client: VoiceClient,
     private val keeper: SessionKeeper,
     private val scope: CoroutineScope,
+    private val reportException: (String, Throwable) -> Unit,
 ) : VoiceCoordinator {
     private val mutableState = MutableStateFlow(CoordinatedVoiceState())
     override val state = mutableState.asStateFlow()
@@ -158,6 +159,7 @@ class DefaultVoiceCoordinator(
                 opened.events.collect { commands.send(Command.Event(currentGeneration, it)) }
                 commands.send(Command.Ended(currentGeneration, "VOICE_CONNECTION_CLOSED"))
             } catch (error: Throwable) {
+                reportException("VoiceCoordinator.startConnection", error)
                 currentCoroutineContext().ensureActive()
                 commands.send(Command.Ended(currentGeneration, (error as? PartyException)?.code ?: "VOICE_CONNECTION_FAILED"))
             } finally {
@@ -198,13 +200,13 @@ class DefaultVoiceCoordinator(
         // The application owner releases membership on every platform before
         // relinquishing foreground protection; cancellation cannot skip cleanup.
         withContext(NonCancellable) {
-            withTimeoutOrNull(5_000) { runCatching { rooms.leave(oldRoom.roomId) } }
+            withTimeoutOrNull(5_000) { runCatching { rooms.leave(oldRoom.roomId) }.onFailure { reportException("VoiceCoordinator.leaveRoom", it) } }
             keeper.stop()
         }
     }
 
     private suspend fun release(old: VoiceSession?) {
-        if (old != null) withContext(NonCancellable) { withTimeoutOrNull(3_000) { runCatching { old.disconnect() } } }
+        if (old != null) withContext(NonCancellable) { withTimeoutOrNull(3_000) { runCatching { old.disconnect() }.onFailure { reportException("VoiceCoordinator.release", it) } } }
     }
 
     private sealed interface Command {

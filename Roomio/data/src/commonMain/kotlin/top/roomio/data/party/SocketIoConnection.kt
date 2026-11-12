@@ -1,5 +1,8 @@
 package top.roomio.data.party
 
+import top.roomio.data.diagnostics.logHandledException
+import top.roomio.data.diagnostics.loggedRunCatching
+
 import io.ktor.client.plugins.websocket.DefaultClientWebSocketSession
 import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
@@ -94,6 +97,7 @@ internal class SocketIoConnection(
             try {
                 socket.send(Frame.Text(encodeNamespaceEvent(namespace, id, event)))
             } catch (error: Throwable) {
+                logHandledException("SocketIoConnection.catch1", error)
                 terminate(error)
                 throw error
             }
@@ -118,13 +122,13 @@ internal class SocketIoConnection(
     internal suspend fun unregister(namespace: String) {
         val remove = synchronized(namespaces) { namespaces.remove(namespace) }
         remove?.fail(PartyException("SOCKET_CLOSED", "Socket.IO namespace closed"))
-        if (remove != null && !closed.isCompleted) runCatching { sendRaw("41$namespace,") }
+        if (remove != null && !closed.isCompleted) loggedRunCatching("SocketIoConnection.run3") { sendRaw("41$namespace,") }
         if (synchronized(namespaces) { namespaces.isEmpty() }) close()
     }
 
     suspend fun close() {
         terminate(PartyException("SOCKET_CLOSED", "Socket.IO connection closed"))
-        runCatching { socket.close(CloseReason(CloseReason.Codes.NORMAL, "client closing")) }
+        loggedRunCatching("SocketIoConnection.run4") { socket.close(CloseReason(CloseReason.Codes.NORMAL, "client closing")) }
         scope.cancel()
     }
 
@@ -140,6 +144,7 @@ internal class SocketIoConnection(
                 for (packet in parseEnginePackets(text)) handleEnginePacket(packet)
             }
         } catch (error: Throwable) {
+            logHandledException("SocketIoConnection.catch2", error)
             failure = error
         } finally {
             terminate(failure ?: PartyException("SOCKET_CLOSED", "Socket.IO connection ended"))
@@ -171,7 +176,7 @@ internal class SocketIoConnection(
         when (packet.type) {
             SOCKET_CONNECT -> client.connected.complete(Unit)
             SOCKET_CONNECT_ERROR -> {
-                val data = runCatching { json.parseToJsonElement(packet.data).jsonObject }.getOrNull()
+                val data = loggedRunCatching("SocketIoConnection.run5") { json.parseToJsonElement(packet.data).jsonObject }.getOrNull()
                 val details = data?.get("data") as? JsonObject
                 val code = details?.get("code")?.jsonPrimitive?.contentOrNull
                     ?: data?.get("code")?.jsonPrimitive?.contentOrNull ?: "INVALID_TICKET"

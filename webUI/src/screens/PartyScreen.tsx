@@ -1,3 +1,4 @@
+import { logHandledException } from '../data/sessionLog';
 import type { GroupSyncUi } from '../components/useGroupSync';
 import { t } from '../i18n';
 import { Bug } from 'lucide-react';
@@ -187,7 +188,8 @@ export function PartyScreen({
   const copyUrl = async () => {
     try {
       await writeClipboardText(activeUrl);
-    } catch {
+    } catch (handledError) {
+      logHandledException("PartyScreen.PartyScreen.copyUrl.1", handledError);
       onNotify(t("Copy is unavailable. Select the link manually."));
       return;
     }
@@ -200,7 +202,8 @@ export function PartyScreen({
     let pasted = '';
     try {
       pasted = await navigator.clipboard.readText();
-    } catch {
+    } catch (handledError) {
+      logHandledException("PartyScreen.PartyScreen.pasteUrl.2", handledError);
       if (live) { onNotify(t("Paste is unavailable. Enter the video URL manually.")); return; }
       pasted = sampleVideoUrl;
     }
@@ -213,7 +216,8 @@ export function PartyScreen({
       await writeClipboardText(value);
       setInviteCopyState(target);
       onNotify(target === 'code' ? t("Party code copied") : t("Invite link copied"));
-    } catch {
+    } catch (handledError) {
+      logHandledException("PartyScreen.PartyScreen.copyInvite.3", handledError);
       setInviteCopyState('error');
       onNotify(t("Copy is unavailable. You can select the text manually."));
     }
@@ -673,7 +677,8 @@ function CinemaPlayer({
       try {
         await playerRef.current.requestFullscreen();
         return;
-      } catch {
+      } catch (handledError) {
+        logHandledException("PartyScreen.CinemaPlayer.toggleFullscreen.4", handledError);
         // Embedded webviews may expose but reject the native API.
       }
     }

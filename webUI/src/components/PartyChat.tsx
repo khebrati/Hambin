@@ -1,3 +1,4 @@
+import { logHandledException } from '../data/sessionLog';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ArrowDown, Check, ChevronDown, ChevronUp, MessageCircle, Send, WifiOff } from 'lucide-react';
 import { t, useLanguage } from '../i18n';
@@ -67,6 +68,7 @@ export function PartyChat({ chat, connected }: { chat: ChatControls; connected: 
         setNotice(t('Message sent'));
       }
     } catch (error) {
+      logHandledException("PartyChat.PartyChat.send.1", error);
       if (mounted.current) setPending(current => current.map(m => m.id === message.id ? { ...m, state: 'failed', error: errorMessage(error) } : m));
     }
   }
@@ -75,7 +77,7 @@ export function PartyChat({ chat, connected }: { chat: ChatControls; connected: 
     setLoadingMore(true); setHistoryError('');
     if (!refresh) setAtBottom(false);
     try { if (refresh) { await chat.refresh(); setAtBottom(true); } else await chat.loadEarlier(); }
-    catch (error) { if (mounted.current) setHistoryError(errorMessage(error)); }
+    catch (error) { logHandledException("PartyChat.PartyChat.history.2", error);  if (mounted.current) setHistoryError(errorMessage(error)); }
     finally { if (mounted.current) setLoadingMore(false); }
   }
   const ids = new Set(remote.map(m => m.id));

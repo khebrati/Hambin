@@ -8,7 +8,7 @@ beforeEach(() => { vi.clearAllMocks(); });
 afterEach(() => vi.unstubAllGlobals());
 
 it('logs a failed request including duration without retaining request content', async () => {
-  vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('private-network-message')));
+  vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Network request failed ticket=private-ticket https://private-host/movie')));
   const before = sessionLog().length;
   await expect(request('/v1/rooms/private-room/chat/messages', { text: 'private-chat-message' })).rejects.toMatchObject({ code: 'NETWORK' });
   const captured = sessionLog().slice(before);
@@ -16,7 +16,10 @@ it('logs a failed request including duration without retaining request content',
   expect(captured).toContain('http.failure');
   expect(captured).toContain('"code":"NETWORK"');
   expect(captured).toContain('elapsedMs');
-  expect(captured).not.toMatch(/private-(network|chat|room|access)/);
+  expect(captured).toContain('Network request failed');
+  expect(captured).toContain('"event":"exception.handled"');
+  expect(captured).toContain('apiDiagnostics.test.ts:');
+  expect(captured).not.toMatch(/private-(ticket|host|chat|room|access)/);
 });
 it('links both auth recovery attempts and completion under one operation', async () => {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(new Response('{"code":"SESSION_EXPIRED"}', { status: 401 })).mockResolvedValueOnce(new Response('{"accepted":true}')));

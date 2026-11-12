@@ -1,5 +1,7 @@
 package top.roomio.data.profile
 
+import top.roomio.data.diagnostics.loggedRunCatching
+
 import com.russhwolf.settings.Settings
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.SingleIn
@@ -24,7 +26,7 @@ interface ProfileDataBindings {
         @SingleIn(AppScope::class)
         fun provideSettings(secureStorage: SecureCredentialStorage): Settings = Settings().also {
             // Storage errors must not be mistaken for a brand-new identity.
-            val existingSession = runCatching { secureStorage.read() != null }.getOrDefault(true)
+            val existingSession = loggedRunCatching("ProfileDataBindings.run1") { secureStorage.read() != null }.getOrDefault(true)
             initializeProfilePreferences(it, existingSession)
         }
     }

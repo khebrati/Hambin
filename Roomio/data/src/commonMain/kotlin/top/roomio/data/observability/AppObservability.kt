@@ -1,5 +1,7 @@
 package top.roomio.data.observability
 
+import top.roomio.data.diagnostics.logHandledException
+
 import co.touchlab.kermit.LogWriter
 import co.touchlab.kermit.Logger
 import co.touchlab.kermit.Severity
@@ -72,8 +74,9 @@ class AppObservability(private val http: HttpClient, settings: Settings) : Produ
                         }
                     }
                 } catch (cancel: kotlinx.coroutines.CancellationException) {
+                    logHandledException("AppObservability.catch1", cancel)
                     if (!scope.coroutineContext[kotlinx.coroutines.Job]!!.isActive) throw cancel
-                } catch (_: Exception) { /* Analytics failures must not become application failures. */ }
+                } catch (handledError: Exception) { logHandledException("AppObservability.catch2", handledError);  /* Analytics failures must not become application failures. */ }
             }
         }
         track("app_opened")

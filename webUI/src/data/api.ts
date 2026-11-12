@@ -1,3 +1,4 @@
+import { logHandledException } from './sessionLog';
 import { t } from '../i18n';
 import { trackApiSuccess } from '../observability';
 import { diagnosticEvent, diagnosticRoute, diagnosticError, nextOperationId } from './sessionLog';
@@ -21,18 +22,21 @@ export async function request<T>(path: string, body?: unknown, method = body ===
         diagnosticEvent('http.attempt_response', { operation, refresh: force, status: response.status });
         return response;
       } catch (error) {
+        logHandledException("api.request.send.1", error);
         diagnosticEvent('http.transport_failure', { operation, code: diagnosticError(error) });
         throw new ApiError('NETWORK');
       }
     };
     let response = await send(false);
     if (response.status === 401) {
-      const failure = await response.clone().json().catch(() => ({}));
+      const failure = await response.clone().json().catch((handledError) => {
+        logHandledException("api.request.failure.2", handledError); return ({}); });
       if (['SESSION_EXPIRED', 'INVALID_TOKEN', 'UNAUTHENTICATED'].includes(failure.code)) response = await send(true);
     }
     diagnosticEvent('http.response', { operation, status: response.status, elapsedMs: Math.round(performance.now() - started) });
     if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
+      const error = await response.json().catch((handledError) => {
+        logHandledException("api.request.error.3", handledError); return ({}); });
       throw new ApiError(error.code || 'UNAVAILABLE', response.status, error.code === 'ALREADY_IN_ROOM' && typeof error.activePartyCode === 'string' && /^[0-9A-HJKMNP-TV-Z]{8}$/.test(error.activePartyCode) ? error.activePartyCode : undefined);
     }
     const result = response.status === 204 ? undefined as T : await response.json();
@@ -40,6 +44,7 @@ export async function request<T>(path: string, body?: unknown, method = body ===
     trackApiSuccess(route, method);
     return result;
   } catch (error) {
+    logHandledException("api.request.4", error);
     diagnosticEvent('http.failure', { operation, code: diagnosticError(error), elapsedMs: Math.round(performance.now() - started) });
     throw error;
   }
@@ -65,6 +70,7 @@ export class MutationRequests {
       this.keys.delete(operation);
       return result;
     } catch (error) {
+      logHandledException("api.run.5", error);
       if (error instanceof ApiError && error.status > 0 && error.status < 500) this.keys.delete(operation);
       throw error;
     }

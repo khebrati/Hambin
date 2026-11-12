@@ -1,5 +1,8 @@
 package top.roomio.data.party
 
+import top.roomio.data.diagnostics.logHandledException
+import top.roomio.data.diagnostics.loggedRunCatching
+
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
@@ -21,6 +24,7 @@ internal class AndroidMicrophoneCapture : MicrophoneCapture {
             recorder.startRecording()
             check(recorder.recordingState == AudioRecord.RECORDSTATE_RECORDING)
         } catch (error: Exception) {
+            logHandledException("AndroidMicrophoneCapture.catch1", error)
             close()
             throw error
         }
@@ -30,7 +34,7 @@ internal class AndroidMicrophoneCapture : MicrophoneCapture {
         recorder.read(samples, 0, samples.size, AudioRecord.READ_NON_BLOCKING)
 
     override fun close() {
-        runCatching { recorder.stop() }
+        loggedRunCatching("AndroidMicrophoneCapture.run2") { recorder.stop() }
         recorder.release()
     }
 }

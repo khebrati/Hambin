@@ -1,5 +1,7 @@
 package top.roomio.data.profile
 
+import top.roomio.data.diagnostics.loggedRunCatching
+
 import com.russhwolf.settings.Settings
 import dev.zacsweers.metro.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,7 +18,7 @@ class PreferencesThemeRepository(private val settings: Settings) : ThemePreferen
     )
     override val color = mutableColor.asStateFlow()
 
-    override fun selectColor(color: ThemeColor): Result<Unit> = runCatching {
+    override fun selectColor(color: ThemeColor): Result<Unit> = loggedRunCatching("PreferencesThemeRepository.run1") {
         settings.putString(KEY, color.name)
         mutableColor.value = color
     }

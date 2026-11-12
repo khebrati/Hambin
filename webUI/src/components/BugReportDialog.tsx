@@ -1,3 +1,4 @@
+import { logHandledException } from '../data/sessionLog';
 import { t } from '../i18n';
 import { useEffect, useRef, useState } from 'react';
 import { Button, Dialog, StatusCard } from './Material';
@@ -26,7 +27,7 @@ export function BugReportDialog({ open, roomId, onClose, onSent, enabled }: {ope
       await request(`/v1/rooms/${encodeURIComponent(roomId)}/bug-reports`, pending.current.payload);
       diagnosticEvent('report.accepted');
       pending.current = null; setDescription(''); onClose(); onSent();
-    } catch (failure) { diagnosticEvent('report.failure', { code: diagnosticError(failure) }); setError(errorMessage(failure)); }
+    } catch (failure) { logHandledException("BugReportDialog.BugReportDialog.send.1", failure);  diagnosticEvent('report.failure', { code: diagnosticError(failure) }); setError(errorMessage(failure)); }
     finally { inFlight.current = false; setSending(false); }
   };
   return <Dialog className="bug-report-dialog" open={open} title={t("Report a bug")} onClose={() => { if (!inFlight.current) onClose(); }} actions={<>

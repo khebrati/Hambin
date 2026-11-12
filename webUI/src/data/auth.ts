@@ -1,3 +1,4 @@
+import { logHandledException } from './sessionLog';
 import { diagnosticEvent, diagnosticError, nextOperationId } from './sessionLog';
 import { avatarName, avatarOptions } from './avatarCatalog';
 import type { IdentityDto } from './contracts';
@@ -44,12 +45,14 @@ async function sessionRequest(path: string, body: unknown, accessToken?: string)
       body: JSON.stringify(body), signal: AbortSignal.timeout(15000),
     });
   } catch (error) {
+    logHandledException("auth.sessionRequest.1", error);
     diagnosticEvent('auth.failure', { operation, code: diagnosticError(error), elapsedMs: Math.round(performance.now() - started) });
     throw new ApiError('NETWORK');
   }
   diagnosticEvent('auth.response', { operation, status: response.status, elapsedMs: Math.round(performance.now() - started) });
   if (!response.ok) {
-    const failure = await response.json().catch(() => ({}));
+    const failure = await response.json().catch((handledError) => {
+      logHandledException("auth.sessionRequest.failure.2", handledError); return ({}); });
     diagnosticEvent('auth.rejected', { operation, code: diagnosticError(new ApiError(failure.code || 'AUTH_UNAVAILABLE')) });
     throw new ApiError(failure.code || 'AUTH_UNAVAILABLE', response.status);
   }
@@ -60,6 +63,7 @@ function scheduleRefresh(delay?: number) {
   if (!current || listeners.size === 0) return;
   timer = setTimeout(() => {
     void token(true).catch(error => {
+      logHandledException("auth.scheduleRefresh.3", error);
       for (const onError of listeners.values()) onError(error);
       if (!canResetIdentity(error)) scheduleRefresh(30_000);
     });
@@ -86,6 +90,7 @@ async function obtain(force: boolean): Promise<GuestSession> {
       localStorage.setItem(establishedKey, '1');
       return accept(value);
     } catch (error) {
+      logHandledException("auth.obtain.run.4", error);
       // Only a genuinely new browser without a cookie may register automatically.
       if (established || current || !(error instanceof ApiError) || error.code !== 'UNAUTHENTICATED') throw error;
     }
@@ -115,7 +120,7 @@ async function obtain(force: boolean): Promise<GuestSession> {
 /** Keep explicit profile choices available for subsequent, explicitly requested identity resets. */
 export function rememberProfile(profile: Profile) {
   initialProfile = { name: profile.name, avatar: profile.avatar, language: profile.language };
-  try { localStorage.setItem(initialProfileKey, JSON.stringify(initialProfile)); } catch { /* Backend and in-memory profile retain the accepted choice. */ }
+  try { localStorage.setItem(initialProfileKey, JSON.stringify(initialProfile)); } catch (handledError) { logHandledException("auth.rememberProfile.5", handledError);  /* Backend and in-memory profile retain the accepted choice. */ }
 }
 export function ensureSession(profile?: Profile): Promise<GuestSession> {
   initialProfile = profile ?? initialProfile;
@@ -135,7 +140,8 @@ export function canResetIdentity(error: unknown): boolean {
 }
 /** Call only after explicit confirmation that existing room ownership will be abandoned. */
 export async function resetIdentity(): Promise<void> {
-  if (pending) await pending.catch(() => {});
+  if (pending) await pending.catch((handledError) => {
+    logHandledException("auth.resetIdentity.6", handledError); });
   await sessionRequest('/reset', {});
   clearTimeout(timer);
   current = undefined;

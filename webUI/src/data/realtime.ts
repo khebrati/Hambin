@@ -1,3 +1,4 @@
+import { logHandledException } from './sessionLog';
 import { SyncClock, type GroupSyncState, type SyncStateFrame } from './groupSync';
 import { diagnosticEvent, diagnosticError } from './sessionLog';
 import { io, type Socket } from 'socket.io-client';
@@ -51,7 +52,7 @@ export class RoomConnection {
         }
         if (!this.snapshot) return;
         const next = reduceEvent(this.snapshot, event);
-        if (next) this.applySnapshot(next); else { this.pendingEvents.push(event); void this.recover().catch(e => this.options.onError(e)); }
+        if (next) this.applySnapshot(next); else { this.pendingEvents.push(event); void this.recover().catch(e => { logHandledException("realtime.connect.1", e); return this.options.onError(e); }); }
       });
       socket.on('sync.state', (value: SyncStateFrame) => { if(generation===this.generation&&!this.closed) this.options.onSyncState?.(value); });
       socket.on('sync.result', (result: SyncResult) => {
@@ -60,15 +61,20 @@ export class RoomConnection {
         diagnosticEvent('room.sync_result', { status: result.status, targetPositionMs: result.targetPositionMs });
         clearTimeout(waiter.timer); this.syncWaiters.delete(result.requestId); waiter.resolve(result);
       });
-      socket.on('error', (error: { code: string }) => this.options.onError(new ApiError(error.code)));
+      socket.on('error', (error: { code: string }) => {
+        logHandledException('realtime.socket.error', error);
+        this.options.onError(new ApiError(error.code));
+      });
       socket.on('disconnect', () => { diagnosticEvent('room.disconnected', { generation }); this.schedule(); });
       socket.on('connect_error', (error: Error & { data?: { code: string } }) => {
+        logHandledException('realtime.socket.connect', error);
         diagnosticEvent('room.connect_failure', { generation, code: diagnosticError(new ApiError(error.data?.code || 'NETWORK')) });
         this.options.onError(new ApiError(error.data?.code || 'NETWORK'));
         this.schedule();
       });
       socket.connect();
     } catch (error) {
+      logHandledException("realtime.connect.2", error);
       if (this.closed || generation !== this.generation) return;
       this.options.onError(error);
       if (error instanceof ApiError && ['NOT_A_MEMBER', 'ROOM_ENDED', 'ROOM_NOT_FOUND', 'SESSION_REVOKED'].includes(error.code)) { this.options.onClosed(error.code); this.close(); } else this.schedule();
@@ -156,7 +162,7 @@ export class RoomConnection {
     }));
   }
   async calibrateClock() {
-    for(let i=0;i<4;i++){const sent=performance.now();try{const result=await this.command('sync.clock',{}) as {serverTimeMs:number};this.syncClock.sample(result.serverTimeMs,sent);}catch{return;}}
+    for(let i=0;i<4;i++){const sent=performance.now();try{const result=await this.command('sync.clock',{}) as {serverTimeMs:number};this.syncClock.sample(result.serverTimeMs,sent);}catch (handledError){ logHandledException("realtime.calibrateClock.3", handledError); return;}}
   }
   async refreshAuth(accessToken: string) {
     const socket = this.socket;

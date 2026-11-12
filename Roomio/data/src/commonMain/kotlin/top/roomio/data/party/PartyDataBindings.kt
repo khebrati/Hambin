@@ -1,5 +1,7 @@
 package top.roomio.data.party
 
+import top.roomio.data.diagnostics.logHandledException
+
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Binds
 import dev.zacsweers.metro.BindingContainer
@@ -75,7 +77,7 @@ interface PartyDataBindings {
         @Provides
         @SingleIn(AppScope::class)
         fun provideVoiceCoordinator(rooms: RoomRepository, voice: VoiceClient, keeper: SessionKeeper): VoiceCoordinator =
-            DefaultVoiceCoordinator(rooms, voice, keeper, CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate))
+            DefaultVoiceCoordinator(rooms, voice, keeper, CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate), ::logHandledException)
 
         @Provides
         @SingleIn(AppScope::class)
