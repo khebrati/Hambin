@@ -2352,7 +2352,6 @@ private fun BugReportDialog(state: RoomUiState, onAction: (RoomAction) -> Unit) 
                 if (state.bugSent) {
                     Text(stringResource(Res.string.bug_report_sent))
                 } else {
-                    Text(stringResource(Res.string.bug_report_context))
                     OutlinedTextField(
                         value = state.bugDescription,
                         onValueChange = { onAction(RoomAction.BugDescriptionChanged(it)) },

@@ -502,3 +502,9 @@ deployment evidence remains historical.
 - **Date:** 2026-11-12
 - **Decision:** In browser and native chat, consecutive messages from one person share a single sender/“You” and time header above the first bubble. Show “Sent” after the last bubble only. Keep bubbles close together and show the avatar only at the start of a group.
 - **Identity and delivery:** Group by stable sender identity, regardless of matching names/avatars or elapsed time. Preserve per-message sending/failure feedback and recovery controls. Recompute boundaries when messages arrive, history loads, or pending messages reconcile.
+
+
+## DD-058: Bug Report Dialog Notice
+
+- **Date:** 2026-11-12
+- **Decision:** Omit the diagnostic storage and Sentry delivery notice from browser and native bug-report dialogs in English and Persian, per stakeholder direction. Keep report submission and delivery behavior unchanged.

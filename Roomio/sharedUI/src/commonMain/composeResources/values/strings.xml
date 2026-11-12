@@ -202,7 +202,6 @@
     <string name="voice_audio_device_failed">Audio device interrupted. Check your headset or microphone and retry voice connections.</string>
     <string name="report_bug">Report a bug</string>
     <string name="bug_report_description">What went wrong?</string>
-    <string name="bug_report_context">Your device details and app log from this session will be sent with your description.</string>
     <string name="bug_report_send">Send</string>
     <string name="bug_report_sending">Sending…</string>
     <string name="bug_report_sent">Bug report sent. Thank you.</string>

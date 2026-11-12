@@ -202,7 +202,6 @@
   <string name="voice_audio_device_failed">دستگاه صوتی قطع شد. هدفون یا میکروفون را بررسی کنید و اتصال صوتی را دوباره امتحان کنید.</string>
   <string name="report_bug">گزارش اشکال</string>
   <string name="bug_report_description">چه مشکلی پیش آمد؟</string>
-  <string name="bug_report_context">مشخصات دستگاه و گزارش برنامه از این نشست همراه توضیح شما ارسال می‌شود.</string>
   <string name="bug_report_send">ارسال</string>
   <string name="bug_report_sending">در حال ارسال…</string>
   <string name="bug_report_sent">گزارش اشکال ارسال شد. سپاسگزاریم.</string>
