@@ -236,7 +236,6 @@
   "Use dark theme": "استفاده از پوسته تیره",
   "Android app": "برنامه اندروید",
   "Native Android app": "برنامه اندروید",
-  "Background voice party · v1.2.1": "گپ صوتی در پس‌زمینه · v1.2.1",
   "Download native Android app": "دریافت برنامه اندروید",
   "Download for Android": "دریافت برای اندروید",
   "Color applied for now. Couldn’t remember it on this device. Select it again to retry.": "رنگ فعلاً اعمال شد، اما در این دستگاه ذخیره نشد. برای تلاش دوباره آن را انتخاب کنید.",
@@ -504,5 +503,6 @@
   "Caught up to {name}": "با {name} هماهنگ شدی",
   "Action": "حرکت",
   "Cancel request": "بیخیال",
-  "Sync cancelled": "میزبان بیخیال شد، هرکس فیلم خودشو ادامه میده."
+  "Sync cancelled": "میزبان بیخیال شد، هرکس فیلم خودشو ادامه میده.",
+  "Background voice party · v1.3.0": "گپ صوتی در پس‌زمینه · v1.3.0"
 }

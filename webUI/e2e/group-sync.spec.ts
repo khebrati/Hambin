@@ -1,10 +1,11 @@
 import { readFile } from 'node:fs/promises';
 import { test, expect, type BrowserContext } from '@playwright/test';
 
-for(const compact of [false,true])test(`live group sync: ${compact?'compact dark RTL large text':'desktop light'}`,  async ({browser})=>{
+for(const compact of [false,true])test(`live group sync: ${compact?'compact dark RTL large text':'desktop light'}`,  async ({browser},testInfo)=>{
  test.setTimeout(120000);
  test.skip(process.env.HAMBIN_SYNC_E2E!=='1','Requires the local fresh backend.');
  const contexts:BrowserContext[]=[];
+ const errors:string[]=[];const forbiddenAuthHosts:string[]=[];
  try {
   const media=await readFile('e2e/fixtures/player-mkv/movie.mp4');
   for(let i=0;i<3;i++){
@@ -16,6 +17,7 @@ for(const compact of [false,true])test(`live group sync: ${compact?'compact dark
    });
   }
   const [owner,guest,declined]=await Promise.all(contexts.map(c=>c.newPage()));
+  for(const page of [owner,guest,declined]){page.on('pageerror',error=>errors.push(error.message));page.on('request',request=>{const host=new URL(request.url()).hostname;if(/firebase|identitytoolkit|securetoken/.test(host))forbiddenAuthHosts.push(host)});}
   await owner.goto(compact?'/?theme=dark&largeText=1&dir=rtl':'/');await owner.getByRole('button',{name:'Start a party',exact:true}).click();await owner.getByRole('button',{name:'Start the party',exact:true}).click();
   await expect(owner.getByRole('textbox',{name:'Message the party',exact:true})).toBeEnabled();
   const code=await owner.evaluate(()=>sessionStorage.getItem('roomio-active-code'));
@@ -40,6 +42,7 @@ for(const compact of [false,true])test(`live group sync: ${compact?'compact dark
   await guest.getByRole('button',{name:'Sync to room',exact:true}).first().click();await guest.getByRole('button',{name:'Accept & pause',exact:true}).click();
   await declined.getByRole('button',{name:'Not joining',exact:true}).click();
   await expect(owner.locator('.group-sync-person--accepted')).toHaveCount(1);await expect(owner.locator('.group-sync-person--declined')).toHaveCount(1);
+  await owner.screenshot({path:testInfo.outputPath('owner-invitation.png')});
   await owner.getByRole('button',{name:'Start with 2',exact:true}).click();
   for(const p of [owner,guest])await expect(p.locator('.group-sync-countdown')).toBeVisible({timeout:20000});
   for(const p of [owner,guest])await expect.poll(()=>p.locator('video:not([hidden])').evaluate((v:HTMLVideoElement)=>v.paused),{timeout:8000}).toBe(false);
@@ -54,5 +57,6 @@ for(const compact of [false,true])test(`live group sync: ${compact?'compact dark
   await expect.poll(()=>guest.locator('video:not([hidden])').evaluate((v:HTMLVideoElement)=>v.currentTime),{timeout:10000}).toBeLessThan(2.5);
   expect(await owner.locator('video:not([hidden])').evaluate((v:HTMLVideoElement)=>v.paused)).toBe(true);
   expect(await owner.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  expect(errors).toEqual([]);expect(forbiddenAuthHosts).toEqual([]);
  }finally{await Promise.all(contexts.map(c=>c.close()));}
 });

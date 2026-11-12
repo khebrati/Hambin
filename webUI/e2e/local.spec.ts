@@ -8,7 +8,7 @@ async function openHome(page: Page) {
 async function create(page: Page) {
   await page.getByRole('button', { name: 'Start a party', exact: true }).click();
   await page.getByRole('button', { name: 'Start the party', exact: true }).click();
-  await expect(page.getByText('Connected', { exact: true })).toBeVisible();
+  await expect(page.getByRole('textbox', {name:'Message the party',exact:true})).toBeEnabled({timeout:20000});
   await page.getByRole('button', { name: 'Invite friends', exact: true }).first().click();
   const code = await page.getByRole('dialog').getByRole('textbox', { name: 'Invite code', exact: true }).inputValue();
   await page.getByRole('button', { name: 'Done', exact: true }).click();
@@ -18,7 +18,7 @@ async function join(page: Page, code: string) {
   await page.goto(`/?invite=${code}`);
   await expect(page.getByRole('heading', { name: 'Room preview', exact: true })).toBeVisible({timeout:20000});
   await page.getByRole('button', { name: 'Join party', exact: true }).click();
-  await expect(page.getByText('Connected', { exact: true })).toBeVisible();
+  await expect(page.getByRole('textbox', {name:'Message the party',exact:true})).toBeEnabled({timeout:20000});
 }
 async function leave(page: Page) {
   await page.getByRole('button', { name: 'Leave party', exact: true }).first().click();
@@ -56,14 +56,14 @@ test('real services: persistent profile, preview/cancel, two identities, owner a
     await expect(guest.getByLabel('Invite code')).toHaveValue(code);
     await guest.getByRole('button', { name: 'Take a look', exact: true }).click();
     await guest.getByRole('button', { name: 'Join party', exact: true }).click();
-    await expect(guest.getByText('Connected', { exact: true })).toBeVisible();
+    await expect(guest.getByRole('textbox', {name:'Message the party',exact:true})).toBeEnabled({timeout:20000});
     await expect(owner.locator('.participant-list:visible').first().getByText('You', { exact: true })).toBeVisible();
     await expect(owner.locator('.participant-list:visible').first().locator('.participant')).toHaveCount(2);
     await leave(owner);
     await expect(guest.getByText('Browser host left the room')).toBeVisible();
     await owner.reload();
     await owner.getByRole('button', { name: /return|rejoin/i }).click();
-    await expect(owner.getByText('Connected', { exact: true })).toBeVisible();
+    await expect(owner.getByRole('textbox', {name:'Message the party',exact:true})).toBeEnabled({timeout:20000});
     await expect(guest.getByText('Browser host left the room')).toHaveCount(0);
     await leave(guest); await leave(owner);
     await guest.goto(`/?invite=${code}`);
