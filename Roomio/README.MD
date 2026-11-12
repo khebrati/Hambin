@@ -1,4 +1,4 @@
-# Roomio
+# Watch Party native client
 
 ### Android
 To run the application on android device/emulator:  

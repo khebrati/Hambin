@@ -16,10 +16,11 @@ compose.desktop {
 
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
-            packageName = "Roomio"
+            packageName = "Watch Party"
             packageVersion = "1.0.0"
 
             linux {
+                packageName = "watch-party"
                 iconFile.set(project.file("appIcons/LinuxIcon.png"))
             }
             windows {

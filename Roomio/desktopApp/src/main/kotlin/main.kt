@@ -7,11 +7,11 @@ import top.roomio.app.App
 
 fun main() = application {
     Window(
-        title = "Roomio",
+        title = "Watch Party",
         state = rememberWindowState(width = 800.dp, height = 600.dp),
         onCloseRequest = ::exitApplication,
     ) {
         window.minimumSize = Dimension(350, 600)
-        App()
+        App(onAppNameChanged = { window.title = it })
     }
 }

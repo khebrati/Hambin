@@ -41,7 +41,7 @@
             disable_tlsalpn_challenge
         }
     }
-    respond "Hambin TURN relay" 200
+    respond "Watch Party TURN relay" 200
 }
 
 www.watchparty.top {

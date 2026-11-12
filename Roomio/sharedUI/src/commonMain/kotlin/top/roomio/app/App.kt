@@ -1,5 +1,6 @@
 package top.roomio.app.ui
 
+import roomio.sharedui.generated.resources.roomio
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import top.roomio.domain.profile.ThemePreferencesRepository
@@ -98,6 +99,7 @@ fun RoomioUi(
     sessionKeeper: SessionKeeper = PreviewSessionKeeper,
     onThemeChanged: @Composable (isDark: Boolean) -> Unit = {},
     launcherIconController: LauncherIconController? = null,
+    onAppNameChanged: (String) -> Unit = {},
 ) {
     val presentationGraph = remember(themePreferencesRepository, profileRepository, sessionRepository, roomRepository, realtimeClient, voiceCoordinator, sessionKeeper) {
         createGraphFactory<PresentationGraph.Factory>().create(
@@ -114,6 +116,8 @@ fun RoomioUi(
     val themeColor by themePreferencesRepository.color.collectAsState()
     val profile by profileRepository.observeProfile().collectAsState(profileRepository.currentProfile())
     AppLanguageEnvironment(profile.language) {
+        val appName = org.jetbrains.compose.resources.stringResource(roomio.sharedui.generated.resources.Res.string.roomio)
+        androidx.compose.runtime.LaunchedEffect(appName) { onAppNameChanged(appName) }
         AppTheme(onThemeChanged, themeColor = themeColor) {
             Box(Modifier.fillMaxSize()) {
                 RoomioNavigation(

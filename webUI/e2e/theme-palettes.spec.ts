@@ -17,7 +17,7 @@ for (const dark of [false, true]) {
     expect(colors.size).toBeGreaterThan(20);
     await page.reload();
     await expect(choices.getByRole('button', { name: 'Birch', exact: true })).toHaveAttribute('aria-pressed', 'true');
-    await choices.getByRole('button', { name: 'Roomio default', exact: true }).click();
+    await choices.getByRole('button', { name: 'Watch Party default', exact: true }).click();
     expect(await page.locator('html').evaluate(el => el.style.getPropertyValue('--md-sys-color-primary'))).toBe('');
   });
 }

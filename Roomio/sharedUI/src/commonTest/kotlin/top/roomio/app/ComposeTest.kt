@@ -98,7 +98,7 @@ class ComposeTest {
         onNodeWithText("Stream and chill").assertExists()
         onNodeWithText("Your next watch party is one room away.").assertDoesNotExist()
         onNodeWithText("READY WHEN EVERYONE IS").assertDoesNotExist()
-        onNodeWithText("Roomio").assertDoesNotExist()
+        onNodeWithText("Watch Party").assertDoesNotExist()
         onNodeWithText("Nika").assertExists()
         onNodeWithText("Create a party").assertExists()
         onNodeWithText("Join with code").assertExists()
@@ -129,7 +129,7 @@ class ComposeTest {
         onNodeWithText("Stream and chill").assertExists()
         onNodeWithText("Your next watch party is one room away.").assertDoesNotExist()
         onNodeWithText("READY WHEN EVERYONE IS").assertDoesNotExist()
-        onNodeWithText("Roomio").assertDoesNotExist()
+        onNodeWithText("Watch Party").assertDoesNotExist()
     }
 
     @Test
@@ -174,7 +174,7 @@ class ComposeTest {
         onNodeWithText("Stream and chill").assertExists()
         onNodeWithText("Your next watch party is one room away.").assertDoesNotExist()
         onNodeWithText("READY WHEN EVERYONE IS").assertDoesNotExist()
-        onNodeWithText("Roomio").assertDoesNotExist()
+        onNodeWithText("Watch Party").assertDoesNotExist()
 
         onNodeWithText("Create a party").performClick()
         onNodeWithText("Party manager").assertExists()
@@ -182,7 +182,7 @@ class ComposeTest {
         onNodeWithText("Stream and chill").assertExists()
         onNodeWithText("Your next watch party is one room away.").assertDoesNotExist()
         onNodeWithText("READY WHEN EVERYONE IS").assertDoesNotExist()
-        onNodeWithText("Roomio").assertDoesNotExist()
+        onNodeWithText("Watch Party").assertDoesNotExist()
     }
 
     @Test
@@ -200,7 +200,7 @@ class ComposeTest {
         onNodeWithText("Stream and chill").assertExists()
         onNodeWithText("Your next watch party is one room away.").assertDoesNotExist()
         onNodeWithText("READY WHEN EVERYONE IS").assertDoesNotExist()
-        onNodeWithText("Roomio").assertDoesNotExist()
+        onNodeWithText("Watch Party").assertDoesNotExist()
         onNodeWithText("Party manager").assertDoesNotExist()
     }
 

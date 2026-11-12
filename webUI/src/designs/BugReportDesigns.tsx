@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, Bug, Check, ChevronRight, Ellipsis, Headphones, Moon, Play, Plus, Settings, Sun, Ticket } from 'lucide-react';
 import { Avatar } from '../components/Avatar';
@@ -45,7 +46,7 @@ export default function BugReportDesigns() {
 
   return <main className="br-designs">
     <header className="br-intro">
-      <div><p className="eyebrow">ROOMIO / DESIGN EXPLORATION</p><h1>A little help. A better movie night.</h1><p>Three ways to report a bug. Tap an action to try its flow.</p></div>
+      <div><p className="eyebrow">{t("Watch Party")} / DESIGN EXPLORATION</p><h1>A little help. A better movie night.</h1><p>Three ways to report a bug. Tap an action to try its flow.</p></div>
       <div className="br-tools" aria-label="Preview settings">
         <Button variant="outlined" aria-pressed={large} onClick={() => setLarge(!large)}>Large text</Button>
         <Button variant="outlined" aria-pressed={rtl} onClick={() => setRtl(!rtl)}>RTL</Button>
@@ -56,7 +57,7 @@ export default function BugReportDesigns() {
       {concepts.map((concept, index) => <section className="br-concept" key={concept.title} aria-labelledby={`br-title-${index}`}>
         <div className="br-caption"><p className="eyebrow">{concept.place}</p><h2 id={`br-title-${index}`}>{concept.title}</h2><p>{concept.description}</p></div>
         <div className="br-phone">
-          <div className="br-appbar">{index === 0 && <ArrowLeft aria-hidden="true" />}<strong>{index === 0 ? 'Your profile' : index === 1 ? 'Friday night crew' : 'Roomio'}</strong>{index === 1 ? <IconButton icon={Ellipsis} label="Party options" aria-expanded={menu} onClick={() => setMenu(!menu)} /> : <Settings size={22} aria-hidden="true" />}</div>
+          <div className="br-appbar">{index === 0 && <ArrowLeft aria-hidden="true" />}<strong>{index === 0 ? 'Your profile' : index === 1 ? 'Friday night crew' : t('Watch Party')}</strong>{index === 1 ? <IconButton icon={Ellipsis} label="Party options" aria-expanded={menu} onClick={() => setMenu(!menu)} /> : <Settings size={22} aria-hidden="true" />}</div>
           {index === 0 ? <div className="br-context">
             <div className="br-profile"><Avatar avatarId="comet" label="Spider-Man" size="large" /><div><small>Ready to watch</small><strong>Spider-Man</strong></div></div>
             <div className="br-setting"><span>Display name</span><strong>Spider-Man</strong></div><div className="br-setting"><span>Avatar</span><div className="br-avatars"><Avatar avatarId="comet" label="Comet" /><Avatar avatarId="mint" label="Mint" /><Avatar avatarId="sunny" label="Sunny" /></div></div><div className="br-setting"><span>App language</span><strong>English</strong></div>
@@ -78,7 +79,7 @@ export default function BugReportDesigns() {
     </div>
     <footer className="br-footer"><span>Interactive concepts · No reports are sent.</span><label>Simulate submission <select value={outcome} onChange={e => { setOutcome(e.target.value as Outcome); setState('editing'); }}><option value="success">Success</option><option value="error">Send failure</option><option value="offline">Offline</option></select></label></footer>
     <div className={`br-report-modal br-report-modal--${active}`}>
-      <Dialog open={active !== null} title={state === 'success' ? 'Thanks for helping Roomio' : 'Report a bug'} onClose={close} actions={state === 'success' ? <Button onClick={close}>Done</Button> : <><Button variant="text" onClick={close}>{state === 'sending' ? 'Cancel' : 'Close'}</Button><Button disabled={!canSend} onClick={send}>{state === 'sending' ? 'Sending…' : state === 'error' ? 'Try again' : 'Send report'}</Button></>}>
+      <Dialog open={active !== null} title={state === 'success' ? t('Thanks for helping Watch Party') : 'Report a bug'} onClose={close} actions={state === 'success' ? <Button onClick={close}>Done</Button> : <><Button variant="text" onClick={close}>{state === 'sending' ? 'Cancel' : 'Close'}</Button><Button disabled={!canSend} onClick={send}>{state === 'sending' ? 'Sending…' : state === 'error' ? 'Try again' : 'Send report'}</Button></>}>
         {state === 'success' ? <div className="br-success"><span><Check size={32} aria-hidden="true" /></span><p role="status">Your report would be sent here.</p><p className="br-muted">This was a preview. Nothing was submitted.</p></div> : <div className="br-form">
           <p>{active === 1 ? 'What went wrong in your party?' : active === 2 ? 'Help us understand what happened.' : 'Something not working? Tell us about it.'}</p>
           {active === 1 && <fieldset disabled={state === 'sending'}><legend>Where is the problem?</legend><div className="br-categories">{['Video', 'Voice', 'Joining', 'Other'].map(value => <Button key={value} variant="outlined" aria-pressed={category === value} onClick={() => setCategory(value)}>{value}</Button>)}</div></fieldset>}

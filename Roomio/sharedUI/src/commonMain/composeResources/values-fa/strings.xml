@@ -115,13 +115,13 @@
   <string name="edit_profile">ویرایش نمایه</string>
   <string name="friends_count">%1$d دوست</string>
   <string name="friends_no_owner">%1$d دوست · بدون صاحب اتاق</string>
-  <string name="stream_and_chill">فیلم ببین، خوش بگذرون</string>
+  <string name="stream_and_chill">با هم ببینید</string>
   <string name="join_with_code">ورود با کد</string>
   <string name="last_room">آخرین اتاق</string>
   <string name="return_to_last_room">بازگشت به آخرین اتاق</string>
   <string name="open_party_manager">باز کردن مدیریت دورهمی</string>
   <string name="rejoin_as_owner">ورود دوباره به‌عنوان صاحب اتاق</string>
-  <string name="roomio">رومیو</string>
+  <string name="roomio">هم‌بین</string>
   <string name="settings">تنظیمات</string>
   <string name="watching_as">در حال تماشا با نام</string>
   <string name="your_room_is_waiting">اتاق شما منتظر است</string>
@@ -136,7 +136,7 @@
   <string name="save">ذخیره</string>
   <string name="a_friend_has_the_code">کد را از دوستتان بگیرید</string>
   <string name="create">ساخت</string>
-  <string name="create_party_description">رومیو یک کد دورهمی می‌سازد و شما را به سینمای خالی می‌برد.</string>
+  <string name="create_party_description">هم‌بین یک کد دورهمی می‌سازد و شما را به سینمای خالی می‌برد.</string>
   <string name="finding_party">در حال پیدا کردن دورهمی</string>
   <string name="join">ورود</string>
   <string name="manager_create_party">ساخت دورهمی</string>
@@ -212,9 +212,9 @@
   <string name="share_invite">اشتراک‌گذاری</string>
   <string name="share_unavailable_details">اشتراک‌گذاری باز نشد. دوباره تلاش کنید یا لینک بالا را انتخاب کنید و دستی به اشتراک بگذارید.</string>
   <string name="color_theme">رنگ پوسته</string>
-  <string name="color_theme_description">رنگ دلخواهتان را برای رومیو انتخاب کنید. بلافاصله اعمال می‌شود.</string>
+  <string name="color_theme_description">رنگ دلخواهتان را برای هم‌بین انتخاب کنید. بلافاصله اعمال می‌شود.</string>
   <string name="color_save_error">این رنگ ذخیره نشد. برای تلاش دوباره آن را انتخاب کنید.</string>
-  <string name="color_roomio">پیش‌فرض رومیو</string>
+  <string name="color_roomio">پیش‌فرض هم‌بین</string>
   <string name="color_tomato">گوجه‌ای</string>
   <string name="color_flamingo">فلامینگو</string>
   <string name="color_tangerine">نارنگی</string>

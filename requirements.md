@@ -59,4 +59,8 @@ Confirmed speaking-indicator semantics (2026-11-11):
 
 Confirmed Android launcher icon foundation (2026-11-11):
 1. Use the approved Shared Screen app icon, with bundled variants for all 24 named theme seed colors. Each background uses the exact supplied seed color with a contrasting foreground.
-2. Android launcher icon color follows the selected named theme, including restoration at app launch. Roomio default uses Shared Screen in Basil, matching the approved concept. Light/dark mode does not change the chosen icon color. Keep the saved theme if switching fails and offer Retry.
+2. Android launcher icon color follows the selected named theme, including restoration at app launch. The app default theme uses Shared Screen in Basil, matching the approved concept. Light/dark mode does not change the chosen icon color. Keep the saved theme if switching fails and offer Retry.
+
+Confirmed localized product naming (2026-11-12):
+1. The English app name is Watch Party. The Persian app name is هم‌بین, with a zero-width non-joiner (U+200C) between هم and بین. Use these names consistently in application text, browser metadata, launcher labels, and desktop/iOS display names. Roomio and Hambin are not user-facing brand names.
+2. The Persian home headline is «با هم ببینید». The English headline remains “Stream and chill”.

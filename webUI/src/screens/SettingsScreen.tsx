@@ -106,10 +106,10 @@ export function SettingsScreen({
         <section className="form-section" aria-labelledby="color-heading">
           <div className="section-heading">
             <span>03</span>
-            <div><h2 id="color-heading">{t("Color theme")}</h2><p>{t("Choose a color to make Roomio yours. Applies immediately.")}</p></div>
+            <div><h2 id="color-heading">{t("Color theme")}</h2><p>{t("Choose a color to make Watch Party yours. Applies immediately.")}</p></div>
           </div>
           <div className="theme-color-picker" role="group" aria-label={t("Color theme")}>
-            {[{ id: 'roomio', name: t("Roomio default"), seed: '#8F3B49' }, ...themeColors].map(color => (
+            {[{ id: 'roomio', name: t("Watch Party default"), seed: '#8F3B49' }, ...themeColors].map(color => (
               <button key={color.id} type="button" className="theme-color-choice"
                 aria-pressed={palette.colorId === color.id}
                 style={{ '--seed-color': color.seed } as CSSProperties}

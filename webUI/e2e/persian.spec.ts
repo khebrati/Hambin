@@ -14,8 +14,9 @@ test('Persian profile choice sends fa, persists after reload, and switches back 
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByLabel('App language', { exact: true }).selectOption('فارسی');
   await page.getByRole('button', { name: 'Save profile', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'فیلم ببین، خوش بگذرون' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'با هم ببینید' })).toBeVisible();
   expect(language).toBe('fa');
+  await expect(page).toHaveTitle('هم‌بین');
   await expect(page.locator('html')).toHaveAttribute('lang', 'fa');
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   await page.reload();
@@ -26,6 +27,7 @@ test('Persian profile choice sends fa, persists after reload, and switches back 
   await page.getByRole('button', { name: 'ذخیره نمایه', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Stream and chill' })).toBeVisible();
   expect(language).toBe('en');
+  await expect(page).toHaveTitle('Watch Party');
   await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
 });
 

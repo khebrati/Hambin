@@ -1,10 +1,10 @@
-# Hambin browser client
+# Watch Party browser client
 
 React/TypeScript/Vite client for the migrated WatchParty backend. Normal entry uses backend-owned anonymous identity, profiles, rooms, Socket.IO state, local video playback, explicit forward-only sync, and optional audio-only WebRTC mesh voice. No registration screen is required.
 
 ## Run locally
 
-Start PostgreSQL and the Hambin Node runtime using [the local stack instructions](../backend/local/README.md). The default API is `127.0.0.1:8081`. Enable the local Coturn profile and pass the same TURN settings to Node to test voice.
+Start PostgreSQL and the Watch Party Node runtime using [the local stack instructions](../backend/local/README.md). The default API is `127.0.0.1:8081`. Enable the local Coturn profile and pass the same TURN settings to Node to test voice.
 
 ```sh
 cd webUI
