@@ -110,3 +110,19 @@ test('player microphone cannot join voice, including in fullscreen', async ({ pa
     await expect(page.getByRole('heading', { name: 'Your mic is on' })).toBeVisible();
   });
 });
+
+for (const variant of [
+  { theme: 'light', dir: 'ltr', width: 1280, height: 900, large: '', lang: 'en' },
+  { theme: 'dark', dir: 'rtl', width: 390, height: 844, large: '1', lang: 'fa' },
+]) {
+  test(`unavailable WebRTC shows recovery instructions ${variant.lang}`, async ({ page }) => {
+    await page.setViewportSize(variant);
+    await page.goto(`/e2e/voice.html?${new URLSearchParams({ ...variant, width: String(variant.width), height: String(variant.height), status: 'error', error: 'WEBRTC_UNAVAILABLE' })}`);
+    const heading = variant.lang === 'en' ? 'Voice calling is unavailable in this browser' : 'تماس صوتی در این مرورگر در دسترس نیست';
+    await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
+    await expect(page.locator('.voice-panel p')).toContainText('WebRTC');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.locator('.voice-panel button').click();
+    await expect(page.locator('.voice-panel p')).toHaveCount(0);
+  });
+}

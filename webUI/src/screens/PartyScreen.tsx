@@ -141,7 +141,9 @@ export function PartyScreen({
     : voiceStatus === 'connecting' ? t("Joining voice…")
     : voiceStatus === 'degraded' ? t("Some voice connections need attention")
     : voiceStatus === 'reconnecting' ? t("Reconnecting voice signaling")
-    : voiceStatus === 'error' ? live?.voice.error === 'NETWORK'
+    : voiceStatus === 'error' ? live?.voice.error === 'WEBRTC_UNAVAILABLE'
+      ? t("Voice calling is unavailable in this browser")
+      : live?.voice.error === 'NETWORK'
       ? t("Could not reach voice. Check your connection and try again.")
       : t("Could not join voice. Try again.")
     : voiceMuted ? t("Your mic is muted") : t("Your mic is on");
@@ -349,6 +351,7 @@ export function PartyScreen({
             <div>
               <span className="eyebrow">{t("Voice room")}</span>
               <h2 id="voice-heading" aria-live={voiceStatus === 'error' ? 'assertive' : 'polite'}>{voiceMessage}</h2>
+              {voiceStatus === 'error' && live?.voice.error === 'WEBRTC_UNAVAILABLE' && <p>{t("Enable WebRTC in your browser settings or privacy extension, reload this page, and join voice again.")}</p>}
             </div>
             {voiceStatus === 'connecting' ? (
               <span className="md-loading__shape voice-panel__progress" role="progressbar" aria-label={t("Joining voice")} />

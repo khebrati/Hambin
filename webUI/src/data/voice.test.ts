@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MeshVoice, PeerGenerationFence, audioOnlySdp, type VoiceState } from './voice'
 import { sessionLog } from './sessionLog'
 
@@ -31,6 +31,7 @@ function setup(selfId = 'a', generation = 'g1') {
   clients.push(client)
   return { client, request, track, states }
 }
+beforeEach(() => { vi.stubGlobal('RTCPeerConnection', FakePeer) })
 afterEach(() => { FakePeer.autoConnect = false; clients.splice(0).forEach(client => client.disconnect()); sockets.length = 0; vi.unstubAllGlobals(); vi.useRealTimers() })
 
 describe('Android-compatible peer epochs', () => {
@@ -61,13 +62,28 @@ describe('microphone-only SDP', () => {
   })
 })
 describe('voice capture lifecycle', () => {
+  it.each([undefined, null, {}, () => {}])('rejects unavailable WebRTC before microphone capture (%s)', async value => {
+    const { client, request, states } = setup()
+    vi.stubGlobal('RTCPeerConnection', value)
+    await expect(client.join()).rejects.toThrow('WEBRTC_UNAVAILABLE')
+    expect(navigator.mediaDevices.getUserMedia).not.toHaveBeenCalled()
+    expect(request).not.toHaveBeenCalled()
+    expect(sockets).toHaveLength(0)
+    expect(states.at(-1)).toMatchObject({ status: 'error', muted: true, error: 'WEBRTC_UNAVAILABLE' })
+    vi.stubGlobal('RTCPeerConnection', FakePeer)
+    const joining = client.join(); await flush()
+    sockets[0].deliver('voice.roster', { members: [{ membershipId: 'a', voiceSessionId: 'g1', muted: true }] })
+    await joining
+    expect(states.at(-1)?.status).toBe('connected')
+  })
+
   it('retains the original handled peer-construction exception in the manual-report log', async () => {
     vi.useFakeTimers()
     const error = new TypeError('Peer construction failed credential=private-credential')
     vi.stubGlobal('RTCPeerConnection', class { constructor() { throw error } })
-    const { client, states } = setup()
+    const { client, states, track } = setup()
     const before = sessionLog().length
-    const joining = client.join(); await flush()
+    const joining = expect(client.join()).rejects.toThrow('Peer construction failed'); await flush()
     sockets[0].deliver('voice.roster', { members: [
       { membershipId: 'a', voiceSessionId: 'g1', muted: true },
       { membershipId: 'b', voiceSessionId: 'g2', muted: true },
@@ -79,7 +95,9 @@ describe('voice capture lifecycle', () => {
     expect(saved).toContain('voice.test.ts:')
     expect(saved).toContain('exception.handled')
     expect(saved).not.toContain('private-credential')
-    client.disconnect(); await joining
+    await joining
+    expect(track.stop).toHaveBeenCalledTimes(1)
+    expect(sockets[0].connected).toBe(false)
   })
   it('opts in muted, waits for roster, updates auth without replacing media, and stops capture on leave', async () => {
     const { client, track, states, request } = setup()

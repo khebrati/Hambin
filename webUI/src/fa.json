@@ -1,4 +1,6 @@
 {
+  "Voice calling is unavailable in this browser": "تماس صوتی در این مرورگر در دسترس نیست",
+  "Enable WebRTC in your browser settings or privacy extension, reload this page, and join voice again.": "WebRTC را در تنظیمات مرورگر یا افزونهٔ حریم خصوصی فعال کن، صفحه را دوباره بارگذاری کن و دوباره به گفت‌وگوی صوتی بپیوند.",
   "Checking your party…": "داریم دورهمی رو چک میکنیم…",
   "This party could not be loaded. It may have ended, or the invite code may be incorrect. Try again or ask for a new invite.": "دورهمی باز نشد. شاید تموم شده یا کدش اشتباهه. دوباره امتحان کن یا یه دعوت تازه بگیر.",
   "Try again": "تلاش دوباره",

@@ -98,6 +98,10 @@ export class MeshVoice {
     this.state = { status: 'connecting', muted: true, members: {} }
     this.publish()
     try {
+      // Capture can work even when Firefox settings/extensions disable WebRTC.
+      // Test constructibility without opening a connection or requesting media.
+      try { Reflect.construct(Object, [], globalThis.RTCPeerConnection) }
+      catch (cause) { throw new Error('WEBRTC_UNAVAILABLE', { cause }) }
       // Only this explicit opt-in operation requests capture; no camera is requested.
       const capture = navigator.mediaDevices.getUserMedia({ audio: true, video: false })
       let discarded = false
@@ -304,7 +308,14 @@ export class MeshVoice {
       this.cancelOpen = () => finish(new Error('Voice connection cancelled'))
       socket.on('voice.roster', (payload: { members: Member[] }) => this.enqueue(async () => {
         if (this.socket !== socket) return
-        await this.applyRoster(payload.members)
+        try { await this.applyRoster(payload.members) }
+        catch (error) {
+          // Settle startup now so join releases capture and preserves the cause.
+          // Later roster failures still use the normal connected-call recovery.
+          if (settled) throw error
+          finish(error)
+          return
+        }
         if (!muteReplayed) {
           muteReplayed = true
           this.authPaused = false
