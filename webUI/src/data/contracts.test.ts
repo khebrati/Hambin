@@ -36,3 +36,13 @@ it('chat events preserve playback and reject a wrong room or sequence', () => {
   expect(reduceEvent(snapshot,event(5,'chat.message',{message:{...message,roomId:'other'}}))).toBeNull();
   expect(reduceEvent(snapshot,event(5,'chat.message',{message:{...message,sequence:6}}))).toBeNull();
 });
+
+
+it('keeps people with identical names and avatars separate by membership and identity', () => {
+  const sameNames = { ...snapshot, members: snapshot.members.map(m => ({ ...m, displayName: 'Frog Wizard', avatar: 'mint' })) };
+  const party = partyModel(sameNames, 'guest');
+  expect(party.role).toBe('participant');
+  expect(party.participants.map(p => p.id)).toEqual(['host-member', 'guest-member']);
+  expect(party.participants.map(p => p.isSelf)).toEqual([false, true]);
+  expect(party.participants.map(p => p.isOwner)).toEqual([true, false]);
+});

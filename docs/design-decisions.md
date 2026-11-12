@@ -474,3 +474,12 @@ deployment evidence remains historical.
 - **Implementation:** The browser ships Pofak through local CSS font-face assets and its semantic typeface tokens. Native uses shared Compose font resources for all standard and emphasized Material typography roles, making the same assets available to desktop and iOS as well. Preserve the existing type sizes, line heights, RTL behavior, text scaling, and theme colors. The local font comparison tool remains optional development tooling.
 - **States:** Bundled fonts require no download or installation action from app users. Native resources remain available offline; browser font assets are served with the app, with a system fallback while loading. System fallback covers glyphs outside the bundled fonts, such as emoji.
 - **Validation:** Web production build and Chrome checks passed for all eight embedded weights across Home, Settings, Create/Join and Party, with compact/expanded layouts, English/Persian, dark theme and large RTL text; every font request was same-origin. Android debug assembly and shared app JVM compilation passed. Four temporary Compose rendering checks passed for compact Persian, dark/large-text Persian, expanded English and every font weight; screenshots reviewed and the temporary renderer removed. APK inspection confirmed all eight bundled fonts byte-for-byte. Physical Android and iOS runtime validation were not performed.
+
+
+## DD-054: Picture-based Avatar Names
+
+- **Date:** 2026-11-12
+- **Decision:** Each of the twelve existing avatar pictures has a fixed character name matching its artwork. Choosing an avatar sets the user's display name; remove custom name entry in browser and native Settings. This supersedes DD-007's display-name field and DD-039's random/editable character names. See [avatar name catalog and contract](avatar-names.md).
+- **Language:** Keep canonical English names identical for everyone; translate picker labels into Persian. Save applies avatar and language, and Back discards drafts.
+- **Identity:** Duplicate names are allowed. Stable guest/membership UUIDs control authentication, ownership, chat and voice. Repeated avatars can be visually ambiguous; no unique-name constraint or numeric suffix is introduced.
+- **Continuity:** Normalize existing profile/membership names without resetting identities or ownership. Preserve historical chat snapshots. Backend derives names and ignores the legacy name input.

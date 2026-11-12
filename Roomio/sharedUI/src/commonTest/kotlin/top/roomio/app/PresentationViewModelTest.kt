@@ -48,24 +48,16 @@ class PresentationViewModelTest {
     }
 
     @Test
-    fun settingsStateDerivesValidationFromActions() {
-        val viewModel = SettingsViewModel(
-            TestProfileRepository(),
-            TestThemePreferencesRepository(),
-        )
-
-        viewModel.onAction(SettingsAction.NameChanged("   "))
-
-        assertEquals("", viewModel.state.value.trimmedName)
-        assertTrue(viewModel.state.value.isNameError)
-        assertFalse(viewModel.state.value.canSave)
-
+    fun avatarSelectionDerivesNameAndSaveCommitsThePair() {
+        val repository = TestProfileRepository()
+        val viewModel = SettingsViewModel(repository, TestThemePreferencesRepository())
+        assertEquals("Ice Queen", viewModel.state.value.displayName)
         viewModel.onAction(SettingsAction.AvatarSelected(ProfileAvatar.BERRY))
-        viewModel.onAction(SettingsAction.NameChanged("  Mira  "))
-
-        assertEquals("Mira", viewModel.state.value.trimmedName)
-        assertEquals(ProfileAvatar.BERRY, viewModel.state.value.draftAvatar)
-        assertTrue(viewModel.state.value.canSave)
+        assertEquals("Captain Octopus", viewModel.state.value.displayName)
+        assertEquals(ProfileAvatarId.COMET, repository.currentProfile().avatar)
+        viewModel.onAction(SettingsAction.SaveClicked)
+        assertEquals("Captain Octopus", repository.currentProfile().name)
+        assertEquals(ProfileAvatarId.BERRY, repository.currentProfile().avatar)
     }
 
     @Test

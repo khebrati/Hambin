@@ -1,5 +1,5 @@
 import { diagnosticEvent, diagnosticError, nextOperationId } from './sessionLog';
-import { randomGuestName } from './guestName';
+import { avatarName } from './avatarCatalog';
 import type { IdentityDto } from './contracts';
 import { backendUrl } from './config';
 import { ApiError } from './errors';
@@ -99,7 +99,7 @@ async function obtain(force: boolean): Promise<GuestSession> {
   return pending;
 }
 export function ensureSession(profile?: Profile): Promise<GuestSession> {
-  initialProfile = profile ?? initialProfile ?? { name: randomGuestName(), avatar: 'COMET', language: 'en' };
+  initialProfile = profile ?? initialProfile ?? { name: avatarName('comet'), avatar: 'comet', language: 'en' };
   return obtain(false);
 }
 export async function token(force = false): Promise<string> {

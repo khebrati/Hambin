@@ -13,25 +13,17 @@ import top.roomio.domain.profile.ProfileRepository
 import top.roomio.domain.profile.UserProfile
 
 internal data class SettingsUiState(
-    val draftName: String,
     val draftAvatar: ProfileAvatar,
     val saveFailed: Boolean = false,
     val themeColor: ThemeColor = ThemeColor.ROOMIO,
     val colorSaveFailed: Boolean = false,
     val draftLanguage: top.roomio.domain.profile.AppLanguage = top.roomio.domain.profile.AppLanguage.ENGLISH,
 ) {
-    val trimmedName: String
-        get() = draftName.trim()
-
-    val isNameError: Boolean
-        get() = draftName.isNotEmpty() && trimmedName.isEmpty()
-
-    val canSave: Boolean
-        get() = trimmedName.isNotEmpty()
+    val displayName: String
+        get() = draftAvatar.toDomainAvatar().displayName
 }
 
 internal sealed interface SettingsAction {
-    data class NameChanged(val name: String) : SettingsAction
     data class AvatarSelected(val avatar: ProfileAvatar) : SettingsAction
     data class ColorSelected(val color: ThemeColor) : SettingsAction
     data class LanguageSelected(val language: top.roomio.domain.profile.AppLanguage) : SettingsAction
@@ -52,7 +44,6 @@ internal class SettingsViewModel(
     private val mutableState = MutableStateFlow(
         SettingsUiState(
             themeColor = themePreferencesRepository.color.value,
-            draftName = initialProfile.name,
             draftLanguage = initialProfile.language,
             draftAvatar = initialProfile.avatar.toPresentationAvatar(),
         ),
@@ -64,12 +55,6 @@ internal class SettingsViewModel(
 
     fun onAction(action: SettingsAction) {
         when (action) {
-            is SettingsAction.NameChanged -> mutableState.update {
-                it.copy(
-                    draftName = action.name,
-                    saveFailed = false,
-                )
-            }
             is SettingsAction.AvatarSelected -> mutableState.update {
                 it.copy(
                     draftAvatar = action.avatar,
@@ -90,11 +75,10 @@ internal class SettingsViewModel(
 
     private fun saveProfile() {
         val currentState = state.value
-        if (!currentState.canSave) return
 
         profileRepository.saveProfile(
             UserProfile(
-                name = currentState.trimmedName,
+                name = currentState.displayName,
                 language = currentState.draftLanguage,
                 avatar = currentState.draftAvatar.toDomainAvatar(),
             ),

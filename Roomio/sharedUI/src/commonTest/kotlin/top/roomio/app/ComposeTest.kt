@@ -14,6 +14,8 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextClearance
@@ -107,7 +109,7 @@ class ComposeTest {
     }
 
     @Test
-    fun homeSettingsCanUpdateTheDisplayName() = runComposeUiTest {
+    fun homeSettingsSetsNameFromAvatarWithoutCustomInput() = runComposeUiTest {
         setContent {
             RoomioUi(TestProfileRepository())
         }
@@ -115,17 +117,16 @@ class ComposeTest {
         onNodeWithContentDescription("Settings").performClick()
 
         onNodeWithText("Your profile").assertExists()
-        onNodeWithText("Display name").assertExists()
+        onNodeWithText("Display name").assertDoesNotExist()
         onNodeWithText("Avatar").assertExists()
-        onNodeWithText("Comet").assertExists()
-        onNodeWithText("Sunny").assertExists()
+        onAllNodesWithText("Ice Queen")[0].assertExists()
+        onNodeWithText("Skeleton Detective").assertExists()
         onNodeWithText("Save profile").assertExists()
 
-        onNodeWithText("Display name").performTextClearance()
-        onNodeWithText("Display name").performTextInput("Mira")
+        onNodeWithText("Frog Wizard").performScrollTo().performClick()
         onNodeWithText("Save profile").performClick()
 
-        onNodeWithText("Mira").assertExists()
+        onNodeWithText("Frog Wizard").assertExists()
         onNodeWithText("Stream and chill").assertExists()
         onNodeWithText("Your next watch party is one room away.").assertDoesNotExist()
         onNodeWithText("READY WHEN EVERYONE IS").assertDoesNotExist()

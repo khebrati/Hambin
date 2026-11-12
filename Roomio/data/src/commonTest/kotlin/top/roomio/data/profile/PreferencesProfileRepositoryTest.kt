@@ -9,17 +9,10 @@ import top.roomio.domain.profile.UserProfile
 
 class PreferencesProfileRepositoryTest {
     @Test
-    fun characterPoolHasAtLeastOneHundredDistinctDigitFreeNames() {
-        assertTrue(guestNames.distinct().size >= 100)
-        assertEquals(guestNames.size, guestNames.distinct().size)
-        assertTrue(guestNames.all { it.isNotBlank() && it.length <= 48 && it.none { char -> char.isDigit() } })
-    }
-
-    @Test
     fun generatedNamePersistsBeforeAnyProfileEdit() {
         val settings = MapSettings()
         val first = PreferencesProfileRepository(settings).currentProfile()
-        assertTrue(first.name in guestNames)
+        assertEquals("Ice Queen", first.name)
         assertTrue(first.name.none { it.isDigit() })
         assertTrue(first.name.length <= 48)
         assertEquals(first, PreferencesProfileRepository(settings).currentProfile())
@@ -27,10 +20,10 @@ class PreferencesProfileRepositoryTest {
     }
 
     @Test
-    fun blankSavedNameGetsPersistentGeneratedDefault() {
-        val settings = MapSettings().apply { putString("profile.name", "  ") }
+    fun previousCustomNameIsReplacedWithoutChangingTheSavedAvatar() {
+        val settings = MapSettings().apply { putString("profile.name", "Previous custom name"); putString("profile.avatar", "BERRY") }
         val first = PreferencesProfileRepository(settings).currentProfile()
-        assertTrue(first.name.isNotBlank())
+        assertEquals("Captain Octopus", first.name)
         assertEquals(first, PreferencesProfileRepository(settings).currentProfile())
     }
 
@@ -47,7 +40,7 @@ class PreferencesProfileRepositoryTest {
         )
 
         val restoredProfile = PreferencesProfileRepository(settings).currentProfile()
-        assertEquals("Mira", restoredProfile.name)
+        assertEquals("Frog Wizard", restoredProfile.name)
         assertEquals(ProfileAvatarId.MINT, restoredProfile.avatar)
     }
     @Test

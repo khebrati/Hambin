@@ -14,7 +14,7 @@ class ThemeSettingsTest {
         val preferences = TestThemePreferencesRepository()
         val profile = TestProfileRepository()
         val viewModel = SettingsViewModel(profile, preferences)
-        viewModel.onAction(SettingsAction.NameChanged("Unfinished draft"))
+        viewModel.onAction(SettingsAction.AvatarSelected(top.roomio.app.profile.ProfileAvatar.MINT))
         viewModel.onAction(SettingsAction.ColorSelected(ThemeColor.SAGE))
         assertEquals(ThemeColor.SAGE, preferences.color.value)
         assertEquals(ThemeColor.SAGE, viewModel.state.value.themeColor)

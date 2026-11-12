@@ -5,10 +5,10 @@ test('Persian profile choice sends fa, persists after reload, and switches back 
   await page.route('**/v1/guest-sessions/**', async route => {
     if (route.request().method() === 'PATCH') {
       const body = route.request().postDataJSON();
-      expect(body.name).toBe('Mira');
+      expect(body.name).toBe('Ice Queen');
       language = body.language;
-      await route.fulfill({ json: { identity: { id: 'guest', name: 'Mira', avatar: 'COMET', language } } });
-    } else await route.fulfill({ json: { identity: { id: 'guest', name: 'Mira', avatar: 'COMET', language }, accessToken: 'test', accessExpiresAt: new Date(Date.now() + 3600000).toISOString(), refreshExpiresAt: new Date(Date.now() + 86400000).toISOString() } });
+      await route.fulfill({ json: { identity: { id: 'guest', name: 'Ice Queen', avatar: 'comet', language } } });
+    } else await route.fulfill({ json: { identity: { id: 'guest', name: 'Ice Queen', avatar: 'comet', language }, accessToken: 'test', accessExpiresAt: new Date(Date.now() + 3600000).toISOString(), refreshExpiresAt: new Date(Date.now() + 86400000).toISOString() } });
   });
   await page.goto('/');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
@@ -52,7 +52,7 @@ for (const config of [{ width: 360, height: 800, theme: 'dark', large: true }, {
 test('discard and failed saves keep the applied language and retain the draft for retry', async ({ page }) => {
   await page.route('**/v1/guest-sessions/**', route => route.fulfill(route.request().method() === 'PATCH'
     ? { status: 503, json: { code: 'UNAVAILABLE' } }
-    : { json: { identity: { id: 'guest', name: 'Mira', avatar: 'COMET', language: 'en' }, accessToken: 'test', accessExpiresAt: new Date(Date.now() + 3600000).toISOString(), refreshExpiresAt: new Date(Date.now() + 86400000).toISOString() } }));
+    : { json: { identity: { id: 'guest', name: 'Ice Queen', avatar: 'comet', language: 'en' }, accessToken: 'test', accessExpiresAt: new Date(Date.now() + 3600000).toISOString(), refreshExpiresAt: new Date(Date.now() + 86400000).toISOString() } }));
   await page.goto('/');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByLabel('App language', { exact: true }).selectOption('فارسی');

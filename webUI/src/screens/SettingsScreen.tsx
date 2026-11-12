@@ -3,11 +3,11 @@ import { Check } from 'lucide-react';
 import { themeColors, type useThemePalette } from '../theme';
 import type { CSSProperties } from 'react';
 import { useState } from 'react';
-import { avatarOptions } from '../data/avatarCatalog';
+import { avatarOptions, avatarName } from '../data/avatarCatalog';
 import type { Identity } from '../types';
 import { AppBar } from '../components/AppBar';
 import { Avatar } from '../components/Avatar';
-import { Button, TextField } from '../components/Material';
+import { Button } from '../components/Material';
 
 interface SettingsScreenProps {
   palette: ReturnType<typeof useThemePalette>;
@@ -29,7 +29,7 @@ export function SettingsScreen({
   saving = false,
 }: SettingsScreenProps) {
   const [draft, setDraft] = useState(identity);
-  const trimmedName = draft.name.trim();
+  const name = avatarName(draft.avatarId);
 
   return (
     <div className="screen settings-screen screen-enter">
@@ -44,36 +44,19 @@ export function SettingsScreen({
 
       <main className="form-page">
         <section className="profile-spotlight" aria-label={t("Profile preview")}>
-          <Avatar avatarId={draft.avatarId} label={trimmedName || t("Your avatar")} size="large" />
+          <Avatar avatarId={draft.avatarId} label={name} size="large" />
           <div>
             <span>{t("Ready to watch")}</span>
-            <strong>{trimmedName || t("Add your name")}</strong>
+            <strong>{name}</strong>
           </div>
-        </section>
-
-        <section className="form-section" aria-labelledby="identity-heading">
-          <div className="section-heading">
-            <span>01</span>
-            <div>
-              <h2 id="identity-heading">{t("Name")}</h2>
-              <p>{t("Keep it recognizable to friends.")}</p>
-            </div>
-          </div>
-          <TextField
-            label={t("Display name")}
-            value={draft.name}
-            onChange={(name) => setDraft((current) => ({ ...current, name }))}
-            placeholder="Nika"
-            supportingText={!trimmedName ? t("A name is needed before saving.") : undefined}
-          />
         </section>
 
         <section className="form-section" aria-labelledby="avatar-heading">
           <div className="section-heading">
-            <span>02</span>
+            <span>01</span>
             <div>
               <h2 id="avatar-heading">{t("Avatar")}</h2>
-              <p>{t("Pick the face friends will see in the room.")}</p>
+              <p>{t("Your avatar sets your name. Pick the character friends will see.")}</p>
             </div>
           </div>
           <div className="avatar-picker" role="radiogroup" aria-label={t("Choose an avatar")}>
@@ -84,6 +67,7 @@ export function SettingsScreen({
                   key={avatar.id}
                   className={`avatar-choice ${selected ? 'is-selected' : ''}`}
                   role="radio"
+                  aria-label={t(avatar.label)}
                   aria-checked={selected}
                   onClick={() =>
                     setDraft((current) => ({ ...current, avatarId: avatar.id }))
@@ -105,7 +89,7 @@ export function SettingsScreen({
 
         <section className="form-section" aria-labelledby="color-heading">
           <div className="section-heading">
-            <span>03</span>
+            <span>02</span>
             <div><h2 id="color-heading">{t("Color theme")}</h2><p>{t("Choose a color to make Watch Party yours. Applies immediately.")}</p></div>
           </div>
           <div className="theme-color-picker" role="group" aria-label={t("Color theme")}>
@@ -125,7 +109,7 @@ export function SettingsScreen({
 
         <section className="form-section" aria-labelledby="language-heading">
           <div className="section-heading">
-            <span>04</span>
+            <span>03</span>
             <div>
               <h2 id="language-heading">{t("Language")}</h2>
               <p>{t('Choose your app language. Applies after saving.')}</p>
@@ -143,8 +127,8 @@ export function SettingsScreen({
         <div className="sticky-action">
           <Button
             fullWidth
-            disabled={!trimmedName || [...trimmedName].length > 48 || saving}
-            onClick={() => onSave({ ...draft, name: trimmedName })}
+            disabled={saving}
+            onClick={() => onSave({ ...draft, name })}
           >
             {saving ? t("Saving…") : t("Save profile")}
           </Button>

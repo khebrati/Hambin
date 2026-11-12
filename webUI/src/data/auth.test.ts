@@ -1,4 +1,4 @@
-import { guestNames } from './guestName';
+import { avatarName } from './avatarCatalog';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const profile = { name: 'Host', avatar: 'comet', language: 'en' };
@@ -25,7 +25,7 @@ describe('backend-owned browser identity', () => {
     fetchMock.mockResolvedValueOnce(reply({ code: 'UNAUTHENTICATED' }, 401)).mockImplementationOnce(async (_url, options) => reply({ ...session(), identity: { ...JSON.parse(options.body), id: 'identity-1' } }));
     const { ensureSession } = await import('./auth');
     const first = await ensureSession();
-    expect(guestNames).toContain(first.identity.name);
+    expect(first.identity.name).toBe(avatarName('comet'));
     expect(first.identity.name).not.toMatch(/\d/);
     expect(first.identity.name.length).toBeLessThanOrEqual(48);
     vi.resetModules();

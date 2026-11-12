@@ -43,7 +43,7 @@ class KtorSessionRepository(
             } else {
                 refreshIfNeeded(current)
                 val identity = tokens.current()!!.identity
-                if (identity.name != name || identity.avatar != avatar || identity.language != language) {
+                if (identity.name != name || !identity.avatar.equals(avatar, ignoreCase = true) || identity.language != language) {
                     updateProfileLocked(name, avatar, language)
                 }
             }

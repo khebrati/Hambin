@@ -13,20 +13,22 @@ import bloomAvatar from '../../cartoon-avatars/f3f027df-e786-4f32-ad33-30ccd51fe
 import type { AvatarId } from '../types';
 
 export const avatarOptions = [
-  { id: 'comet', label: 'Comet', src: cometAvatar },
-  { id: 'mint', label: 'Mint', src: mintAvatar },
-  { id: 'sunny', label: 'Sunny', src: sunnyAvatar },
-  { id: 'berry', label: 'Berry', src: berryAvatar },
-  { id: 'cloud', label: 'Cloud', src: cloudAvatar },
-  { id: 'ember', label: 'Ember', src: emberAvatar },
-  { id: 'nova', label: 'Nova', src: novaAvatar },
-  { id: 'orbit', label: 'Orbit', src: orbitAvatar },
-  { id: 'prism', label: 'Prism', src: prismAvatar },
-  { id: 'echo', label: 'Echo', src: echoAvatar },
-  { id: 'spark', label: 'Spark', src: sparkAvatar },
-  { id: 'bloom', label: 'Bloom', src: bloomAvatar },
+  { id: 'comet', label: 'Ice Queen', src: cometAvatar },
+  { id: 'mint', label: 'Frog Wizard', src: mintAvatar },
+  { id: 'sunny', label: 'Skeleton Detective', src: sunnyAvatar },
+  { id: 'berry', label: 'Captain Octopus', src: berryAvatar },
+  { id: 'cloud', label: 'Gamer TV', src: cloudAvatar },
+  { id: 'ember', label: 'Alien Scientist', src: emberAvatar },
+  { id: 'nova', label: 'Robot Poet', src: novaAvatar },
+  { id: 'orbit', label: 'Coffee Wolf', src: orbitAvatar },
+  { id: 'prism', label: 'Professor Fox', src: prismAvatar },
+  { id: 'echo', label: 'Bookworm Dragon', src: echoAvatar },
+  { id: 'spark', label: 'Frankie', src: sparkAvatar },
+  { id: 'bloom', label: 'Mummy Barista', src: bloomAvatar },
 ] as const satisfies readonly { id: AvatarId; label: string; src: string }[];
 
 export const avatarImageById = Object.fromEntries(
   avatarOptions.map(({ id, src }) => [id, src]),
 ) as Record<AvatarId, string>;
+
+export const avatarName = (id: AvatarId): string => avatarOptions.find(avatar => avatar.id === id)!.label;

@@ -2,14 +2,14 @@ import { getMockPartyPreview, sampleVideoUrl } from './data/fakeRepository';
 import type { Identity, Party, PartyPreview, PreviewState } from './types';
 
 export const defaultIdentity: Identity = {
-  name: 'Nika',
+  name: 'Ice Queen',
   language: 'English',
   avatarId: 'comet',
 };
 
 export const previewStates: Record<string, PreviewState> = {
   home: { screen: 'home' },
-  'settings-empty': { screen: 'settings', identity: { name: '' } },
+  'settings-empty': { screen: 'settings' }, // Fixed avatar names have no empty state.
   'settings-populated': { screen: 'settings' },
   'party-manager': { screen: 'party-manager' },
   'party-manager-loading': {

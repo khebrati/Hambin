@@ -171,7 +171,6 @@ internal fun RoomioNavigation(
                         when (action) {
                             SettingsAction.BackClicked -> navigateBack()
                             SettingsAction.SaveClicked,
-                            is SettingsAction.NameChanged,
                             is SettingsAction.AvatarSelected,
                             is SettingsAction.ColorSelected,
                             is SettingsAction.LanguageSelected,

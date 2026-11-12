@@ -8,19 +8,19 @@ data class UserProfile(
     val language: AppLanguage = AppLanguage.ENGLISH,
 )
 
-enum class ProfileAvatarId {
-    COMET,
-    MINT,
-    SUNNY,
-    BERRY,
-    CLOUD,
-    EMBER,
-    NOVA,
-    ORBIT,
-    PRISM,
-    ECHO,
-    SPARK,
-    BLOOM,
+enum class ProfileAvatarId(val displayName: String) {
+    COMET("Ice Queen"),
+    MINT("Frog Wizard"),
+    SUNNY("Skeleton Detective"),
+    BERRY("Captain Octopus"),
+    CLOUD("Gamer TV"),
+    EMBER("Alien Scientist"),
+    NOVA("Robot Poet"),
+    ORBIT("Coffee Wolf"),
+    PRISM("Professor Fox"),
+    ECHO("Bookworm Dragon"),
+    SPARK("Frankie"),
+    BLOOM("Mummy Barista"),
 }
 
 interface ProfileRepository {

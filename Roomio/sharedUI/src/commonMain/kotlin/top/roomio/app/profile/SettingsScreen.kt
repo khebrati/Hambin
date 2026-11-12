@@ -46,7 +46,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -69,26 +68,20 @@ import androidx.compose.ui.zIndex
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import roomio.sharedui.generated.resources.Res
-import roomio.sharedui.generated.resources.add_your_name
 import roomio.sharedui.generated.resources.app_language
 import roomio.sharedui.generated.resources.avatar
 import roomio.sharedui.generated.resources.avatar_description
 import roomio.sharedui.generated.resources.back
 import roomio.sharedui.generated.resources.choose_an_avatar
-import roomio.sharedui.generated.resources.display_name
 import roomio.sharedui.generated.resources.english
 import roomio.sharedui.generated.resources.language
 import roomio.sharedui.generated.resources.language_description
-import roomio.sharedui.generated.resources.name
-import roomio.sharedui.generated.resources.name_description
-import roomio.sharedui.generated.resources.name_required
 import roomio.sharedui.generated.resources.profile_preview
 import roomio.sharedui.generated.resources.ready_to_watch
 import roomio.sharedui.generated.resources.save_profile
 import roomio.sharedui.generated.resources.save_profile_error
 import roomio.sharedui.generated.resources.shown_inside_every_party
 import roomio.sharedui.generated.resources.theme
-import roomio.sharedui.generated.resources.your_avatar
 import roomio.sharedui.generated.resources.your_profile
 import top.roomio.app.theme.RoomioLightColorScheme
 import top.roomio.app.theme.AppTheme
@@ -109,7 +102,7 @@ internal fun SettingsScreen(
         topBar = { ProfileTopBar(onBack = { onAction(SettingsAction.BackClicked) }) },
         bottomBar = {
             SaveProfileBar(
-                enabled = state.canSave,
+                enabled = true,
                 saveFailed = state.saveFailed,
                 onSave = { onAction(SettingsAction.SaveClicked) },
             )
@@ -134,31 +127,11 @@ internal fun SettingsScreen(
                 verticalArrangement = Arrangement.spacedBy(32.dp),
             ) {
                 ProfileSpotlight(
-                    name = state.trimmedName,
+                    name = state.displayName,
                     avatar = state.draftAvatar,
                 )
                 ProfileSection(
                     number = "01",
-                    title = stringResource(Res.string.name),
-                    description = stringResource(Res.string.name_description),
-                ) {
-                    OutlinedTextField(
-                        value = state.draftName,
-                        onValueChange = { onAction(SettingsAction.NameChanged(it)) },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        isError = state.isNameError,
-                        label = { Text(stringResource(Res.string.display_name)) },
-                        placeholder = { Text("Nika") },
-                        supportingText = if (state.trimmedName.isEmpty()) {
-                            { Text(stringResource(Res.string.name_required)) }
-                        } else {
-                            null
-                        },
-                    )
-                }
-                ProfileSection(
-                    number = "02",
                     title = stringResource(Res.string.avatar),
                     description = stringResource(Res.string.avatar_description),
                 ) {
@@ -168,7 +141,7 @@ internal fun SettingsScreen(
                     )
                 }
                 ProfileSection(
-                    number = "03",
+                    number = "02",
                     title = stringResource(Res.string.color_theme),
                     description = stringResource(Res.string.color_theme_description),
                 ) {
@@ -196,7 +169,7 @@ internal fun SettingsScreen(
                     }
                 }
                 ProfileSection(
-                    number = "04",
+                    number = "03",
                     title = stringResource(Res.string.language),
                     description = stringResource(Res.string.language_description),
                     showDivider = false,
@@ -297,11 +270,7 @@ private fun ProfileSpotlight(
     avatar: ProfileAvatar,
 ) {
     val previewLabel = stringResource(Res.string.profile_preview)
-    val avatarDescription = if (name.isEmpty()) {
-        stringResource(Res.string.your_avatar)
-    } else {
-        name
-    }
+    val avatarDescription = name
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -328,7 +297,7 @@ private fun ProfileSpotlight(
                     style = MaterialTheme.typography.labelMedium,
                 )
                 Text(
-                    text = name.ifEmpty { stringResource(Res.string.add_your_name) },
+                    text = name,
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                 )
@@ -597,7 +566,7 @@ private fun SaveProfileBar(
 private fun SettingsCompactPreview() {
     AppTheme(onThemeChanged = {}) {
         SettingsScreen(
-            state = SettingsUiState("Nika", ProfileAvatar.COMET),
+            state = SettingsUiState(ProfileAvatar.COMET),
             onAction = {},
         )
     }
@@ -608,7 +577,7 @@ private fun SettingsCompactPreview() {
 private fun SettingsExpandedPreview() {
     AppTheme(onThemeChanged = {}) {
         SettingsScreen(
-            state = SettingsUiState("Nika", ProfileAvatar.COMET),
+            state = SettingsUiState(ProfileAvatar.COMET),
             onAction = {},
         )
     }
@@ -619,7 +588,7 @@ private fun SettingsExpandedPreview() {
 private fun SettingsLargeTextPreview() {
     RoomioTheme(darkTheme = true) {
         SettingsScreen(
-            state = SettingsUiState("", ProfileAvatar.BERRY),
+            state = SettingsUiState(ProfileAvatar.BERRY),
             onAction = {},
         )
     }
@@ -631,7 +600,6 @@ private fun SettingsSaveErrorPreview() {
     AppTheme(onThemeChanged = {}) {
         SettingsScreen(
             state = SettingsUiState(
-                draftName = "Nika",
                 draftAvatar = ProfileAvatar.COMET,
                 saveFailed = true,
             ),
