@@ -50,6 +50,10 @@ Set `VITE_APP_BUILD` to a unique release identifier. Browser source-map generati
 
 The Android Sentry Gradle plugin creates a ProGuard mapping identifier for release builds. `SENTRY_AUTH_TOKEN` enables automatic mapping upload to `erfan-co/watchparty-native`; without it the mapping remains local. Automatic bytecode tracing, logcat capture, source uploads and native-symbol uploads are disabled. The KMP plugin owns SDK installation. Apple linkage uses the KMP SDK's SwiftPM integration on macOS and requires Xcode validation before an iOS release.
 
+Android palette selection also changes the launcher icon. Launcher aliases route through a short-lived `LauncherActivity` into the stable `AppActivity` task, so disabling the old alias does not remove the running app's task. An operating-system task removal is different from an unhandled exception and may produce no Sentry error event. When investigating an unexplained exit, check Android task/process exit logs as well as Sentry; absence of an event alone does not establish that capture is broken.
+
+2026-11-12 verification: the published 1.3.0/code12 APK lost its task after the initial random palette disabled its Basil launch alias on an API 36 emulator, without an unhandled exception. With the launcher bridge, opening via Cocoa and selecting Graphite preserved the same resumed `AppActivity` instance and task, with Graphite the only enabled alias. Android debug assembly and all 24 manifest alias target checks passed. The reported Poco/LineageOS device still needs confirmation with an updated APK.
+
 ## Verification and rollout
 
 Verify errors through the running application's real initialization, not a standalone SDK call. Keep synthetic errors and analytics in the development environment. Remove temporary error triggers before preparing a release. Check source locations in a fresh minified-build error after uploading source maps/mappings.
