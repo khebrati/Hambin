@@ -28,8 +28,8 @@ for (const variant of [
       await route.fulfill({ status, json });
     });
     await page.goto('/' + variant.query);
-    await page.getByRole('button', { name: 'Create a party', exact: true }).click();
-    await page.getByRole('button', { name: 'Create party', exact: true }).click();
+    await page.getByRole('button', { name: 'Start a party', exact: true }).click();
+    await page.getByRole('button', { name: 'Start the party', exact: true }).click();
     const action = page.getByRole('button', { name: 'Return to party', exact: true });
     await expect(action).toBeVisible();
     await page.waitForTimeout(5200);
@@ -51,8 +51,8 @@ test('failed return reports the current error and removes the stale action', asy
     return route.fulfill({ status: 409, json: path === '/v1/rooms' ? { code: 'ALREADY_IN_ROOM', activePartyCode: 'ABCD2345' } : { code: 'ROOM_ENDED' } });
   });
   await page.goto('/');
-  await page.getByRole('button', { name: 'Create a party', exact: true }).click();
-  await page.getByRole('button', { name: 'Create party', exact: true }).click();
+  await page.getByRole('button', { name: 'Start a party', exact: true }).click();
+  await page.getByRole('button', { name: 'Start the party', exact: true }).click();
   await page.getByRole('button', { name: 'Return to party', exact: true }).click();
   await expect(page.locator('.md-snackbar')).toContainText('This party has ended.');
   await expect(page.getByRole('button', { name: 'Return to party', exact: true })).toHaveCount(0);

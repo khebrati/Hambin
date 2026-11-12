@@ -1,29 +1,34 @@
-A watch party mobile app where users can stream from a direct URL. 
+A watch party mobile app where users can stream from a direct URL.
 
 
 The app has several sections:
 
 In home page, users can either:
-1. Enter setting, where they can choose English or Persian (فارسی), an avatar whose character name becomes their display name. Saving the profile applies and remembers the language; Persian uses right-to-left layout in both browser and Android. Video links, room codes, other users’ saved names, and subtitle content retain their original values. A user’s own avatar-derived name follows their saved app language. Settings also offers the 24 named color seeds listed in docs/theme-palettes.md; selecting one immediately applies its full light/dark Material palette and remembers it on the current device. The avatar picker uses the selected “In the spotlight” design: larger character previews, with the selected character enlarged in a prominent tile spanning two columns. Use Color garden for theme colors and a focused, searchable language picker that opens as a compact sheet or expanded dialog. Include only English and Persian in the language list; support future expansion without exposing untranslated language fixtures. Confirming a language in the picker updates the Settings draft; saving the profile applies it. New users receive a random avatar and named theme color, remembered once. Keep existing saved choices unchanged until the user changes them.
+1. Enter setting, where they can choose English or Persian (فارسی), an avatar whose character name becomes their display name. Saving the profile applies and remembers the language; Persian uses right-to-left layout in both browser and Android. Video links, room codes, other users’ saved names, and subtitle content retain their original values. A user’s own avatar-derived name follows their saved app language. Settings also offers the 24 named color seeds listed in docs/theme-palettes.md; selecting one immediately applies its full light/dark Material palette and remembers it on the current device. The avatar picker uses the selected “In the spotlight” design: larger character previews, with the selected character enlarged in a prominent tile spanning two columns. Use Color garden for theme colors and a focused, searchable language picker that opens as a compact sheet or expanded dialog. Include only English and Persian in the language list; support future expansion without exposing untranslated language fixtures. Confirming a language in the picker updates the Settings draft; saving the profile applies it.
 2. A party manager page, where they can either create or join a party (via ID)
 
 after they join or create a party, we have the party screen.
 
 In party screen:
 1. There is an input field where the URL must be pasted and then played.
-2. The URL then becomes a video player 
+2. The URL then becomes a video player
 
 Inside that screen users can see their own icon and other users in party.
 
 Syncronization rules:
 1. Only the room owner can past URLs to start streaming.
 2. Only room owner can fully abort the stream for everyone and start with another URL in that same room.
-2. When a stream is started, everyone can pause, play, forward/backward for themselves. This does not 
+2. When a stream is started, everyone can pause, play, forward/backward for themselves. This does not
 effect the streaming process for others (streaming is done on device for each client.)
-3. A Sync button is available. When tapped, the user's playback is fast forwarded to match the playback position of the leading participant (the one currently furthest ahead).
+3. Sync has role-specific behavior. A non-owner privately catches up to the owner's playback position without interrupting anyone else; this may move the requester forward or backward.
+4. Opening the owner's Sync together dialog shows a live Meet at timestamp and Ask for sync, without a participant list or pausing playback. Only pressing Ask for sync sends the group request. When the owner sends that request, the owner's playback pauses and that position becomes the fixed invitation target. Other viewers continue normally until they accept. The invitation identifies the owner and target timestamp.
+5. Accepting pauses that viewer's playback. Until the owner starts synchronization, viewers can withdraw acceptance and resume local playback; the owner sees live pending, accepted, declined, and withdrawn responses and can cancel the invitation. Declined and unanswered viewers remain unaffected.
+6. The owner may start with all or some viewers having accepted. Starting atomically locks the currently accepted participant list, including the owner, and ends manual cancellation/withdrawal for that attempt. Late responses do not add participants to the committed attempt.
+7. Included players seek to the fixed target, buffer, and report readiness. When all remaining included players are ready, show a countdown over their playback screens using the app's theme and font: 3, 2, 1, Action, followed by coordinated playback. Declined, unanswered, and withdrawn viewers keep their normal local playback throughout.
+8. Committed preparation has a finite deadline and automatic failure recovery. Disconnected or failed players must not block the room indefinitely: explain their exclusion and continue with ready participants when coordination remains possible, or automatically end the attempt with an explanation and recovery path. Manual cancellation being unavailable must never prevent automatic recovery.
 Other notes:
 1. Users are able to speak in the chatroom and when they do so there should be an indicator on their icon.
-2. Video playback has play/pause forware/backward and volume set capabilities. 
+2. Video playback has play/pause forware/backward and volume set capabilities.
 
 Confirmed additions:
 1. Party members can invite others by copying the party ID or sharing an invite link. Android provides a Share button in the Invite friends dialog that opens the Android share sheet with the invite link.
@@ -70,5 +75,15 @@ Confirmed localized product naming (2026-11-12):
 Confirmed application typography (2026-11-12):
 1. Use Pofak as the application typeface in both the browser and Android clients, including English and Persian. Bundle the fonts with each client; users must not need to install them or access a third-party font service. Preserve text scaling, RTL support, and the existing typography hierarchy.
 
+Confirmed observability (2026-11-12):
+1. Use PostHog EU for visitor/product analytics and Sentry for application errors and manual bug reports across browser, native clients and backend.
+2. Preserve backend-owned durable report submission and retry behavior; forward new reports and redacted diagnostics to Sentry asynchronously without making user acknowledgement depend on that service.
+3. Keep session replay and automatic content capture disabled. Exclude chat contents, media and invitation URLs, credentials, microphone audio and screenshots from usage analytics and automatic error capture.
+
 Confirmed consecutive chat messages (2026-11-12):
 1. Consecutive messages from the same person appear as separate, closely spaced bubbles with the sender name/“You” and time only above the first bubble, and “Sent” only after the last bubble. Changing sender begins a new group.
+
+Confirmed product voice and information (2026-11-12):
+1. Use short, friendly, casual English and Persian throughout all clients, including future UI copy.
+2. Omit overly informative or redundant helper sentences, captions and cards when the interface already communicates the meaning. Do not reintroduce explanations the stakeholder removed.
+3. Retain concise action consequences and recovery guidance when needed to make a meaningful decision. Prefer clear action labels and brief, recipient-specific feedback over explanatory paragraphs. See `docs/design-principles.md` and DD-067.

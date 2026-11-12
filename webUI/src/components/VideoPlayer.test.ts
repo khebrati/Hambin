@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { forwardSyncPosition, playbackReport, slowLoadingMessage } from './VideoPlayer';
+import { syncPosition, playbackReport, slowLoadingMessage } from './VideoPlayer';
 import { usesIntegratedPlayer } from './avPlayer';
 
 describe('integrated player routing', () => {
@@ -23,18 +23,18 @@ describe('slow source guidance', () => {
   });
 });
 
-describe('forward-only explicit synchronization', () => {
+describe('explicit owner synchronization', () => {
   it('uses milliseconds from the server and clamps to media duration', () => {
-    expect(forwardSyncPosition(10, 25_000, 20)).toBe(20);
-    expect(forwardSyncPosition(10, 25_000, Infinity)).toBe(25);
+    expect(syncPosition(10, 25_000, 20)).toBe(20);
+    expect(syncPosition(10, 25_000, Infinity)).toBe(25);
   });
-  it('never rewinds, including after duration shrinks', () => {
-    expect(forwardSyncPosition(20, 10_000, 50)).toBeNull();
-    expect(forwardSyncPosition(20, 20_000, 50)).toBeNull();
-    expect(forwardSyncPosition(20, 30_000, 15)).toBeNull();
+  it('rewinds to the owner and clamps when duration shrinks', () => {
+    expect(syncPosition(20, 10_000, 50)).toBe(10);
+    expect(syncPosition(20, 20_000, 50)).toBeNull();
+    expect(syncPosition(20, 30_000, 15)).toBe(15);
   });
   it('rejects nonfinite or negative server positions', () => {
-    for (const value of [NaN, Infinity, -1]) expect(forwardSyncPosition(10, value, 50)).toBeNull();
+    for (const value of [NaN, Infinity, -1]) expect(syncPosition(10, value, 50)).toBeNull();
   });
 });
 

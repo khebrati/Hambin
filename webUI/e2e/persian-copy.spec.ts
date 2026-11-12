@@ -32,8 +32,8 @@ for (const lang of ['en', 'fa']) {
 
 test('Persian creation and playback sentences', async ({ page }) => {
   await page.goto('/?preview=party-manager&lang=fa');
-  await expect(page.getByText('بیا یه دورهمی جدید بسازیم.', { exact: true })).toBeVisible();
-  await expect(page.getByText('ورود به عنوان میزبان.', { exact: true })).toBeVisible();
+  await expect(page.getByText('یه دورهمی جدید بساز', { exact: true })).toBeVisible();
+  await expect(page.getByText('میزبان تویی', { exact: true })).toBeVisible();
   await expect(page.getByText('یه دورهمی با سینمای خالی، بعدش میتونی دوستاتو اضافه کنی.', { exact: true })).toBeVisible();
   await page.goto('/?preview=player-paused&lang=fa');
   await expect(page.locator('.sync-band strong')).toHaveText('فیلمت وایستاده');

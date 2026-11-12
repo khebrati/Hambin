@@ -15,8 +15,8 @@ for (const variant of [
       return route.fulfill({ status: 503, json: { code: 'UNAVAILABLE' } });
     });
     await page.goto('/' + variant.query);
-    await page.getByRole('button', { name: 'Create a party', exact: true }).click();
-    await page.getByRole('button', { name: 'Create party', exact: true }).click();
+    await page.getByRole('button', { name: 'Start a party', exact: true }).click();
+    await page.getByRole('button', { name: 'Start the party', exact: true }).click();
     await expect(page.getByRole('textbox', { name: 'Direct video URL' })).toBeVisible();
     await page.reload();
     await expect(page.getByRole('textbox', { name: 'Direct video URL' })).toBeVisible();
@@ -42,6 +42,6 @@ test('profile failure keeps recovery actions inside an error card', async ({ pag
   failed = false;
   await card.getByRole('button', { name: 'Retry connection' }).focus();
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('button', { name: 'Create a party', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Start a party', exact: true })).toBeVisible();
   await expect(card).toHaveCount(0);
 });

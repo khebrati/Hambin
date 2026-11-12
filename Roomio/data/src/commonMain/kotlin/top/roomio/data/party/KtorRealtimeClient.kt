@@ -131,6 +131,23 @@ private class KtorRealtimeSession(
         ))
     }
 
+    override suspend fun groupSync(action: String, streamSessionId: String, requestId: String, positionMs: Long?, response: String?, ready: Boolean?, reason: String?): top.roomio.domain.party.GroupSyncAttempt? {
+        require(action in setOf("invite", "respond", "commit", "cancel", "ready", "failed"))
+        val ack = emitCommand("sync.$action", buildJsonObject {
+            put("streamSessionId", JsonPrimitive(streamSessionId)); put("requestId", JsonPrimitive(requestId))
+            positionMs?.let { put("positionMs", JsonPrimitive(it)) }; response?.let { put("response", JsonPrimitive(it)) }
+            ready?.let { put("ready", JsonPrimitive(it)) }; reason?.let { put("reason", JsonPrimitive(it)) }
+        }) as? JsonObject ?: throw PartyException("INVALID_SYNC", "Missing sync acknowledgement")
+        val state = parseGroupSync(ack["state"])
+        output.send(RealtimeEvent.GroupSyncChanged(state, ack["serverTimeMs"]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: error("Missing clock")))
+        return state
+    }
+
+    override suspend fun syncClock(): Long {
+        val ack = emitCommand("sync.clock", buildJsonObject {}) as? JsonObject ?: throw PartyException("INVALID_SYNC", "Missing clock")
+        return ack["serverTimeMs"]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: throw PartyException("INVALID_SYNC", "Missing clock")
+    }
+
     override suspend fun close() {
         log.i("room.close requested")
         closed = true
@@ -139,10 +156,10 @@ private class KtorRealtimeSession(
         output.close()
     }
 
-    private suspend fun emitCommand(name: String, payload: JsonElement) {
+    private suspend fun emitCommand(name: String, payload: JsonElement): JsonElement {
         val ack = namespaceMutex.withLock { namespace.emit(name, payload) }
-        val obj = ack as? JsonObject ?: return
-        val code = obj["code"]?.jsonPrimitive?.contentOrNull ?: return
+        val obj = ack as? JsonObject ?: return ack
+        val code = obj["code"]?.jsonPrimitive?.contentOrNull ?: return ack
         val message = obj["message"]?.jsonPrimitive?.contentOrNull ?: "Realtime command failed"
         throw PartyException(code, message)
     }

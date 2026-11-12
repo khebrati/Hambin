@@ -1,3 +1,5 @@
+import { useGroupSync } from './components/useGroupSync';
+import type { SyncStateFrame } from './data/groupSync';
 import { t, setLanguage } from './i18n';
 import { useThemePalette } from './theme';
 import { appLog } from './data/sessionLog';
@@ -51,7 +53,7 @@ export default function LiveApp() {
   const [returnableParty, setReturnableParty] = useState<Party | null>(null);
   const [voiceState, setVoiceState] = useState<VoiceState>(voiceOff);
   const [syncTarget, setSyncTarget] = useState<{requestId: string;positionMs: number}>();
-  const [syncing, setSyncing] = useState(false);
+  const [syncFrame, setSyncFrame] = useState<SyncStateFrame | null>(null);
   useEffect(() => { appLog(`Screen ${screen}; stream=${streamStatus}; realtime=${connected}; voice=${voiceState.status}; micMuted=${voiceState.muted}`); }, [screen, streamStatus, connected, voiceState.status, voiceState.muted]);
   const mutations = useRef(new MutationRequests());
   const entering = useRef(false);
@@ -60,6 +62,7 @@ export default function LiveApp() {
   const playback = useRef({ positionMs: 0, playing: false });
   const streamSession = useRef('');
   const notify = useCallback((message: string) => setSnackbar({ message }), []);
+  const groupSync=useGroupSync({snapshot,identityId,connected,connection:realtime,frame:syncFrame,notify});
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -128,7 +131,7 @@ export default function LiveApp() {
       } else if (value.stream.state !== 'ACTIVE') setStreamStatus('empty');
       setSnapshot(value);
     };
-    const session = new RoomConnection({ roomId, onSnapshot, onConnection: setConnected, onError: e => notify(errorMessage(e)), onClosed: reason => {
+    const session = new RoomConnection({ roomId, onSnapshot, onSyncState:setSyncFrame, onConnection: setConnected, onError: e => notify(errorMessage(e)), onClosed: reason => {
       voice.current?.disconnect(); voice.current = null; setVoiceState(voiceOff); sessionStorage.removeItem(activeCodeKey); setRoomId(''); setSnapshot(null); setScreen('home'); if (['ROOM_ENDED', 'ROOM_NOT_FOUND'].includes(reason || '')) { if (snapshot?.room.code) forgetLastRoom(identityId, snapshot.room.code); setReturnableParty(null); } else setReturnableParty(readLastRoom(identityId)); notify(t("This room session has ended."));
     } });
     realtime.current = session;
@@ -218,12 +221,6 @@ export default function LiveApp() {
       } else await voice.current.setMuted(!voiceState.muted);
     } catch { /* MeshVoice publishes failure state; the voice pane owns recovery. */ }
   };
-  const sync = async () => {
-    setSyncing(true);
-    try { const result = await realtime.current?.sync(playback.current.positionMs); if (result?.status === 'APPLIED') { setSyncTarget({ requestId: result.requestId, positionMs: result.targetPositionMs }); notify(t("You're caught up with the room")); } else if (result) notify(result.status === 'ALREADY_LEADING' ? t("You're already caught up") : t("No recent room position is available. Try again shortly.")); }
-    catch (error) { notify(errorMessage(error)); }
-    finally { setSyncing(false); }
-  };
   const resetGuest = async () => {
     if (resetting || !window.confirm(t("Reset your guest identity? You will lose ownership of your existing parties."))) return;
     setResetting(true);
@@ -251,7 +248,7 @@ export default function LiveApp() {
         send: async (messageId, text) => (await request<{ message: ChatMessage }>(`/v1/rooms/${roomId}/chat/messages`, { messageId, text })).message,
         loadEarlier: async () => { if (!realtime.current) throw new ApiError('NETWORK'); await realtime.current.loadEarlierChat(); },
         refresh: async () => { if (!realtime.current) throw new ApiError('NETWORK'); await realtime.current.recover(); },
-      }, voice: voiceState, onToggleVoice: toggleVoice, onRetryVoice: () => voice.current?.retryConnections(), onResumeVoice: () => { void voice.current?.resumeAudio().catch(e => notify(e.message)); }, onSync: sync, syncing, syncTarget, onReport: (positionMs, playing) => { playback.current = {positionMs,playing}; realtime.current?.report(positionMs, playing); } }} /></>}
+      }, voice: voiceState, onToggleVoice: toggleVoice, onRetryVoice: () => voice.current?.retryConnections(), onResumeVoice: () => { void voice.current?.resumeAudio().catch(e => notify(e.message)); }, onSync: groupSync.openSync, syncing:groupSync.busy, syncTarget, groupSync, onReport: (positionMs, playing) => { playback.current = {positionMs,playing}; realtime.current?.report(positionMs, playing); } }} /></>}
     </>}
     <Snackbar message={snackbar?.message || ''} onDismiss={() => setSnackbar(null)} action={snackbar?.partyCode ? { label: t("Return to party"), disabled: joinStatus === 'loading', onClick: () => { void enterRoom(`/v1/rooms/${encodeURIComponent(snackbar.partyCode!)}/join`); } } : undefined} />
   </div>;

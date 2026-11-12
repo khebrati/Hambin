@@ -56,8 +56,8 @@ describe('room session recovery',()=>{
   });
   it('never sends playback reports before the authoritative snapshot or while disconnected',async()=>{
     const {client}=setup();await flush();const socket=mocks.sockets[0];client.report(1000,true);expect(socket.sent).toHaveLength(0);
-    socket.deliver('snapshot',initial);client.report(1234.5,false);expect(socket.sent[0]).toEqual({event:'playback.report',payload:{streamSessionId:'s1',positionMs:1235,playing:false}});
-    socket.deliver('disconnect');client.report(3000,true);expect(socket.sent).toHaveLength(1);
+    socket.deliver('snapshot',initial);client.report(1234.5,false);expect(socket.sent.find(e=>e.event==='playback.report')).toEqual({event:'playback.report',payload:{streamSessionId:'s1',positionMs:1235,playing:false}});
+    socket.deliver('disconnect');client.report(3000,true);expect(socket.sent.filter(e=>e.event==='playback.report')).toHaveLength(1);
   });
 });
 

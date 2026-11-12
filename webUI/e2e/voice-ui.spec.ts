@@ -9,7 +9,7 @@ for (const variant of [
     const url = new URLSearchParams({ theme: variant.theme, dir: variant.dir, large: variant.large, status: 'off', offline: '1' });
     await page.goto(`/e2e/voice.html?${url}`);
     const panel = page.getByRole('region', { name: /Talk with the room|Your mic is/ });
-    await expect(page.getByRole('heading', { name: 'Talk with the room' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Hang out on voice' })).toBeVisible();
     const join = page.getByRole('button', { name: 'Join voice', exact: true });
     await expect(join).toBeEnabled();
     await join.focus(); await page.keyboard.press('Enter');

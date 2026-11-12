@@ -1,4 +1,5 @@
 import { t } from '../i18n';
+import './expressive-loading.css';
 import {
   useEffect,
   useId,
@@ -199,10 +200,10 @@ export function StatusCard({ title, children, tone = 'info', loading = false, ac
   );
 }
 
-export function LoadingIndicator({ label }: { label: string }) {
+export function LoadingIndicator({ label, expressive = false }: { label: string; expressive?: boolean }) {
   return (
-    <div className="md-loading" role="status" aria-live="polite">
-      <span className="md-loading__shape" aria-hidden="true" />
+    <div className={`md-loading${expressive ? ' md-loading--expressive' : ''}`} role="status" aria-live="polite">
+      {expressive ? <span className="md-expressive-loading" aria-hidden="true"><span /></span> : <span className="md-loading__shape" aria-hidden="true" />}
       <span>{label}</span>
     </div>
   );

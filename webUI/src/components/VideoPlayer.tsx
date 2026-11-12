@@ -1,3 +1,5 @@
+import type { PlayerSyncBridge } from './playerSync';
+import type { MutableRefObject, ReactNode } from 'react';
 import { diagnosticEvent } from '../data/sessionLog';
 import { t } from '../i18n';
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
@@ -17,6 +19,9 @@ type TrackChoice = { id: string; name: string };
 export interface VideoPlayerProps {
   url: string;
   sessionId: string;
+  syncBridge?: MutableRefObject<PlayerSyncBridge | null>;
+  syncLocked?: boolean;
+  syncOverlay?: ReactNode;
   onReport: (positionMs: number, playing: boolean) => void;
   onNotify: (message: string) => void;
   syncTarget?: { requestId: string; positionMs: number };
@@ -29,11 +34,11 @@ export interface VideoPlayerProps {
   micDisabled?: boolean;
 }
 
-/** Synchronization is explicit and forward-only, including when duration changes. */
-export function forwardSyncPosition(current: number, targetMs: number, end: number): number | null {
+/** Explicit owner catch-up may move forward or backward on the media timeline. */
+export function syncPosition(current: number, targetMs: number, end: number): number | null {
   if (!Number.isFinite(current) || !Number.isFinite(targetMs) || targetMs < 0) return null;
   const target = Math.min(targetMs / 1000, Number.isFinite(end) ? end : Infinity);
-  return target > current ? target : null;
+  return target !== current ? target : null;
 }
 
 export function playbackReport(media: Pick<HTMLVideoElement, 'readyState' | 'currentTime' | 'paused' | 'ended' | 'seeking' | 'error'>) {
@@ -65,7 +70,7 @@ export function VideoPlayer(props: VideoPlayerProps) {
   return <MediaPlayer key={`${props.sessionId}:${props.url}`} {...props} syncTarget={props.syncTarget?.requestId === previous.current.blocked ? undefined : props.syncTarget} />;
 }
 
-function MediaPlayer({ url, onReport, onNotify, onState, syncTarget, onSync, syncDisabled, onToggleMic, micMuted = true, micLabel, micDisabled }: VideoPlayerProps) {
+function MediaPlayer({ url, sessionId, syncBridge, syncLocked, syncOverlay, onReport, onNotify, onState, syncTarget, onSync, syncDisabled, onToggleMic, micMuted = true, micLabel, micDisabled }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const engineSurfaceRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<AvMedia | null>(null);
@@ -73,6 +78,18 @@ function MediaPlayer({ url, onReport, onNotify, onState, syncTarget, onSync, syn
   const integrated = usesIntegratedPlayer(url) && !browserPlayback;
   const media = (): PlayerMedia | null => engineRef.current ?? videoRef.current;
   const containerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if(!syncBridge)return;
+    const bridge:PlayerSyncBridge={sessionId,
+      info:()=>{const m=media();let bufferedUntilMs=0;
+        if(m)for(let i=0;i<m.buffered.length;i++)if(m.buffered.start(i)<=m.currentTime+.1&&m.buffered.end(i)>=m.currentTime)bufferedUntilMs=m.buffered.end(i)*1000;
+        return {positionMs:(m?.currentTime??0)*1000,durationMs:(m?.duration??NaN)*1000,playing:!!m&&!m.paused,paused:!!m?.paused,seeking:!!m?.seeking,ready:(m?.readyState??0)>=3,error:!!m?.error,bufferedUntilMs,seekable:!!m?.seekable.length};},
+      pause:async()=>{await media()?.pause();},play:async()=>{const m=media();if(!m)throw Error('PLAYER_UNAVAILABLE');await m.play();},
+      prepare:async(positionMs)=>{const engine=engineRef.current;if(engine)await engine.prepareForSync(positionMs);else{const m=media();await m?.pause();if(m)m.currentTime=positionMs/1000;}},
+      seek:(positionMs)=>{const m=media();if(m)m.currentTime=positionMs/1000;},
+    };syncBridge.current=bridge;return()=>{if(syncBridge.current===bridge)syncBridge.current=null;};
+  },[syncBridge,sessionId,integrated,browserPlayback]);
+
   const hlsRef = useRef<Hls | null>(null);
   const callbacks = useRef({ onReport, onNotify, onState });
   callbacks.current = { onReport, onNotify, onState };
@@ -329,7 +346,7 @@ function MediaPlayer({ url, onReport, onNotify, onState, syncTarget, onSync, syn
     if (!syncTarget || !video || !ready || appliedRequest.current === syncTarget.requestId) return;
     appliedRequest.current = syncTarget.requestId;
     const end = live && video.seekable.length ? video.seekable.end(video.seekable.length - 1) : video.duration;
-    const next = forwardSyncPosition(video.currentTime, syncTarget.positionMs, end);
+    const next = syncPosition(video.currentTime, syncTarget.positionMs, end);
     if (next !== null) {
       if (live && (!video.seekable.length || next < video.seekable.start(0))) { callbacks.current.onNotify(t("That position is outside the live window.")); return; }
       try { video.currentTime = next; } catch { callbacks.current.onNotify(t("This video cannot seek to that position.")); }
@@ -337,10 +354,12 @@ function MediaPlayer({ url, onReport, onNotify, onState, syncTarget, onSync, syn
   }, [syncTarget, ready, live]);
 
   const play = async () => {
+    if(syncLocked)return;
     try { await media()?.play(); setBlocked(false); }
     catch { setBlocked(true); callbacks.current.onNotify(t("Playback could not start. Try Play again or retry the video.")); }
   };
   const seek = (value: number) => {
+    if(syncLocked)return;
     diagnosticEvent('player.seek_requested', { seconds: Math.round(value) });
     const video = media();
     if (!video || !ready || !Number.isFinite(video.duration) || live) return;
@@ -425,17 +444,18 @@ function MediaPlayer({ url, onReport, onNotify, onState, syncTarget, onSync, syn
       </video>
       {error ? <div className="player-buffering"><StatusCard title={t("Unable to play video")} tone="error" actions={<><Button onClick={() => setRetry(value => value + 1)}>{t("Retry video")}</Button>{integrated && <Button variant="text" onClick={() => { setBrowserPlayback(true); setRetry(value => value + 1); }}>{t("Use browser player")}</Button>}</>}>{error}</StatusCard></div>
         : status === 'loading' || status === 'buffering' ? <div className="player-buffering"><LoadingIndicator label={status === 'loading' ? t("Loading video") : t("Buffering")} />{slowLoading && <><p className="player-loading-help">{slowLoadingMessage(ready || integrated ? '' : url, navigator.userAgent)}</p><Button onClick={() => setRetry(value => value + 1)}>{t("Retry video")}</Button></>}</div>
-        : paused ? <button className="player-big-play" aria-label={t("Play video")} onClick={event => { event.stopPropagation(); void play(); }}><Play size={38} aria-hidden="true" /></button> : null}
+        : paused && !syncLocked ? <button className="player-big-play" aria-label={t("Play video")} onClick={event => { event.stopPropagation(); void play(); }}><Play size={38} aria-hidden="true" /></button> : null}
+      {syncOverlay}
     </div>
     <div ref={controlsRef} className="player-controls" onPointerDown={() => { pointerActive.current = true; revealControls(); }} onPointerUp={() => { pointerActive.current = false; revealControls(); }} onPointerCancel={() => { pointerActive.current = false; revealControls(); }} onBlur={revealControls}>
       {blocked && <StatusCard title={t("Ready to play")}>{t("Select Play to start the video on this device.")}</StatusCard>}
-      {live ? <span className="player-live"><span aria-hidden="true">●</span> {t("Live")}</span> : <label className="player-progress"><span className="sr-only">{t("Playback position")}</span><input type="range" min={0} max={seekable ? duration : 1} step="0.1" value={seekable ? Math.min(position, duration) : 0} disabled={!seekable} onChange={event => seek(Number(event.target.value))} aria-valuetext={time(position)} style={{ '--range-progress': `${seekable ? position / duration * 100 : 0}%` } as CSSProperties} /></label>}
+      {live ? <span className="player-live"><span aria-hidden="true">●</span> {t("Live")}</span> : <label className="player-progress"><span className="sr-only">{t("Playback position")}</span><input type="range" min={0} max={seekable ? duration : 1} step="0.1" value={seekable ? Math.min(position, duration) : 0} disabled={!seekable || syncLocked} onChange={event => seek(Number(event.target.value))} aria-valuetext={time(position)} style={{ '--range-progress': `${seekable ? position / duration * 100 : 0}%` } as CSSProperties} /></label>}
       <div className="player-controls__row">
         <span className="player-time">{time(position)} {!live && <span>/ {time(duration)}</span>}<span className="sr-only"> {t("Buffered to")}{time(buffered)}</span></span>
         <div className="transport" role="group" aria-label={t("Playback controls")}>
-          {!live && <IconButton icon={Rewind} label={t("Rewind 15 seconds")} disabled={!seekable} onClick={() => seek(position - 15)} />}
-          <IconButton icon={paused ? Play : Pause} label={paused ? t("Play") : t("Pause")} variant="filled" disabled={!!error} onClick={() => paused ? void play() : media()?.pause()} />
-          {!live && <IconButton icon={FastForward} label={t("Fast-forward 15 seconds")} disabled={!seekable} onClick={() => seek(position + 15)} />}
+          {!live && <IconButton icon={Rewind} label={t("Rewind 15 seconds")} disabled={!seekable || syncLocked} onClick={() => seek(position - 15)} />}
+          <IconButton icon={paused ? Play : Pause} label={paused ? t("Play") : t("Pause")} variant="filled" disabled={!!error || syncLocked} onClick={() => paused ? void play() : media()?.pause()} />
+          {!live && <IconButton icon={FastForward} label={t("Fast-forward 15 seconds")} disabled={!seekable || syncLocked} onClick={() => seek(position + 15)} />}
         </div>
         <div className="volume-control">
           <IconButton icon={RefreshCw} label={t("Sync to room")} disabled={!onSync || syncDisabled} onClick={onSync} />

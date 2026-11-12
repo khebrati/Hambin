@@ -76,10 +76,11 @@ Resolved questions are preserved with their answers for traceability.
     - Answer: The room remains active without an owner until that same owner rejoins. Other users retain local playback but cannot start, replace, or abort the shared video. Ownership does not transfer.
     - Design decision affected: Add a persistent owner-absent room state, keep owner-only controls unavailable, and restore them only when the original owner returns.
 
-12. [Deferred/archived 2026-10-15, DD-023] Directional sync semantics, and the conflict with the resolved "no visible position differences" answer.
+12. [Core consent rules resolved 2026-11-12, DD-059; archived UI variations remain deferred] Directional sync semantics, and the conflict with the resolved "no visible position differences" answer.
     - The archived `webUI` sync exploration (DD-017) shows each participant's playback time and offers "Bring everyone to me" / "Take me to others". This conflicts with the resolved answer to Important question 7, which said not to design visible ahead/behind indicators or participant timelines.
-    - Open sub-questions: Does "Bring everyone to me" need unanimous agreement, a majority, or move immediately with per-user opt-out? Can the room owner force a sync? Is "turn off sync requests from others" global, per-room, or per-sender, and does it persist across sessions? Should "Take me to others" allow following someone who is behind the requester? Which of the three variations (A · Sheet, B · Inline, C · Center) should be adopted?
-    - Design decision affected: The accepted variation and consent rules must be settled before the "Synchronization rules" in `requirements.md` are updated and before the native client implements matching behavior.
+    - Resolved: Only the owner invites a group, pausing the owner at a fixed target. Viewers pause only upon acceptance and may withdraw before commitment. The owner sees live responses, can cancel before commitment, and can start with the currently accepted subset. Starting locks that set; automatic bounded failure recovery remains mandatory. Non-owners privately sync to the owner, including backward. Declined/unanswered/withdrawn viewers continue normally. No participant timeline or drift badges are implied.
+    - Implemented policies: 15-second preparation deadline, two seconds of playable buffer or the remaining movie, mandatory owner readiness, 3.5-second shared scheduled start, two-minute invitation expiry, and revision/request/stream correlation. Owner loss ends the attempt; unready/disconnected viewers are excluded. Viewers may withdraw and accept again before commit. Nonseekable live media and absent/stale-owner private sync report unavailable. Cancellation restores the preceding local state; withdrawal explicitly resumes at the saved acceptance position. See `synchronization-contract.md`.
+    - Remaining scope: continuous drift correction and invitation muting. The selected focused dialog/mobile sheet and latest concise bilingual labels are implemented; archived DD-017 alternatives remain deferred.
 
 13. [Resolved] What direct video URL formats and validation rules apply to the native client?
     - Answer: The Android client accepts any well-formed HTTP(S) direct video URL and plays it through Media3 ExoPlayer; progressive files and HLS live streams are supported. Validation is deferred to playback: failures surface through the player error state and a retry path. Cleartext HTTP is permitted for this feature via a debug network security configuration.
@@ -114,8 +115,8 @@ Resolved questions are preserved with their answers for traceability.
 - [Resolved, DD-049] Persian and RTL are included in browser and Android.
 - [Resolved, DD-031] Voice is explicit muted opt-in with independent per-peer recovery; physical audio and deployment/load acceptance remain open.
 - Initial owner assignment is still inferred from party creation, but the owner-absent and returning-owner lifecycle is defined.
-- Desktop and iOS playback engines are not yet implemented; the Android player (DD-013) is the approved reference seam for extending them.
-- Synchronization is a local placeholder until a cross-device sync contract exists. Directional sync (DD-017) is an archived exploration; its request-consent rules and chosen variation are deferred under DD-023. The connected browser uses the accepted private, requester-only forward sync contract.
+- Desktop VLC and iOS AVPlayer adapters are implemented. Desktop runtime smoke passes; iOS compilation/device validation remains pending on macOS.
+- [Implemented, DD-059] Owner-led synchronization uses revocable acceptance, locked participants and bounded recovery; private catch-up follows the owner. See `synchronization-contract.md` for verified platforms and timing. DD-017 stays archived.
 - [Resolved, DD-031] An application-scoped coordinator owns the Android voice lifetime and notification commands through a bound foreground microphone service. Process death never automatically restores capture.
 
 

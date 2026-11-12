@@ -276,7 +276,33 @@ export class AvMedia implements PlayerMedia {
       if (this.video()?.paused) throw new DOMException(t("Select Play to start video"), 'NotAllowedError');
     });
   }
-  pause() { void this.enqueue(player => player.pause()).catch(() => this.fail(t("Unable to pause this video. Retry the video."))); }
+  pause() { return this.enqueue(player => player.pause()).catch(() => this.fail(t("Unable to pause this video. Retry the video."))); }
+  /** Keep the packet pump active while the native media element stays paused. */
+  async prepareForSync(positionMs: number) {
+    await this.seekTo(positionMs / 1000);
+    await this.enqueue(async player => {
+      this.previewing = true;
+      player.setVolume(0);
+      try {
+        await player.play();
+        const video = this.video();
+        if (!video) throw new Error('PLAYER_UNAVAILABLE');
+        video.pause();
+        const target = positionMs / 1000;
+        const end = Math.min(target + 2, this.durationValue);
+        await this.waitForMedia(() => Array.from({length:video.buffered.length}, (_,i)=>i).some(i=>video.buffered.start(i)<=target+.1 && video.buffered.end(i)>=end));
+        video.currentTime = target;
+        await this.waitForMedia(() => !video.seeking && video.readyState >= 3);
+        await player.pause();
+        this.pausedValue = true;
+      } finally {
+        await player.pause();
+        this.previewing = false;
+        player.setVolume(this.mutedValue ? 0 : this.volumeValue);
+        this.callbacks.update();
+      }
+    });
+  }
   async selectAudio(id: string) {
     if (id.startsWith('avh:')) await this.enqueue(player => player.selectAudio(Number(id.slice(4))));
     else await this.seekTo(() => this.currentTime, Number(id.slice(3)));

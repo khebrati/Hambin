@@ -24,6 +24,22 @@ channels:
         $ref: '#/components/messages/Snapshot'
       event:
         $ref: '#/components/messages/Event'
+      syncState:
+        $ref: '#/components/messages/SyncState'
+      syncInvite:
+        $ref: '#/components/messages/SyncInvite'
+      syncRespond:
+        $ref: '#/components/messages/SyncRespond'
+      syncCommit:
+        $ref: '#/components/messages/SyncCommit'
+      syncCancel:
+        $ref: '#/components/messages/SyncCancel'
+      syncReady:
+        $ref: '#/components/messages/SyncReady'
+      syncFailed:
+        $ref: '#/components/messages/SyncFailed'
+      syncClock:
+        $ref: '#/components/messages/SyncClock'
       syncResult:
         $ref: '#/components/messages/SyncResult'
       error:
@@ -65,6 +81,7 @@ operations:
     - $ref: '#/channels/room/messages/snapshot'
     - $ref: '#/channels/room/messages/event'
     - $ref: '#/channels/room/messages/syncResult'
+    - $ref: '#/channels/room/messages/syncState'
     - $ref: '#/channels/room/messages/error'
   sendRoom:
     action: send
@@ -73,6 +90,13 @@ operations:
     messages:
     - $ref: '#/channels/room/messages/playbackReport'
     - $ref: '#/channels/room/messages/syncRequest'
+    - $ref: '#/channels/room/messages/syncInvite'
+    - $ref: '#/channels/room/messages/syncRespond'
+    - $ref: '#/channels/room/messages/syncCommit'
+    - $ref: '#/channels/room/messages/syncCancel'
+    - $ref: '#/channels/room/messages/syncReady'
+    - $ref: '#/channels/room/messages/syncFailed'
+    - $ref: '#/channels/room/messages/syncClock'
     - $ref: '#/channels/room/messages/ack'
     - $ref: '#/channels/room/messages/authRefresh'
   receiveVoice:
@@ -153,26 +177,123 @@ components:
             additionalProperties: true
           sequence:
             type: integer
+    SyncState:
+      name: sync.state
+      description: Full ephemeral attempt state, separate from durable room event sequencing. See docs/synchronization-contract.md for phase and recovery rules.
+      payload:
+        type: object
+        required: [serverTimeMs, state]
+        properties:
+          serverTimeMs:
+            type: integer
+            format: int64
+          state:
+            oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/SyncAttempt'
+    SyncInvite:
+      name: sync.invite
+      description: Acknowledged command; returns serverTimeMs and state, or a stable error.
+      payload:
+        type: object
+        required: [streamSessionId, requestId, positionMs]
+        properties:
+          streamSessionId:
+            type: string
+          requestId:
+            type: string
+          positionMs:
+            type: integer
+    SyncRespond:
+      name: sync.respond
+      description: Acknowledged command; returns serverTimeMs and state, or a stable error.
+      payload:
+        type: object
+        required: [streamSessionId, requestId, response]
+        properties:
+          streamSessionId:
+            type: string
+          requestId:
+            type: string
+          response:
+            type: string
+            enum: [ACCEPTED, DECLINED, WITHDRAWN]
+    SyncCommit:
+      name: sync.commit
+      description: Acknowledged command; returns serverTimeMs and state, or a stable error.
+      payload:
+        type: object
+        required: [streamSessionId, requestId]
+        properties:
+          streamSessionId:
+            type: string
+          requestId:
+            type: string
+    SyncCancel:
+      name: sync.cancel
+      description: Acknowledged command; returns serverTimeMs and state, or a stable error.
+      payload:
+        type: object
+        required: [streamSessionId, requestId]
+        properties:
+          streamSessionId:
+            type: string
+          requestId:
+            type: string
+    SyncReady:
+      name: sync.ready
+      description: Acknowledged command; returns serverTimeMs and state, or a stable error.
+      payload:
+        type: object
+        required: [streamSessionId, requestId, ready]
+        properties:
+          streamSessionId:
+            type: string
+          requestId:
+            type: string
+          ready:
+            type: boolean
+    SyncFailed:
+      name: sync.failed
+      description: Acknowledged command; returns serverTimeMs and state, or a stable error.
+      payload:
+        type: object
+        required: [streamSessionId, requestId, reason]
+        properties:
+          streamSessionId:
+            type: string
+          requestId:
+            type: string
+          reason:
+            type: string
+    SyncClock:
+      name: sync.clock
+      description: Acknowledged command; returns serverTimeMs and state, or a stable error.
+      payload:
+        type: object
     SyncResult:
       name: sync.result
       title: Sync result
-      description: 'Returns only a target position and outcome. Never reveals participant drift or leader
-        identity, never rewinds the requester, and is never broadcast to other participants.
-
-        '
+      description: Private catch-up to fresh owner telemetry, including rewinds. Other players are untouched.
       contentType: application/json
       payload:
         type: object
         required:
         - status
         - targetPositionMs
+        - serverTimeMs
+        - playing
         - requestId
         properties:
+          serverTimeMs:
+            type: integer
+            format: int64
+          playing:
+            type: boolean
           status:
             type: string
             enum:
             - APPLIED
-            - ALREADY_LEADING
             - UNAVAILABLE
           targetPositionMs:
             type: integer
@@ -353,6 +474,31 @@ components:
           msg:
             type: string
   schemas:
+    SyncAttempt:
+      type: object
+      required: [requestId, streamSessionId, streamRevision, ownerMembershipId, targetPositionMs, createdAtMs, revision, phase, participants]
+      properties:
+        requestId: {type: string}
+        streamSessionId: {type: string}
+        streamRevision: {type: integer}
+        ownerMembershipId: {type: string}
+        targetPositionMs: {type: integer, format: int64}
+        createdAtMs: {type: integer, format: int64}
+        revision: {type: integer}
+        phase: {type: string, enum: [INVITING, PREPARING, SCHEDULED, COMPLETED, CANCELLED, FAILED]}
+        deadlineMs: {type: integer, format: int64}
+        startAtMs: {type: integer, format: int64}
+        reason: {type: string}
+        participants:
+          type: array
+          items:
+            type: object
+            required: [membershipId, response, ready]
+            properties:
+              membershipId: {type: string}
+              response: {type: string, enum: [PENDING, ACCEPTED, DECLINED, WITHDRAWN, EXCLUDED]}
+              ready: {type: boolean}
+              reason: {type: string}
     Room:
       type: object
       properties:

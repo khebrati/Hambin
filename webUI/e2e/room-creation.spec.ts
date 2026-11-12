@@ -19,10 +19,10 @@ for (const query of ['', '?theme=dark&largeText=1&dir=rtl']) {
       return route.fulfill({ status: 503, json: { code: 'UNAVAILABLE' } });
     });
     await page.goto('/' + query);
-    await page.getByRole('button', { name: 'Create a party', exact: true }).click();
-    await page.getByRole('button', { name: 'Create party', exact: true }).click();
+    await page.getByRole('button', { name: 'Start a party', exact: true }).click();
+    await page.getByRole('button', { name: 'Start the party', exact: true }).click();
     await expect(page.getByRole('textbox', { name: 'Direct video URL' })).toBeVisible();
-    await expect(page.locator('.app-bar')).toContainText('Owner');
+    await expect(page.locator('.app-bar')).toContainText('Host');
     await expect(page.locator('.owner-away-banner')).toHaveCount(0);
     await expect(page.getByText('Waiting for Nika to return')).toHaveCount(0);
     await page.getByRole('textbox', { name: 'Direct video URL' }).fill('https://example.test/film.mp4');

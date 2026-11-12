@@ -485,6 +485,15 @@ deployment evidence remains historical.
 - **Continuity:** Normalize existing profile/membership names without resetting identities or ownership. Preserve historical chat snapshots. Backend derives names and ignores the legacy name input.
 
 
+## DD-055: Product Analytics and Error Reporting
+
+- **Date:** 2026-11-12
+- **Decision:** Use PostHog EU for aggregate usage and product events and Sentry for automatic web/native/backend errors plus manual feedback. Retain the existing backend-owned bug-report dialog, validation, idempotency and 30-day private PostgreSQL retention.
+- **Delivery:** New manual reports enqueue in their original database transaction. A single-runtime worker forwards description, allowlisted client context and the redacted session log, using the report UUID as the stable Sentry event ID. Temporary network failures and quota limits retry independently of user acknowledgement. Historical reports are not automatically forwarded.
+- **Privacy and scope:** No session replay, screenshots, microphone recording, automatic click capture or chat/media payload collection. Explicit events cover app opens and successful room creation/join, playback start and report submission. Analytics uses a random browser/installation identifier, separate from authentication; user counts represent installations rather than deduplicated people. Automatic errors omit request/user/extra data and exception text while preserving stack locations. Per stakeholder direction on 2026-11-12, remove the diagnostic storage and Sentry delivery notice from the browser and native report dialogs in both English and Persian; report submission and delivery behavior remain unchanged.
+- **Operations:** Keep ingestion configuration in ignored local environment/property files or deployment environment variables. Keep source-map/mapping upload authentication only in build-time environment/CI secrets. Separate development and production with environment properties. See `docs/observability.md` for operation and verification details.
+
+
 ## DD-056: Persian Gathering Copy and Chat Shortcut
 
 - **Date:** 2026-11-12
@@ -497,6 +506,7 @@ deployment evidence remains historical.
 
 - **Compact layout:** Stack native playback status above the sync action when space is narrow, so the longer Persian gathering label and large text do not squeeze the status into individual letters.
 
+
 ## DD-057: Consecutive Chat Message Groups
 
 - **Date:** 2026-11-12
@@ -508,6 +518,34 @@ deployment evidence remains historical.
 
 - **Date:** 2026-11-12
 - **Decision:** Omit the diagnostic storage and Sentry delivery notice from browser and native bug-report dialogs in English and Persian, per stakeholder direction. Keep report submission and delivery behavior unchanged.
+
+
+## DD-059: Owner-led Synchronization with Revocable Acceptance
+
+- **Date:** 2026-11-12
+- **Status:** Accepted product behavior; implemented in the fresh-deployment service contract and browser/shared native clients. Local verification and platform limits are recorded in `synchronization-contract.md`.
+- **Supersedes:** The leading-participant, forward-only synchronization rule in REQ-021/REQ-022 and the requester-only restrictions in DD-023/DD-029/DD-036. DD-017 remains an archived exploration; this decision does not adopt its direction chooser, participant timeline, or visual variations.
+- **Private sync:** A non-owner's Sync action moves only that viewer to the owner's position, including backward when needed. It does not initiate a group request or interrupt anyone else.
+- **Invitation:** Owner Sync pauses only the owner and freezes the invitation target at the owner's current media position. Show who is asking and the timestamp. Pending, declined, and withdrawn viewers retain normal local playback; the room is not globally paused.
+- **Revocable acceptance:** Accepting pauses that viewer. Before the owner starts, an accepter can cancel their participation and resume local playback; acceptance never obliges them to remain waiting. The owner sees current response states in real time and can cancel the whole invitation. On owner cancellation, release accepted viewers from the waiting state. Restoring each viewer's preceding playing/paused state is the recovery working assumption.
+- **Commit boundary:** The owner can start without unanimous acceptance. Starting locks a snapshot of the currently accepted viewers plus the owner. The server must serialize acceptance/withdrawal against this boundary so the owner starts with an authoritative set. Late accepts cannot enlarge it. After commitment, neither owner cancellation nor participant withdrawal is available for that attempt; ordinary room departure and automatic failure recovery must still work.
+- **Preparation and start:** Included players seek to the frozen target, prepare playable buffered data, and report readiness for this attempt. Once all remaining included players are ready, show 3, 2, 1, Action over their playback screens in the app's theme and font and start together. Excluded viewers receive no seek, pause, countdown, or playback command. A shared scheduled start and clock coordination are the proposed technical direction; independent timers triggered by message arrival are insufficient.
+- **Automatic recovery:** Bound committed preparation with a deadline. Remove disconnected or failed players with an explanation and proceed with ready participants if coordination remains viable; otherwise automatically end the attempt, explain the failure, and provide recovery. A non-cancellable committed operation must never trap players indefinitely. The fresh-deployment implementation uses the deadlines and owner-loss rules in `synchronization-contract.md`.
+- **Required states:** Idle/private catch-up, invitation pending, accepted/paused, declined, withdrawn, owner cancellation, committing, preparing/buffering, ready, countdown, completed, excluded/disconnected, and automatic failure with recovery. Use accessible text for status, with English/Persian, RTL, large-text, light/dark, and compact/expanded support.
+- **Scope:** The shared protocol is defined in `synchronization-contract.md` and `backend/asyncapi/asyncapi.yaml`. This workspace implementation has not been deployed. Continuous drift correction and invitation muting remain outside this change.
+
+
+## DD-060: Three Owner-led Sync UI Explorations
+
+- **Date:** 2026-11-12
+- **Status:** The stakeholder selected variation 03 (focused dialog/mobile sheet); the other variations remain comparison previews.
+- **Scope:** Explore DD-059 inside the existing browser party screen at `?preview=sync`. All three share the owner/viewer role selector, existing theme and font, English/Persian, RTL, large text, local mock responses, and on-player countdown. The prototype remains a comparison surface; the selected focused sheet is now integrated into production browser and shared native presentation.
+- **01 · Together, right here (`variant=inline`):** An expanding panel below playback; the owner sees response cards and start/cancel actions, while viewers accept or withdraw in context.
+- **02 · A place for everyone (`variant=side`):** A dedicated panel beside the movie on expanded screens and below it on compact screens, with a prominent fixed target and stacked live response rows.
+- **03 · One shared moment (`variant=sheet`):** A focused dialog on desktop and a bottom sheet on compact screens. Dismissing the surface does not withdraw acceptance or cancel the attempt; View sync reopens it. Committed operations have no manual cancellation action.
+- **Selected owner entry refinement:** Before any request exists, opening Sync together shows a live Meet at card and the primary Ask for sync action, with no participant list. Opening or dismissing this draft does not pause playback or send a request. The timestamp follows local playback. Pressing Ask for sync pauses the owner, freezes that exact moment as the invitation target, sends the request, and reveals the live response list. Keep the initial heading Sync together (not Sync everyone). This draft precedes DD-059's invitation phase; the request/acceptance/commit rules remain as documented.
+- **Interaction coverage:** Initial/private catch-up; owner request; pending/accepted/declined/withdrawn responses; owner cancellation; locked preparation; readiness; 3/2/1/Action overlay; completion; disconnected-player exclusion; owner-player failure and recovery. The preview simulator provides remote invitation/start/cancel and response controls outside the product components.
+- **Working assumptions:** Preparation recovery uses an illustrative eight-second deadline; owner-player failure ends the attempt, and a disconnected viewer is excluded. These demonstrate the unresolved recovery policies rather than accepting production timeout values. The mock cinema is illustrative, not a measurement of real multi-device synchronization.
 
 
 ## DD-061 — Avatar names follow the user’s saved language
@@ -529,18 +567,37 @@ deployment evidence remains historical.
 - **Details:** See [Settings chooser studies](settings-chooser-designs.md) for routes, states and verification.
 - **Settings copy refinement:** Remove the profile subtitle and color helper sentences. Keep only “Pick the character friends will see.” for avatar guidance and “Applies after saving.” under Language; remove the repeated language instruction below its picker. Apply the same wording in Persian and native Settings.
 
+## DD-063: Friendly, Casual English Copy
+
+- **Date:** 2026-11-12
+- **Decision:** The stakeholder approved the proposed friendly English replacements across Home, create/join, Settings, room status and sync. Use short conversational language and contractions, while keeping playback consequences and destructive actions explicit. The browser's `src/en.json` records the approved replacements using existing translation keys; matching native English resources use the same wording. Persian revisions remain proposals pending confirmation.
+- **Examples:** Start a party; Got a code?; Your last hangout; Jump back in; Movie night; You’re hosting; Let’s start movie night; Got an invite?; Invite code; Take a look; Make yourself at home; Pick your movie-night face.; Your colors; Save to switch languages.; Save changes; Host; You’re watching; You’re paused; Hang out on voice; Ask everyone to sync; Let’s meet at; Getting everyone set…; Back to the movie.
+- **Clarity:** Keep Join voice distinct from room text chat. Preserve Sync together, Who’s joining?, Accept & pause, Keep watching, and standard playback controls. Do not add previously removed helper sentences. Keep existing Persian translations and stable translation/protocol keys until Persian copy is accepted.
+- **Presence constraint:** Your friends are waiting is approved only when participant presence is known. The code-entry form cannot establish this, so it retains Step into their room. Do not imply that people are waiting merely because the join form is open.
+- **Scope:** Wording changes do not change room permissions, synchronization contracts or behavior. Group sync remains a browser design preview until implementation is separately completed.
+
+## DD-064: Stakeholder-selected Persian Copy
+
+- **Date:** 2026-11-12
+- **Decision:** Apply the stakeholder’s Persian wording across Home, create/join, Settings, playback/voice labels and sync previews. This resolves DD-063’s pending Persian copy review and supersedes earlier wording examples where they differ. Keep the approved English copy unchanged.
+- **Home and entry:** ساخت دورهمی؛ کد داری؟؛ دورهمی قبلیت؛ بازگشت به آخرین دورهمی؛ مدیریت دورهمی؛ میزبان تویی؛ یه دورهمی جدید بساز؛ ساخت دورهمی؛ دعوت شدی؟؛ برو پیش دوستات؛ کد دعوت؛ یه نگاه بنداز؛ داریم دورهمی رو پیدا میکنیم؛ نتونستیم دورهمی رو راه بندازیم.
+- **Settings and playback:** به سلیقه خودت؛ یه شخصیت انتخاب کن که دوستات ببینن؛ رنگ دلخواهت؛ ذخیره کن تا زبان عوض شه؛ ذخیره تغییرات؛ فیلمت داره اجرا میشه؛ وارد صحبت بشید؛ ورود به گپ صوتی.
+- **Sync:** درخواست هماهنگی؛ قرار ما در؛ هنوز جواب نداده · داره میبینه؛ نمیاد · داره میبینه؛ بیخیال، فیلممو ادامه میدم؛ داریم اماده میشیم؛ برگردیم به فیلم.
+- **Acceptance clarification:** The stakeholder explicitly chose just پایه است for accepted viewers after clarifying that acceptance pauses playback. Do not append داره میبینه to accepted viewers. This is a text change only; consent, pause, withdrawal, commitment and recovery rules remain unchanged.
+- **Implementation boundary:** Keep stable translation keys, identities and protocol values. Shared native Persian resources match browser wording where those controls exist; group sync remains a browser prototype.
+
 ## DD-065: Integrate the approved Settings chooser combination
 
 - **Date:** 2026-11-12
 - **Decision:** The stakeholder confirmed Spotlight avatars, Color garden and the focused language picker for main browser/shared native Settings. This supersedes DD-062’s final-review boundary. Settings no longer depends on design-preview query parameters or variation controls.
 - **Languages:** Include only English and فارسی. The ten additional study entries remain historical layout fixtures; do not show them as selectable production languages. Keep the picker extensible for future translations.
 - **Interaction:** Color changes apply and persist immediately. Language selection is staged within the focused picker; explicit Use transfers it to the Settings draft. Dismissal discards only the picker’s staged choice. Save applies the profile and app language; Back from Settings discards profile drafts. Preserve the existing network/persistence retry behavior and fixed localized avatar names.
-- **Presentation:** Keep the accepted enlarged Spotlight tile, named swatch grid with a current-color summary, and compact bottom sheet / expanded dialog language surface. Support search/no-results recovery, English/Persian, light/dark themes, large text, RTL and keyboard/focus semantics. Retain the approved Settings wording and the stakeholder’s requested helper-text removals.
+- **Presentation:** Keep the accepted enlarged Spotlight tile, named swatch grid with a current-color summary, and compact bottom sheet / expanded dialog language surface. Support search/no-results recovery, English/Persian, light/dark themes, large text, RTL and keyboard/focus semantics. Retain DD-063/DD-064 wording and the stakeholder’s requested helper-text removals.
 - **Implementation:** Reusable browser components own the accepted patterns; native presentation stays in sharedUI. Service contracts and backend behavior are unchanged. See [integrated Settings choosers](settings-chooser-designs.md).
 
 - **Withdrawal refinement (2026-11-12):** In the sync invitation, selecting “Change my mind & keep watching” / «بیخیال، فیلممو ادامه میدم» withdraws acceptance, dismisses the dialog and starts local playback at the viewer’s saved acceptance position. It starts playback even if the viewer had been paused before accepting. The viewer does not seek to the owner’s target and is excluded from subsequent commitment unless they accept again.
 
-## DD-066: Concise, Casual Product Voice Across Clients
+## DD-067: Concise, Casual Product Voice Across Clients
 
 - **Date:** 2026-11-12
 - **Decision:** The stakeholder approved the additional thirty Persian sentence replacements and explicitly established their repeated removal of overly informative sentences as a project-wide design fact. All current and future English/Persian copy should be friendly, casual and concise across web and native clients.
@@ -548,3 +605,11 @@ deployment evidence remains historical.
 - **Examples:** «از دورهمی میری؟»؛ «لینک فیلم رو چک کن و دوباره امتحان کن.»؛ «یه مشکلی پیش اومد. دوباره امتحان کن.»؛ «کنترل فیلم دوباره دست خودته.» Preserve the stakeholder's selected spelling and product terminology rather than reverting to formal Persian.
 - **Feedback:** The group-recovery completion remains an owner-only snackbar, with «با اونایی که آماده بودن شروع کردیم. کسی که قطع شد میتونه بعدا هماهنگ بشه.» It must not reappear as a persistent card or be shown to every viewer.
 - **Implementation:** Apply approved wording through existing browser translation keys, inline sync copy and matching shared native resources. This changes presentation only; identity, permissions, playback, consent, recovery timing and backend contracts are unchanged. Detailed authoring rules are in `design-principles.md`.
+
+## DD-066: Persist random first-time personalization
+
+- **Date:** 2026-11-12
+- **Decision:** New users receive a random character avatar and one of the twenty-four named theme colors. Persist those initial choices once, before their first session is issued. Reloads, restarts, retries, theme-mode toggles and Settings visits must not reroll them. Explicit profile/color choices always take precedence.
+- **Existing users:** Preserve stored avatar/color choices, including Ice Queen and the original brand palette. Existing sessions without an explicit color retain the original palette. Recover existing guest sessions before choosing any registration avatar; never replace an established identity to randomize appearance.
+- **Boundary:** Clients send the chosen avatar through the existing guest-session/profile fields; the backend retains its authoritative localized-name derivation. Theme color stays a device preference. No HTTP/realtime schema change, new identity reset or randomization of historical chat is required.
+- **Names:** Rename the stable cloud, ember and orbit characters to TV Boy, Alien Employee and Wolf Barista. Matching Persian names are پسر تلویزیونی، کارمند فضایی، گرگ باریستا. Update current profile/membership display names while retaining avatar IDs, identity/room ownership and historical message snapshots.

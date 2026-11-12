@@ -60,13 +60,13 @@ class ComposeTest {
             }
         }
 
-        onNodeWithText("Create a party").performClick()
-        onNodeWithText("Create party").performClick()
+        onNodeWithText("Start a party").performClick()
+        onNodeWithText("Start the party").performClick()
 
         onNodeWithContentDescription("Invite friends").performClick()
 
         onNodeWithText("Share either option. Friends will preview the room before they join.").assertExists()
-        onNodeWithText("Party code").assertExists()
+        onNodeWithText("Invite code").assertExists()
         onNodeWithText("Prototype invite link").assertExists()
         onNodeWithText("Copy code").assertExists()
         onNodeWithText("Copy link").assertExists()
@@ -87,7 +87,7 @@ class ComposeTest {
         }
         onNodeWithText("Movie night").assertExists()
         onNodeWithText("ABCD2345").assertExists()
-        onNodeWithContentDescription("Return to last room").performClick()
+        onNodeWithContentDescription("Jump back in").performClick()
         kotlin.test.assertEquals(top.roomio.app.home.HomeAction.OpenRoomClicked, action)
     }
 
@@ -102,8 +102,8 @@ class ComposeTest {
         onNodeWithText("READY WHEN EVERYONE IS").assertDoesNotExist()
         onNodeWithText("Watch Party").assertDoesNotExist()
         onNodeWithText("Nika").assertExists()
-        onNodeWithText("Create a party").assertExists()
-        onNodeWithText("Join with code").assertExists()
+        onNodeWithText("Start a party").assertExists()
+        onNodeWithText("Got a code?").assertExists()
         onNodeWithText("Friday night screening").assertDoesNotExist()
         onNodeWithText("2 friends · No owner").assertDoesNotExist()
     }
@@ -116,15 +116,15 @@ class ComposeTest {
 
         onNodeWithContentDescription("Settings").performClick()
 
-        onNodeWithText("Your profile").assertExists()
+        onNodeWithText("Make yourself at home").assertExists()
         onNodeWithText("Display name").assertDoesNotExist()
         onNodeWithText("Avatar").assertExists()
         onAllNodesWithText("Ice Queen")[0].assertExists()
         onNodeWithText("Skeleton Detective").assertExists()
-        onNodeWithText("Save profile").assertExists()
+        onNodeWithText("Save changes").assertExists()
 
         onNodeWithText("Frog Wizard").performScrollTo().performClick()
-        onNodeWithText("Save profile").performClick()
+        onNodeWithText("Save changes").performClick()
 
         onNodeWithText("Frog Wizard").assertExists()
         onNodeWithText("Stream and chill").assertExists()
@@ -139,13 +139,13 @@ class ComposeTest {
             RoomioUi(TestProfileRepository())
         }
 
-        onNodeWithText("Create a party").performClick()
+        onNodeWithText("Start a party").performClick()
 
-        onNodeWithText("Party manager").assertExists()
-        onNodeWithText("Open a room for movie night").assertExists()
-        onNodeWithText("You will be the host", ignoreCase = true).assertExists()
+        onNodeWithText("Movie night").assertExists()
+        onNodeWithText("Let’s start movie night").assertExists()
+        onNodeWithText("You’re hosting", ignoreCase = true).assertExists()
 
-        onNodeWithText("Create party").performClick()
+        onNodeWithText("Start the party").performClick()
 
         onNodeWithText("Your cinema is empty").assertExists()
     }
@@ -156,11 +156,11 @@ class ComposeTest {
             RoomioUi(TestProfileRepository())
         }
 
-        onNodeWithText("Join with code").performClick()
+        onNodeWithText("Got a code?").performClick()
 
         onNodeWithText("Step into their room").assertExists()
-        onNodeWithText("Party code").assertExists()
-        onNodeWithText("Preview party").assertIsNotEnabled()
+        onNodeWithText("Invite code").assertExists()
+        onNodeWithText("Take a look").assertIsNotEnabled()
     }
 
     @Test
@@ -170,15 +170,15 @@ class ComposeTest {
         }
 
         onNodeWithContentDescription("Settings").performClick()
-        onNodeWithText("Your profile").assertExists()
+        onNodeWithText("Make yourself at home").assertExists()
         onNodeWithContentDescription("Back").performClick()
         onNodeWithText("Stream and chill").assertExists()
         onNodeWithText("Your next watch party is one room away.").assertDoesNotExist()
         onNodeWithText("READY WHEN EVERYONE IS").assertDoesNotExist()
         onNodeWithText("Watch Party").assertDoesNotExist()
 
-        onNodeWithText("Create a party").performClick()
-        onNodeWithText("Party manager").assertExists()
+        onNodeWithText("Start a party").performClick()
+        onNodeWithText("Movie night").assertExists()
         onNodeWithContentDescription("Back").performClick()
         onNodeWithText("Stream and chill").assertExists()
         onNodeWithText("Your next watch party is one room away.").assertDoesNotExist()
@@ -192,8 +192,8 @@ class ComposeTest {
             RoomioUi(TestProfileRepository())
         }
 
-        onNodeWithText("Create a party").performClick()
-        onNodeWithText("Create party").performClick()
+        onNodeWithText("Start a party").performClick()
+        onNodeWithText("Start the party").performClick()
         onNodeWithContentDescription("Leave").performClick()
         onNodeWithText("Leave party?").assertExists()
         onNodeWithText("Leave").performClick()
@@ -202,7 +202,7 @@ class ComposeTest {
         onNodeWithText("Your next watch party is one room away.").assertDoesNotExist()
         onNodeWithText("READY WHEN EVERYONE IS").assertDoesNotExist()
         onNodeWithText("Watch Party").assertDoesNotExist()
-        onNodeWithText("Party manager").assertDoesNotExist()
+        onNodeWithText("Movie night").assertDoesNotExist()
     }
 
     @kotlin.test.Ignore("Preview now loads asynchronously from the backend; rewrite to await the effect-based navigation.")
@@ -212,9 +212,9 @@ class ComposeTest {
             RoomioUi(TestProfileRepository())
         }
 
-        onNodeWithText("Join with code").performClick()
-        onNodeWithText("Party code").performTextInput("MOON-42")
-        onNodeWithText("Preview party").performClick()
+        onNodeWithText("Got a code?").performClick()
+        onNodeWithText("Invite code").performTextInput("MOON-42")
+        onNodeWithText("Take a look").performClick()
 
         onNodeWithText("Room preview").assertExists()
         onNodeWithText("Mira's late show").assertExists()
@@ -234,9 +234,9 @@ class ComposeTest {
             RoomioUi(TestProfileRepository())
         }
 
-        onNodeWithText("Join with code").performClick()
-        onNodeWithText("Party code").performTextInput("MOON-42")
-        onNodeWithText("Preview party").performClick()
+        onNodeWithText("Got a code?").performClick()
+        onNodeWithText("Invite code").performTextInput("MOON-42")
+        onNodeWithText("Take a look").performClick()
         onNodeWithText("Not now").performClick()
 
         onNodeWithText("Step into their room").assertExists()

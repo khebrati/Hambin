@@ -1,7 +1,7 @@
 import { test, expect, type BrowserContext, type Page } from '@playwright/test';
 
 const sessionPath = '/v1/guest-sessions';
-const home = (page: Page) => page.getByRole('button', { name: 'Create a party', exact: true });
+const home = (page: Page) => page.getByRole('button', { name: 'Start a party', exact: true });
 
 async function openHome(page: Page) {
   await page.goto('/');

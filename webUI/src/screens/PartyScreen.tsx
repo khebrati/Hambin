@@ -1,3 +1,4 @@
+import type { GroupSyncUi } from '../components/useGroupSync';
 import { t } from '../i18n';
 import { Bug } from 'lucide-react';
 import { BugReportDialog } from '../components/BugReportDialog';
@@ -66,6 +67,7 @@ function formatTime(value: number) {
 }
 
 export interface LivePartyControls {
+  groupSync?: GroupSyncUi;
   chat?: ChatControls;
   connected: boolean;
   leaving: boolean;
@@ -73,12 +75,13 @@ export interface LivePartyControls {
   onToggleVoice: () => Promise<void>;
   onResumeVoice: () => void;
   onRetryVoice: () => void;
-  onSync: () => Promise<void>;
+  onSync: () => void | Promise<void>;
   syncing: boolean;
   syncTarget?: { requestId: string; positionMs: number };
   onReport: (positionMs: number, playing: boolean) => void;
 }
 interface PartyScreenProps {
+  syncPreview?: { band: ReactNode; aside?: ReactNode; overlay?: ReactNode; locked: boolean; position: number; onPositionChange: (position: number) => void };
   chatPreview?: { placement: 'side' | 'dock' | 'floating'; content: ReactNode };
   live?: LivePartyControls;
   party: Party;
@@ -106,12 +109,14 @@ export function PartyScreen({
   onNotify,
   live,
   chatPreview,
+  syncPreview,
 }: PartyScreenProps) {
   const [bugReportOpen, setBugReportOpen] = useState(false);
   const [urlDraft, setUrlDraft] = useState(
     streamStatus === 'error' ? 'not-a-complete-link' : '',
   );
   const [position, setPosition] = useState(1122);
+  useEffect(() => { if (syncPreview) setPosition(syncPreview.position); }, [syncPreview?.position]);
   const [volume, setVolume] = useState(72);
   const [previousVolume, setPreviousVolume] = useState(72);
   const [micMuted, setMicMuted] = useState(true);
@@ -161,13 +166,13 @@ export function PartyScreen({
   }, [party.id, party.code]);
 
   useEffect(() => {
-    if (live || streamStatus !== 'playing') return;
+    if (live || syncPreview || streamStatus !== 'playing') return;
     const timer = window.setInterval(
       () => setPosition((current) => Math.min(current + 1, TOTAL_SECONDS)),
       1000,
     );
     return () => window.clearInterval(timer);
-  }, [streamStatus, live]);
+  }, [streamStatus, live, !!syncPreview]);
 
   const participants = useMemo(
     () =>
@@ -284,26 +289,28 @@ export function PartyScreen({
               ownerName={party.ownerName}
             />
           ) : live ? (
-            <VideoPlayer url={party.streamUrl} sessionId={party.streamSessionId || ''} onReport={live.onReport} onNotify={onNotify} onState={onSetStreamStatus} syncTarget={live.syncTarget} onSync={() => void live.onSync()} syncDisabled={!live.connected || live.syncing} onToggleMic={toggleMic} micMuted={voiceMuted} micLabel={voiceLabel} />
+            <VideoPlayer syncBridge={live.groupSync?.bridge} syncLocked={live.groupSync?.locked} syncOverlay={live.groupSync?.overlay} url={party.streamUrl} sessionId={party.streamSessionId || ''} onReport={live.onReport} onNotify={onNotify} onState={onSetStreamStatus} syncTarget={live.syncTarget} onSync={() => void live.onSync()} syncDisabled={!live.connected || live.syncing} onToggleMic={toggleMic} micMuted={voiceMuted} micLabel={voiceLabel} />
           ) : (
             <CinemaPlayer
+              locked={syncPreview?.locked}
+              overlay={syncPreview?.overlay}
               status={streamStatus}
               position={position}
               volume={volume}
-              onPositionChange={setPosition}
+              onPositionChange={(value) => { setPosition(value); syncPreview?.onPositionChange(value); }}
               onVolumeChange={setVolume}
               onToggleMute={toggleMute}
               onTogglePlay={() =>
                 onSetStreamStatus(streamStatus === 'playing' ? 'paused' : 'playing')
               }
-              onSkipBack={() => setPosition((current) => Math.max(0, current - 15))}
+              onSkipBack={() => { const next = Math.max(0, position - 15); setPosition(next); syncPreview?.onPositionChange(next); }}
               onSkipForward={() =>
-                setPosition((current) => Math.min(TOTAL_SECONDS, current + 15))
+                { const next = Math.min(TOTAL_SECONDS, position + 15); setPosition(next); syncPreview?.onPositionChange(next); }
               }
             />
           )}
 
-          {hasPlayer ? (
+          {hasPlayer ? syncPreview ? syncPreview.band : (
             <div className="sync-band">
               <div>
                 {t("Local playback") && <span className="eyebrow">{t("Local playback")}</span>}
@@ -327,6 +334,7 @@ export function PartyScreen({
         </section>
 
         <aside className="party-support" aria-label={t("Party details")}>
+          {syncPreview?.aside}
           {live?.chat && <PartyChat chat={live.chat} connected={live.connected && !live.leaving} />}
           {chatPreview?.placement === 'side' && chatPreview.content}
           <div className="participants-wide">
@@ -386,6 +394,7 @@ export function PartyScreen({
       </main>
       {chatPreview?.placement === 'floating' && chatPreview.content}
 
+      {live?.groupSync?.dialog}
       <BugReportDialog open={bugReportOpen} roomId={party.id} enabled={!!live} onClose={() => setBugReportOpen(false)} onSent={() => onNotify(t("Bug report sent. Thank you."))} />
       <Dialog
         open={inviteOpen}
@@ -597,6 +606,8 @@ function StreamEntry({
 }
 
 function CinemaPlayer({
+  locked = false,
+  overlay,
   status,
   position,
   volume,
@@ -607,6 +618,8 @@ function CinemaPlayer({
   onSkipBack,
   onSkipForward,
 }: {
+  locked?: boolean;
+  overlay?: ReactNode;
   status: StreamStatus;
   position: number;
   volume: number;
@@ -686,7 +699,7 @@ function CinemaPlayer({
     >
       <div className="cinema-player__visual">
         <CinemaScene />
-        {paused ? (
+        {paused && !locked ? (
           <button className="player-big-play" onClick={onTogglePlay} aria-label={t("Play video")}>
             <Play size={34} fill="currentColor" aria-hidden="true" />
           </button>
@@ -697,9 +710,10 @@ function CinemaPlayer({
             <span>{t("Buffering")}</span>
           </div>
         ) : null}
+        {overlay}
       </div>
 
-      <div className="player-controls">
+      <fieldset disabled={locked} className="player-controls" style={{ border: 0, margin: 0, minWidth: 0 }}>
         <label className="player-progress">
           <span className="sr-only">{t("Playback position")}</span>
           <input
@@ -753,7 +767,7 @@ function CinemaPlayer({
             />
           </div>
         </div>
-      </div>
+      </fieldset>
     </div>
   );
 }

@@ -6,7 +6,7 @@
 | --- | --- |
 | Entry point | The user starts at the home page, which gives access to settings and party manager. Supported by REQ-004, REQ-005, REQ-008. |
 | User goal | The user wants to create or join a party, watch a direct video URL with others, and participate through voice chat. Supported by REQ-001, REQ-002, REQ-009, REQ-010, REQ-024. |
-| Success outcome | The user reaches the party screen, sees participant avatars, watches the video player, can use local playback controls, can speak in voice chat, and can sync to the leading participant if desired. Supported by REQ-011, REQ-013, REQ-017, REQ-020, REQ-021, REQ-022, REQ-023, REQ-024. |
+| Success outcome | The user reaches the party screen, sees participant avatars, watches the video player, can use local playback controls, can speak in voice chat, and can join owner-led synchronization or privately catch up to the owner (DD-059). Supported by REQ-011, REQ-013, REQ-017, REQ-020, REQ-021, REQ-022, REQ-023, REQ-024. |
 
 ## Main Steps
 
@@ -20,7 +20,7 @@
 8. Invite others at any time by copying the party code or mock invite link. Supported by REQ-042.
 9. Once playback is active, use custom Material 3 Expressive playback controls for play/pause, forward/backward, and volume. Supported by REQ-017, REQ-026, REQ-027, REQ-028, REQ-039.
 10. Use voice chat; when users speak, their avatar shows a speaking indicator. Supported by REQ-023, REQ-024, REQ-025.
-11. Press Sync when desired to fast forward local playback to the leading participant. Supported by REQ-020, REQ-021, REQ-022, REQ-038.
+11. Use role-specific Sync (DD-059): the owner pauses and invites others to a fixed timestamp; accepting viewers pause and may withdraw until the owner starts with the current accepted set. Committed players prepare, then count down and restart together, with bounded automatic recovery. Non-owners can privately catch up to the owner. Declined/unanswered/withdrawn viewers continue independently. Supported by REQ-020, REQ-021, REQ-022, REQ-038.
 12. If the owner leaves, keep the room and current playback available but remove all owner-only stream actions until that same owner returns. Supported by REQ-044.
 13. Leave the party through a visible leave affordance and confirmation prompt. Supported by REQ-034, REQ-037.
 

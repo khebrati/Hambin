@@ -251,6 +251,7 @@ internal fun RoomScreen(
     val copyUnavailable = stringResource(Res.string.copy_unavailable)
     val offlineMessage = stringResource(Res.string.offline_message)
     val requestFailed = stringResource(Res.string.request_failed)
+    val syncNoticeMessages=mapOf(GroupSyncNotice.CANCELLED to stringResource(Res.string.group_sync_cancelled),GroupSyncNotice.STOPPED to stringResource(Res.string.group_sync_stopped),GroupSyncNotice.EXCLUDED to stringResource(Res.string.group_sync_excluded),GroupSyncNotice.OWNER_RECOVERY to stringResource(Res.string.group_sync_owner_recovery),GroupSyncNotice.UNAVAILABLE to stringResource(Res.string.group_sync_unavailable))
 
     val playerHandle: VideoPlayerHandle? = if (playerContent == null) {
         rememberPlatformVideoPlayer { playerState ->
@@ -267,14 +268,18 @@ internal fun RoomScreen(
         if (resumePlaybackAfterSubtitlePicker) playerHandle?.play()
         resumePlaybackAfterSubtitlePicker = false
     }
-    val player: @Composable (Modifier) -> Unit = playerContent ?: { playerModifier ->
-        val handle = playerHandle
-        if (handle != null) {
-            VideoPlayerSurface(handle, playerModifier)
-        } else {
-            CinemaScene(modifier = playerModifier, showTitle = true, muted = false)
+    val player: @Composable (Modifier) -> Unit = { playerModifier ->
+        Box(playerModifier) {
+            if(playerContent!=null) playerContent(Modifier.fillMaxSize())
+            else if(playerHandle!=null) VideoPlayerSurface(playerHandle,Modifier.fillMaxSize())
+            else CinemaScene(modifier=Modifier.fillMaxSize(),showTitle=true,muted=false)
+            GroupSyncCountdown(state.syncCountdown)
         }
     }
+    LaunchedEffect(state.groupSync?.phase,playerHandle) {
+        if(playerHandle==null && playerContent==null && state.syncLocked) onAction(RoomAction.SyncPlayerUnavailable)
+    }
+    GroupSyncDialog(state,onAction)
     // Load the shared stream when it becomes active (owner start or a remote
     // stream.started event) and keep the local player's play/pause in sync.
     var loadedVideoUrl by remember { mutableStateOf<String?>(null) }
@@ -311,6 +316,8 @@ internal fun RoomScreen(
     LaunchedEffect(effects) {
         effects.collect { effect ->
             when (effect) {
+                is RoomEffect.PlayerPlaying -> if(effect.playing)playerHandle?.play()else playerHandle?.pause()
+                is RoomEffect.GroupSyncNotice -> snackbarHost.showSnackbar(syncNoticeMessages.getValue(effect.notice))
                 is RoomEffect.SeekTo -> {
                     log.i("effect SeekTo target=${effect.positionMs}ms handle=${playerHandle != null} playback=${state.playback}")
                     playerHandle?.seekTo(effect.positionMs)
@@ -352,15 +359,15 @@ internal fun RoomScreen(
             snackbarHost = snackbarHost,
             onTogglePlayback = {
                 onAction(RoomAction.TogglePlaybackClicked)
-                playerHandle?.togglePlayPause()
+                if(!state.syncLocked)playerHandle?.togglePlayPause()
             },
             onPositionChange = {
                 onAction(RoomAction.PlaybackPositionChanged(it))
-                playerHandle?.seekTo(it)
+                if(!state.syncLocked)playerHandle?.seekTo(it)
             },
             onSkip = {
                 onAction(RoomAction.PlaybackSkipped(it))
-                playerHandle?.seekBy((it * 15_000f).toLong())
+                if(!state.syncLocked)playerHandle?.seekBy((it * 15_000f).toLong())
             },
             onVolumeChange = {
                 onAction(RoomAction.VolumeChanged(it))
@@ -439,15 +446,15 @@ internal fun RoomScreen(
                     },
                     onTogglePlayback = {
                         onAction(RoomAction.TogglePlaybackClicked)
-                        playerHandle?.togglePlayPause()
+                        if(!state.syncLocked)playerHandle?.togglePlayPause()
                     },
                     onPositionChange = {
                         onAction(RoomAction.PlaybackPositionChanged(it))
-                        playerHandle?.seekTo(it)
+                        if(!state.syncLocked)playerHandle?.seekTo(it)
                     },
                     onSkip = {
                         onAction(RoomAction.PlaybackSkipped(it))
-                        playerHandle?.seekBy((it * 15_000f).toLong())
+                        if(!state.syncLocked)playerHandle?.seekBy((it * 15_000f).toLong())
                     },
                     onVolumeChange = {
                         onAction(RoomAction.VolumeChanged(it))

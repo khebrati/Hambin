@@ -91,5 +91,9 @@ interface RealtimeSession {
      */
     suspend fun requestSync(streamSessionId: String, positionMs: Long, requestId: String)
 
+    suspend fun groupSync(action: String, streamSessionId: String, requestId: String, positionMs: Long? = null, response: String? = null, ready: Boolean? = null, reason: String? = null): GroupSyncAttempt? = throw PartyException("UNAVAILABLE", "Sync unavailable")
+
+    suspend fun syncClock(): Long = throw PartyException("UNAVAILABLE", "Clock unavailable")
+
     suspend fun close()
 }

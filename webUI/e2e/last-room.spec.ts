@@ -33,12 +33,12 @@ for (const identityId of ['owner', 'guest']) {
     await expect(page.getByRole('button', { name: 'Leave party', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Leave party', exact: true }).click();
     await page.getByRole('dialog').getByRole('button', { name: 'Leave party', exact: true }).click();
-    await expect(page.getByRole('region', { name: 'Last room', exact: true })).toContainText(room.title);
+    await expect(page.getByRole('region', { name: 'Your last hangout', exact: true })).toContainText(room.title);
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem('roomio-last-room')!).identityId)).toBe(identityId);
     const other = await context.newPage();
     const otherState = await fixture(other, identityId);
     await other.goto('/');
-    await other.getByRole('button', { name: 'Return to last room' }).click();
+    await other.getByRole('button', { name: 'Jump back in' }).click();
     await expect(other.getByRole('heading', { name: room.title })).toBeVisible();
     expect(otherState.joins).toBe(0);
     await other.getByRole('button', { name: 'Join party', exact: true }).click();
@@ -57,7 +57,7 @@ for (const variant of [
   state.failPreview = true;
   await page.setViewportSize(variant);
   await page.goto('/' + variant.query);
-  const button = page.getByRole('button', { name: 'Return to last room' });
+  const button = page.getByRole('button', { name: 'Jump back in' });
   await expect(button).toBeVisible();
   await button.focus(); await page.keyboard.press('Enter');
   await expect(page.locator('.md-snackbar')).toContainText('The service is unavailable');
@@ -76,13 +76,13 @@ test('full room uses current preview without admitting, ended room removes saved
   const state = await fixture(page, 'guest', true);
   state.availability = 'FULL';
   await page.goto('/');
-  await page.getByRole('button', { name: 'Return to last room' }).click();
+  await page.getByRole('button', { name: 'Jump back in' }).click();
   await expect(page.getByRole('button', { name: 'Join party', exact: true })).toBeDisabled();
   expect(state.joins).toBe(0);
   state.availability = 'ENDED';
   await page.goto('/');
-  await expect(page.getByRole('button', { name: 'Create a party', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Return to last room' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Start a party', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Jump back in' })).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => localStorage.getItem('roomio-last-room'))).toBeNull();
 });
 
@@ -90,8 +90,8 @@ test('an unrelated guest identity cannot see the saved room', async ({ page }) =
   await fixture(page, 'new-guest');
   await page.addInitScript(() => localStorage.setItem('roomio-last-room', JSON.stringify({ identityId: 'old-guest', code: 'ABCD2345', title: 'Old room' })));
   await page.goto('/');
-  await expect(page.getByRole('button', { name: 'Create a party', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Return to last room' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Start a party', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Jump back in' })).toHaveCount(0);
 });
 
 test('delayed startup preview cannot replace a more recently joined room', async ({ page }) => {
@@ -108,14 +108,14 @@ test('delayed startup preview cannot replace a more recently joined room', async
   });
   await page.goto('/');
   await requestStarted;
-  await page.getByRole('button', { name: 'Create a party', exact: true }).click();
-  await page.getByRole('button', { name: 'Create party', exact: true }).click();
+  await page.getByRole('button', { name: 'Start a party', exact: true }).click();
+  await page.getByRole('button', { name: 'Start the party', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Leave party', exact: true })).toBeVisible();
   const completed = page.waitForResponse('**/v1/rooms/OLD23456/preview');
   finishPreview();
   await completed;
   await page.getByRole('button', { name: 'Leave party', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Leave party', exact: true }).click();
-  await expect(page.getByRole('region', { name: 'Last room', exact: true })).toContainText(room.title);
+  await expect(page.getByRole('region', { name: 'Your last hangout', exact: true })).toContainText(room.title);
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('roomio-last-room')!).code)).toBe(room.code);
 });

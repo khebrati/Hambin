@@ -16,6 +16,6 @@ describe('Persian localization', () => {
     expect(t('Create a party')).toBe('ساخت دورهمی');
     expect(t('{name} is away', { name: 'Mira / میرا' })).toBe('Mira / میرا حضور ندارد');
     setLanguage('en');
-    expect(t('Create a party')).toBe('Create a party');
+    expect(t('Create a party')).toBe('Start a party');
   });
 });

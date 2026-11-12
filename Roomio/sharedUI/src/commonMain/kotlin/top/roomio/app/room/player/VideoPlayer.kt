@@ -24,6 +24,8 @@ internal data class VideoPlayerState(
     val subtitles: List<SubtitleTrack> = emptyList(),
     val audioTracks: List<AudioTrack> = emptyList(),
     val audioTrackSelectionId: String? = null,
+    /** Platform decoder/cache confirms immediate playback when no buffer-end timestamp is exposed. */
+    val immediatelyPlayable: Boolean = false,
 ) {
     val hasDuration: Boolean
         get() = durationMs > 0L

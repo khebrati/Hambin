@@ -22,6 +22,8 @@ import top.roomio.app.room.player.VideoPlayerState
 import top.roomio.app.room.player.VideoPlayerStatus
 import top.roomio.app.room.player.AudioTrack
 import top.roomio.app.room.player.SubtitleTrack
+import top.roomio.domain.party.GroupSyncAttempt
+import top.roomio.domain.party.GroupSyncResponse
 import top.roomio.domain.party.Member
 import top.roomio.domain.party.PartyException
 import top.roomio.domain.party.RealtimeClient
@@ -46,6 +48,14 @@ internal enum class VoiceConnectionState { IDLE, CONNECTING, CONNECTED, DEGRADED
 
 internal data class RoomUiState(
     val model: RoomScreenModel,
+    val groupSync: GroupSyncAttempt? = null,
+    val syncDialogOpen: Boolean = false,
+    val syncBusy: Boolean = false,
+    val syncLocked: Boolean = false,
+    val syncCountdown: String? = null,
+    val syncMembers: List<Member> = emptyList(),
+    val syncSelfId: String = "",
+
     val chat: RoomChatState = RoomChatState(),
     val playback: RoomPlaybackState = model.playback,
     val videoUrl: String = "",
@@ -116,6 +126,12 @@ internal sealed interface RoomAction {
     data object ToggleMicClicked : RoomAction
     data object JoinVoiceClicked : RoomAction
     data object RetryVoiceConnections : RoomAction
+    data object SyncAsk : RoomAction
+    data class SyncRespond(val response: GroupSyncResponse) : RoomAction
+    data object SyncCommit : RoomAction
+    data object SyncCancel : RoomAction
+    data object SyncDismiss : RoomAction
+    data object SyncPlayerUnavailable : RoomAction
     data object SyncClicked : RoomAction
     data object InviteClicked : RoomAction
     data object InviteDismissed : RoomAction
@@ -130,6 +146,8 @@ internal sealed interface RoomAction {
 }
 
 internal sealed interface RoomEffect {
+    data class PlayerPlaying(val playing: Boolean) : RoomEffect
+    data class GroupSyncNotice(val notice: top.roomio.app.room.GroupSyncNotice) : RoomEffect
     data class SeekTo(val positionMs: Long) : RoomEffect
     data object SyncCompleted : RoomEffect
     data object SyncUnavailable : RoomEffect
@@ -169,6 +187,8 @@ internal class RoomViewModel(
     private var chatVersion = 0L
     private var connectionJob: Job? = null
 
+    private val groupSync = NativeGroupSync(viewModelScope, { mutableState.value }, { change -> mutableState.update(change) }, { realtime }, { streamSessionId }, { members.find { it.identityId == identityId }?.membershipId }, { mutableEffects.tryEmit(it) })
+
     init {
         connectionJob = viewModelScope.launch { connect() }
         viewModelScope.launch { reportLoop() }
@@ -204,7 +224,14 @@ internal class RoomViewModel(
     }
 
     fun onAction(action: RoomAction) {
+        if (state.value.syncLocked && (action == RoomAction.TogglePlaybackClicked || action is RoomAction.PlaybackPositionChanged || action is RoomAction.PlaybackSkipped)) return
         when (action) {
+            RoomAction.SyncAsk -> groupSync.ask()
+            is RoomAction.SyncRespond -> groupSync.respond(action.response)
+            RoomAction.SyncCommit -> groupSync.commit()
+            RoomAction.SyncCancel -> groupSync.cancel()
+            RoomAction.SyncDismiss -> groupSync.dismiss()
+            RoomAction.SyncPlayerUnavailable -> groupSync.playerUnavailable()
             is RoomAction.ChatDraftChanged -> if (action.text.length <= 500) mutableState.update { it.copy(chat = it.chat.copy(draft = action.text)) }
             RoomAction.ChatSend -> sendChat()
             is RoomAction.ChatRetry -> sendChat(action.messageId)
@@ -238,13 +265,13 @@ internal class RoomViewModel(
                     if (action.target == InviteCopyTarget.CODE) RoomEffect.PartyCodeCopied else RoomEffect.InviteLinkCopied,
                 )
             }
-            is RoomAction.PlayerStateChanged -> mutableState.update { current ->
+            is RoomAction.PlayerStateChanged -> { groupSync.player(action.state); mutableState.update { current ->
                 val playerState = action.state
                 if (playerState.status == VideoPlayerStatus.ERROR) {
                     log.e("player error: ${playerState.error}")
                 }
                 current.copy(
-                    playback = playerState.status.toRoomPlaybackState(current.playback),
+                    playback = if(current.syncLocked) RoomPlaybackState.PAUSED else playerState.status.toRoomPlaybackState(current.playback),
                     positionMs = playerState.positionMs.coerceAtLeast(0L),
                     durationMs = playerState.durationMs.coerceAtLeast(0L),
                     bufferedMs = playerState.bufferedMs.coerceAtLeast(0L),
@@ -255,6 +282,7 @@ internal class RoomViewModel(
                     audioTracks = playerState.audioTracks,
                     audioTrackSelectionId = playerState.audioTrackSelectionId,
                 )
+            }
             }
             RoomAction.InviteCopyFailed -> {
                 mutableState.update { it.copy(inviteCopyState = InviteCopyState.ERROR) }
@@ -277,7 +305,7 @@ internal class RoomViewModel(
             RoomAction.ToggleMicClicked -> toggleMic()
             RoomAction.JoinVoiceClicked -> voiceCoordinator.join(roomId)
             RoomAction.RetryVoiceConnections -> voiceCoordinator.retryFailedConnections(roomId)
-            RoomAction.SyncClicked -> requestSync()
+            RoomAction.SyncClicked -> if(state.value.groupSync?.active == true || state.value.isOwner) groupSync.open() else requestSync()
             RoomAction.InviteClicked -> mutableState.update { it.copy(inviteOpen = true, inviteCopyState = InviteCopyState.IDLE) }
             RoomAction.InviteDismissed -> mutableState.update { it.copy(inviteOpen = false) }
             RoomAction.LinkClicked -> mutableState.update { it.copy(linkOpen = true) }
@@ -400,6 +428,7 @@ internal class RoomViewModel(
             try {
                 val session = realtimeClient.connect(roomId)
                 realtime = session
+                viewModelScope.launch { groupSync.calibrate(session) }
                 log.i("realtime connected, awaiting events")
                 session.events.collect { event -> handleEvent(event) }
                 log.w("realtime event flow ended")
@@ -423,6 +452,7 @@ internal class RoomViewModel(
 
     private fun handleEvent(event: RealtimeEvent) {
         when (event) {
+            is RealtimeEvent.GroupSyncChanged -> groupSync.apply(event.value, event.serverTimeMs)
             is RealtimeEvent.Snapshot -> applySnapshot(event.value)
             is RealtimeEvent.MemberJoined -> upsertMember(event.member)
             is RealtimeEvent.MemberReturned -> upsertMember(event.member)
@@ -436,6 +466,7 @@ internal class RoomViewModel(
                     log.w("stream.started ignored: stale revision=${event.revision} current=$streamRevision")
                     return
                 }
+                groupSync.reset()
                 streamRevision = event.revision
                 streamSessionId = event.sessionId
                 log.i("stream.started session=${event.sessionId} revision=${event.revision}")
@@ -451,6 +482,7 @@ internal class RoomViewModel(
                     log.w("stream.aborted ignored: stale revision=${event.revision} current=$streamRevision")
                     return
                 }
+                groupSync.reset()
                 streamRevision = event.revision
                 // The aborted session must never be a sync or report target.
                 streamSessionId = null
@@ -468,9 +500,8 @@ internal class RoomViewModel(
                 val pending = pendingSyncRequestId
                 // An echoed requestId that does not match the in-flight request
                 // is a late reply for an earlier sync; applying it would yank the
-                // player unexpectedly. Empty ids are accepted for compatibility
-                // with a server that does not echo the correlation id.
-                if (event.requestId.isNotEmpty() && event.requestId != pending) {
+                // player unexpectedly. Replies must match the current request.
+                if (event.requestId != pending) {
                     log.w("sync.result ignored: stale requestId=${event.requestId} pending=$pending")
                     return
                 }
@@ -479,12 +510,9 @@ internal class RoomViewModel(
                 when (event.status) {
                     SyncStatus.APPLIED -> {
                         log.i("sync.result APPLIED target=${event.targetPositionMs}ms → SeekTo + SyncCompleted")
-                        mutableState.update { it.copy(positionMs = event.targetPositionMs) }
+                        mutableState.update { it.copy(positionMs = event.targetPositionMs, playback = if(event.playing) RoomPlaybackState.PLAYING else RoomPlaybackState.PAUSED) }
                         mutableEffects.tryEmit(RoomEffect.SeekTo(event.targetPositionMs))
-                        mutableEffects.tryEmit(RoomEffect.SyncCompleted)
-                    }
-                    SyncStatus.ALREADY_LEADING -> {
-                        log.i("sync.result ALREADY_LEADING → SyncCompleted")
+                        mutableEffects.tryEmit(RoomEffect.PlayerPlaying(event.playing))
                         mutableEffects.tryEmit(RoomEffect.SyncCompleted)
                     }
                     SyncStatus.UNAVAILABLE -> {
@@ -494,6 +522,7 @@ internal class RoomViewModel(
                 }
             }
             is RealtimeEvent.Failure -> {
+                groupSync.disconnected()
                 log.w("realtime failure code=${event.code}")
                 if (event.code in setOf("NETWORK", "UNAVAILABLE", "AUTH_UNAVAILABLE", "SESSION_EXPIRED", "INVALID_TOKEN", "UNAUTHENTICATED", "SESSION_REVOKED", "NOT_A_MEMBER", "ROOM_ENDED")) {
                     mutableState.update { it.copy(chat = it.chat.copy(connected = false)) }
@@ -507,6 +536,7 @@ internal class RoomViewModel(
         chatVersion++
         val incomingSessionId = snapshot.stream.sessionId.takeIf { snapshot.stream.state == StreamState.ACTIVE && it.isNotEmpty() }
         val sameActiveStream = incomingSessionId != null && incomingSessionId == streamSessionId
+        if (!sameActiveStream) groupSync.reset()
         streamRevision = snapshot.stream.revision
         // Only an active stream may be reported or synced to. An aborted
         // session stays in the snapshot but must not be a target.
@@ -516,6 +546,7 @@ internal class RoomViewModel(
             null
         }
         members = snapshot.members
+        mutableState.update { it.copy(syncMembers=members,syncSelfId=members.find { member -> member.identityId==identityId }?.membershipId.orEmpty()) }
         val owner = members.firstOrNull { it.isOwner }
         val playback = when (snapshot.stream.state) {
             StreamState.ACTIVE -> RoomPlaybackState.PLAYING
@@ -574,6 +605,7 @@ internal class RoomViewModel(
     }
 
     private fun refreshParticipants() {
+        mutableState.update { it.copy(syncMembers=members,syncSelfId=members.find { member -> member.identityId==identityId }?.membershipId.orEmpty()) }
         val owner = members.firstOrNull { it.isOwner }
         mutableState.update { current ->
             current.copy(

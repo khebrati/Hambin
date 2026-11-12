@@ -11,7 +11,7 @@ export interface Snapshot { chat?: ChatPage; ownerName?: string; room: RoomDto; 
 export interface Admission { room: RoomDto; membership: { id: string; identityId: string; isOwner: boolean } }
 export interface PreviewDto { code: string; title: string; ownerName: string; ownerPresent: boolean; participantCount: number; availability: 'OPEN' | 'FULL' | 'ENDED'; streamState: string }
 export interface RoomEvent { topic: string; eventId: string; sequence: number; payload: { message?: ChatMessage; member?: MemberDto; present?: boolean; ownerName?: string; streamSessionId?: string; revision?: number; url?: string } }
-export interface SyncResult { requestId: string; status: 'APPLIED' | 'ALREADY_LEADING' | 'UNAVAILABLE'; targetPositionMs: number }
+export interface SyncResult { requestId: string; status: 'APPLIED' | 'UNAVAILABLE'; targetPositionMs: number; serverTimeMs?: number; playing?: boolean }
 
 export const avatarId = (value: string): AvatarId => avatarOptions.some(a => a.id === value.toLowerCase()) ? value.toLowerCase() as AvatarId : 'comet';
 export const identityModel = (value: IdentityDto): Identity => ({ name: value.name, avatarId: avatarId(value.avatar), language: value.language === 'fa' ? 'فارسی' : 'English' });

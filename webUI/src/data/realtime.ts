@@ -1,10 +1,11 @@
+import { SyncClock, type GroupSyncState, type SyncStateFrame } from './groupSync';
 import { diagnosticEvent, diagnosticError } from './sessionLog';
 import { io, type Socket } from 'socket.io-client';
 import { ApiError, backendUrl, request } from './api';
 import type { ChatPage, RoomEvent, Snapshot, SyncResult } from './contracts';
 import { reduceEvent } from './contracts';
 
-interface Options { roomId: string; onSnapshot(value: Snapshot): void; onConnection(connected: boolean): void; onError(error: unknown): void; onClosed(reason?: string): void }
+interface Options { roomId: string; onSnapshot(value: Snapshot): void; onConnection(connected: boolean): void; onError(error: unknown): void; onClosed(reason?: string): void; onSyncState?(value: SyncStateFrame): void }
 export class RoomConnection {
   private socket?: Socket;
   private closed = false;
@@ -14,6 +15,7 @@ export class RoomConnection {
   private snapshot?: Snapshot;
   private recovery?: Promise<void>;
   private pendingEvents: RoomEvent[] = [];
+  readonly syncClock = new SyncClock();
   private syncRequest = '';
   private authReady = false;
   private chatVersion = 0;
@@ -36,6 +38,7 @@ export class RoomConnection {
         this.authReady = true;
         this.applySnapshot(value, true);
         this.options.onConnection(true);
+        void this.calibrateClock();
       });
       socket.on('event', (event: RoomEvent) => {
         if (generation !== this.generation || this.closed) return;
@@ -50,6 +53,7 @@ export class RoomConnection {
         const next = reduceEvent(this.snapshot, event);
         if (next) this.applySnapshot(next); else { this.pendingEvents.push(event); void this.recover().catch(e => this.options.onError(e)); }
       });
+      socket.on('sync.state', (value: SyncStateFrame) => { if(generation===this.generation&&!this.closed) this.options.onSyncState?.(value); });
       socket.on('sync.result', (result: SyncResult) => {
         const waiter = this.syncWaiters.get(result.requestId);
         if (!waiter) return;
@@ -138,6 +142,21 @@ export class RoomConnection {
     });
     if (this.closed || this.syncRequest !== requestId || this.snapshot?.stream.sessionId !== sessionId || this.snapshot.stream.state !== 'ACTIVE') return;
     return result;
+  }
+  async syncCommand(action: 'invite'|'respond'|'commit'|'cancel'|'ready'|'failed', body: Record<string, unknown>): Promise<GroupSyncState> {
+    if (!this.snapshot || this.snapshot.stream.state!=='ACTIVE') throw new ApiError('UNAVAILABLE');
+    const result=await this.command('sync.'+action,{...body,streamSessionId:this.snapshot.stream.sessionId}) as SyncStateFrame;
+    if(result.state)this.options.onSyncState?.(result);
+    return result.state!;
+  }
+  private command(name:string,body:unknown):Promise<unknown> {
+    if(!this.socket?.connected||!this.authReady)return Promise.reject(new ApiError('NETWORK'));
+    return new Promise((resolve,reject)=>this.socket!.timeout(10000).emit(name,body,(error:Error|null,result:{code?:string})=>{
+      if(error||result?.code)reject(error||new ApiError(result.code!));else resolve(result);
+    }));
+  }
+  async calibrateClock() {
+    for(let i=0;i<4;i++){const sent=performance.now();try{const result=await this.command('sync.clock',{}) as {serverTimeMs:number};this.syncClock.sample(result.serverTimeMs,sent);}catch{return;}}
   }
   async refreshAuth(accessToken: string) {
     const socket = this.socket;

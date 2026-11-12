@@ -12,7 +12,7 @@ test('real two-browser chat, native HTTP payload, failure retry, offline recover
   guest.on('pageerror', error => errors.push(error.message));
   try {
     await owner.goto('/?lang=en');
-    await expect(owner.getByRole('button', { name: 'Create a party', exact: true })).toBeVisible();
+    await expect(owner.getByRole('button', { name: 'Start a party', exact: true })).toBeVisible();
     // Use the app's admission path without leaking credentials to test output.
     const admission = await owner.evaluate(async () => {
       const { request } = await import('/src/data/api.ts');
@@ -86,7 +86,7 @@ test('real two-browser chat, native HTTP payload, failure retry, offline recover
 
 test('production panel fits desktop, phone, Persian RTL and large text', async ({ page }) => {
   await page.goto('/?lang=en');
-  await expect(page.getByRole('button', { name: 'Create a party', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Start a party', exact: true })).toBeVisible();
   const admission = await page.evaluate(async () => {
     const { request } = await import('/src/data/api.ts');
     const result = await request<{room:{id:string;code:string}}>('/v1/rooms', {});

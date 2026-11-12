@@ -41,10 +41,14 @@ internal fun parseRealtimeFrame(json: Json, text: String): RealtimeEvent {
             )
         }
         "event" -> parseEvent(json, element, text)
+        "sync.state" -> {
+            val serverTime = element["serverTimeMs"]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: error("Missing sync clock")
+            RealtimeEvent.GroupSyncChanged(parseGroupSync(element["state"]), serverTime)
+        }
         "sync.result" -> {
             val dto = json.decodeFromJsonElement(SyncResultMessageDto.serializer(), element)
             log.i("sync.result status=${dto.status} target=${dto.targetPositionMs}ms")
-            RealtimeEvent.SyncResult(dto.status.toSyncStatus(), dto.targetPositionMs, dto.requestId)
+            RealtimeEvent.SyncResult(dto.status.toSyncStatus(), dto.targetPositionMs, dto.requestId, dto.playing, dto.serverTimeMs)
         }
         "error" -> {
             val dto = json.decodeFromJsonElement(ErrorMessageDto.serializer(), element)
@@ -126,6 +130,5 @@ private fun streamEvent(
 
 private fun String.toSyncStatus(): SyncStatus = when (uppercase()) {
     "APPLIED" -> SyncStatus.APPLIED
-    "ALREADY_LEADING" -> SyncStatus.ALREADY_LEADING
     else -> SyncStatus.UNAVAILABLE
 }

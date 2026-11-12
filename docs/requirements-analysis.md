@@ -30,8 +30,8 @@ Existing requirement IDs are preserved. New confirmed requirements from stakehol
 | REQ-018 | Local playback controls do not affect playback for other users. | Business rule | Explicit | REQ-014, REQ-017, REQ-022, REQ-035 | Needs careful distinction from owner abort and opt-in synchronization behavior. | Relevant |
 | REQ-019 | Streaming is done on device for each client. | Platform or technical constraint | Explicit | REQ-014, REQ-018 | Production streaming implementation is outside the design prototype scope. | Not relevant to current design-only phase except for UX copy/states. |
 | REQ-020 | The party screen has a synchronization button. | Functional requirement | Explicit | REQ-011, REQ-022, REQ-038 | Button placement, availability, disabled states, and labels are unspecified. | Relevant |
-| REQ-021 | When anyone clicks the synchronization button, their playback is fast forwarded to the leading participant. | Functional requirement | Explicit | REQ-020, REQ-022, REQ-038 | Behavior for a user who is already the leading participant remains unspecified. | Relevant |
-| REQ-022 | The synchronization target is the leading participant, defined as the participant currently furthest ahead in playback. | Business rule | Explicit | REQ-020, REQ-021, REQ-038 | None for target definition. Edge cases remain: tied leaders and the current leader pressing sync. | Relevant |
+| REQ-021 | Owner Sync invites viewers to a coordinated restart; non-owner Sync privately catches up to the owner. | Functional requirement | Explicit, DD-059 | REQ-020, REQ-022, REQ-038 | Owner pauses on request; viewers pause only on acceptance and can withdraw until commitment. Owner can cancel before commitment or start with the currently accepted subset. | Relevant |
+| REQ-022 | Group sync uses the owner's fixed invitation timestamp and locks the accepted participant set at commitment. Private sync targets the owner's current playback. | Business rule | Explicit, DD-059 | REQ-020, REQ-021, REQ-038 | Seeking may move backward. Committed preparation requires readiness, countdown, and bounded automatic failure recovery; declined/unanswered/withdrawn viewers remain unaffected. | Relevant |
 | REQ-023 | Users can see their own avatar/icon and other users in the party screen. | Content requirement | Explicit | REQ-007, REQ-011, REQ-024 | Member overflow and party size remain unspecified. | Relevant |
 | REQ-024 | Party members can use voice and independent room text/emoji chat. | Functional requirement | Explicit, updated 2026-11-12 | REQ-011, REQ-025, REQ-040 | Voice follows DD-031; text follows DD-052 and chat-contract.md. | Relevant |
 | REQ-025 | When users speak in voice chat, an indicator appears on their avatar/icon. | Visual requirement | Explicit | REQ-023, REQ-024 | Indicator style, duration, and sensitivity are unspecified. | Relevant |
@@ -75,7 +75,7 @@ Existing requirement IDs are preserved. New confirmed requirements from stakehol
 
 - Voice and room text chat are confirmed modes (DD-052). Chat remains independent of voice and playback.
 - "Logo" in settings is confirmed as a personal avatar selected from a list of fun illustrated cartoonic avatars.
-- The synchronization target is confirmed as the leading participant, meaning the participant currently furthest ahead.
+- DD-059 replaces leading-participant sync with owner-led group invitations and private non-owner catch-up to the owner. Acceptance is revocable until the owner commits the participant set.
 - Non-owners can see, copy, and inspect the current URL but cannot start a new stream URL.
 - Users can type URLs manually, but the design should emphasize easy pasting.
 - Supported URL concept for the design is a direct video URL.
@@ -97,13 +97,13 @@ Existing requirement IDs are preserved. New confirmed requirements from stakehol
 - Voice chat details: mute, push-to-talk/open mic, permission prompts, speaking indicator duration, and failure states.
 - Avatar catalog size, avatar categories, and name validation rules.
 - Whether RTL support is deferred or removed for this prototype, given the conflict between repository guidance and the latest English-only design instruction.
-- Behavior when the leading participant presses sync, or when multiple participants are tied for furthest-ahead playback.
+- DD-059 preparation deadline, readiness criteria, owner-loss and automatic failure recovery, live-source handling, and ongoing drift policy; see `open-questions.md`.
 - Volume control form and forward/backward step size.
 
 ## Conflicts and Tensions
 
 - The owner can abort the stream for everyone, while all users can control playback for themselves. This creates two control scopes: global owner actions and local viewer actions.
-- Local playback differences should not be visible, but sync targets the leading participant. The system may need hidden timing knowledge without exposing it in the UI.
+- DD-059 exposes the invitation target and response/readiness states without requiring visible participant timelines or ahead/behind badges.
 - Repository guidance assigns React, TypeScript, and Vite to `webUI`, while `Roomio` uses Compose Multiplatform. Apply Material 3 through design tokens and CSS variables on the web and through the native Compose design system in Roomio.
 - Repository guidance asks for RTL support, while the latest stakeholder answer says to proceed only with English designs and no RTL examples now.
 

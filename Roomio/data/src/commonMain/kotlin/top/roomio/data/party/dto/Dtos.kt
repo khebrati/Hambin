@@ -210,6 +210,8 @@ data class EventMessageDto(
 
 @Serializable
 data class SyncResultMessageDto(
+    val playing: Boolean = true,
+    val serverTimeMs: Long = 0,
     val type: String,
     val status: String,
     val targetPositionMs: Long,

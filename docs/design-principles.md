@@ -7,7 +7,7 @@
 | Mobile-first shared watching | Design for a cross-platform mobile watch party experience where users create or join rooms and watch direct video URLs. | Supported by REQ-001, REQ-002, REQ-009, REQ-010, REQ-011. |
 | Clear role boundaries | Owner-only actions must be visually and behaviorally distinct from participant actions. | Supported by REQ-015, REQ-016, REQ-032, REQ-035. |
 | Local control by default | Play, pause, seeking, and volume are personal controls and should not imply group control. | Supported by REQ-017, REQ-018, REQ-026, REQ-027, REQ-028. |
-| Explicit synchronization | Sync should be an intentional user action that aligns local playback to the leading participant without exposing playback drift. | Supported by REQ-020, REQ-021, REQ-022, REQ-038. |
+| Explicit synchronization | Owner-led group sync requires viewer consent; non-owners can privately catch up to the owner. Expose response states without participant timelines or drift badges. | Supported by REQ-020, REQ-021, REQ-022, REQ-038; DD-059. |
 | Voice and text presence | Keep voice chat, participant avatars and speaking indicators alongside an independent room text-chat panel. | Supported by REQ-023, REQ-024, REQ-025, REQ-040; DD-052. |
 | Playful identity | Personalization should use simple names and fun illustrated cartoonic avatars. | Supported by REQ-007, REQ-023. |
 | Simple recovery | Join failures can use a simple error model; leave and abort actions should use clear confirmation or impact messaging. | Supported by REQ-033, REQ-034, REQ-035, REQ-036, REQ-037. |
@@ -26,6 +26,16 @@
 | Meaningful state treatment | Initial, loading, empty, error, disabled, selected, pressed/active, and populated states should be visually planned, not added later. | Supported by REQ-030 and temporary decision based on ASM-012. |
 | Accessible contrast and scale | Light theme, dark theme, large text, and responsive layouts are part of the design scope. | Supported by REQ-030. |
 
+## Product Voice and Information
+
+- **Established stakeholder preference:** The stakeholder repeatedly removed explanatory sentences, redundant state captions and informational cards during sync review. Treat concise copy as an accepted product design rule across browser and native clients, not a temporary preview preference. See DD-063, DD-064 and DD-067.
+- Use a friendly, casual tone in English and Persian throughout screens, dialogs, status messages, errors, tooltips and notifications. Use natural contractions in English and conversational Persian such as «میتونی»، «فیلم رو» and «دوباره امتحان کن». Preserve established terminology and the stakeholder's chosen labels.
+- Let the UI carry the explanation. Omit helper sentences when headings, actions, icons, state changes or the surrounding context already make the meaning clear. Do not add a sentence simply to fill space or narrate what just happened.
+- Prefer a short heading and clear actions. State each useful fact once. Avoid introductory paragraphs, repeated playback-status explanations, internal coordination details and generic reassurance. Do not reintroduce removed copy as captions, tooltips or cards.
+- Keep the shortest wording needed for an informed action: who is affected by an action, an important consequence that is not otherwise clear, or a concrete recovery step after an error. Button labels such as «پذیرش و توقف فیلم» can communicate the consequence without another paragraph.
+- Keep feedback relevant to its recipient. Brief informational outcomes belong in a snackbar rather than a persistent card when no action is required; for example, only the owner receives the group-recovery completion snackbar.
+- Casual language must remain truthful. Accepted viewers are paused, so «پایه است» must not be paired with a watching status. Avoid claiming a specific failure cause unless it is known.
+
 ## Temporary Exploratory Choices
 
 | Choice | Rationale | Risk if wrong |
@@ -34,7 +44,7 @@
 | Treat room creator as owner and ID or invite-link joiners as non-owners. | Ownership is required for URL start and abort, and creation is the only available initial ownership cue. Temporary decision based on ASM-004, ASM-005 and supported by REQ-015, REQ-016, REQ-043, REQ-044. | If initial ownership is assigned differently, role labels and party creation behavior must change; ownership does not transfer after leave. |
 | Use a simple mute/unmute voice model until voice behavior is clarified. | Voice chat is confirmed, but detailed interaction model is not. Temporary decision based on ASM-016 and supported by REQ-024, REQ-025. | Push-to-talk or open-mic requirements could change party screen controls. |
 | Show a post-abort party state that keeps the room available for another URL. | The owner can start another URL in the same room, but exact post-abort state is undefined. Temporary decision based on ASM-009 and supported by REQ-016, REQ-035. | If abort ends the room, navigation should return to party manager or home. |
-| Keep designs English-only for now while avoiding choices that block future RTL support. | Stakeholder clarified English-only for current designs, while repository guidance still mentions RTL. Temporary decision based on ASM-015 and supported by REQ-041. | If RTL returns, layout mirroring and language states must be added. |
+| Support English and Persian with RTL presentation. | English-only exploration was superseded by DD-049; both languages follow the accepted casual, concise product voice. | Review translated layouts at large text and compact sizes. |
 | Represent direct video URL validation visually in `webUI` rather than implementing real compatibility checks there. | The browser client is the interactive prototype, not production media infrastructure. Temporary decision based on ASM-014 and supported by REQ-002, REQ-031. | If real validation is required in the web client, its scope and technical dependencies increase. |
 
 ## Anti-principles

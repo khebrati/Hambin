@@ -3,14 +3,14 @@ import { test, expect, type Page, type BrowserContext } from '@playwright/test';
 
 async function openHome(page: Page) {
   await page.goto('/');
-  await expect(page.getByRole('button', { name: 'Create a party', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Start a party', exact: true })).toBeVisible();
 }
 async function create(page: Page) {
-  await page.getByRole('button', { name: 'Create a party', exact: true }).click();
-  await page.getByRole('button', { name: 'Create party', exact: true }).click();
+  await page.getByRole('button', { name: 'Start a party', exact: true }).click();
+  await page.getByRole('button', { name: 'Start the party', exact: true }).click();
   await expect(page.getByText('Connected', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Invite friends', exact: true }).first().click();
-  const code = await page.getByRole('dialog').getByRole('textbox', { name: 'Party code', exact: true }).inputValue();
+  const code = await page.getByRole('dialog').getByRole('textbox', { name: 'Invite code', exact: true }).inputValue();
   await page.getByRole('button', { name: 'Done', exact: true }).click();
   return code;
 }
@@ -23,7 +23,7 @@ async function join(page: Page, code: string) {
 async function leave(page: Page) {
   await page.getByRole('button', { name: 'Leave party', exact: true }).first().click();
   await page.getByRole('dialog').getByRole('button', { name: 'Leave party', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Create a party', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Start a party', exact: true })).toBeVisible();
 }
 
 test('fixture previews make no API/Auth/Socket requests and omit directional sync', async ({ page }) => {
@@ -45,7 +45,7 @@ test('real services: persistent profile, preview/cancel, two identities, owner a
     await openHome(owner);
     await owner.getByRole('button', { name: /settings|profile/i }).first().click();
     await owner.getByRole('radio', { name: 'Frog Wizard', exact: true }).click();
-    await owner.getByRole('button', { name: 'Save profile', exact: true }).click();
+    await owner.getByRole('button', { name: 'Save changes', exact: true }).click();
     await owner.reload();
     await expect(owner.getByText('Browser host', { exact: true }).first()).toBeVisible();
     const code = await create(owner);
@@ -53,8 +53,8 @@ test('real services: persistent profile, preview/cancel, two identities, owner a
     await guest.goto(`/?invite=${code}`);
     await expect(guest.getByRole('heading', { name: 'Room preview', exact: true })).toBeVisible();
     await guest.getByRole('button', { name: 'Not now' }).click();
-    await expect(guest.getByLabel('Party code')).toHaveValue(code);
-    await guest.getByRole('button', { name: 'Preview party', exact: true }).click();
+    await expect(guest.getByLabel('Invite code')).toHaveValue(code);
+    await guest.getByRole('button', { name: 'Take a look', exact: true }).click();
     await guest.getByRole('button', { name: 'Join party', exact: true }).click();
     await expect(guest.getByText('Connected', { exact: true })).toBeVisible();
     await expect(owner.locator('.participant-list:visible').first().getByText('You', { exact: true })).toBeVisible();
@@ -72,7 +72,7 @@ test('real services: persistent profile, preview/cancel, two identities, owner a
   } finally { await Promise.all(contexts.map(context => context.close())); }
 });
 
-test('real video, independent controls, forward-only sync, offline recovery, and stream abort', async ({ browser }) => {
+test('real video, independent controls, private owner sync, offline recovery, and stream abort', async ({ browser }) => {
   test.skip(!process.env.ROOMIO_TEST_VIDEO, 'Set ROOMIO_TEST_VIDEO to a local MP4 fixture.');
   const contexts: BrowserContext[] = [];
   try {
@@ -98,10 +98,10 @@ test('real video, independent controls, forward-only sync, offline recovery, and
     await expect.poll(()=>guest.locator('video').evaluate((v:HTMLVideoElement)=>v.currentTime)).toBeGreaterThanOrEqual(2.9);
     await guest.locator('video').evaluate((v:HTMLVideoElement)=>{v.currentTime=4;});
     await guest.getByRole('button',{name:'Sync to room',exact:true}).click();
-    expect(await guest.locator('video').evaluate((v:HTMLVideoElement)=>v.currentTime)).toBeGreaterThanOrEqual(3.9);
+    expect(await guest.locator('video').evaluate((v:HTMLVideoElement)=>v.currentTime)).toBeLessThan(3.3);
     await b.setOffline(true);await expect(guest.getByText('Reconnecting to room…')).toBeVisible();
     await b.setOffline(false);await expect(guest.getByText('Connected',{exact:true})).toBeVisible({timeout:20000});
-    expect(await guest.locator('video').evaluate((v:HTMLVideoElement)=>v.currentTime)).toBeGreaterThanOrEqual(3.9);
+    expect(await guest.locator('video').evaluate((v:HTMLVideoElement)=>v.currentTime)).toBeLessThan(3.3);
     await owner.getByRole('button',{name:'End stream for everyone',exact:true}).click();
     await owner.getByRole('button',{name:'End for everyone',exact:true}).click();
     await expect(guest.locator('video')).toHaveCount(0);
