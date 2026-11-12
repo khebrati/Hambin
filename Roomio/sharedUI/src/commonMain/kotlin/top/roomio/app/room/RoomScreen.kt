@@ -446,7 +446,7 @@ internal fun RoomScreen(
                     },
                     onRetry = {
                         onAction(RoomAction.RetryPlaybackClicked)
-                        playerHandle?.load(state.videoUrl)
+                        playerHandle?.retry(state.videoUrl)
                         playerHandle?.play()
                     },
                     onTogglePlayback = {

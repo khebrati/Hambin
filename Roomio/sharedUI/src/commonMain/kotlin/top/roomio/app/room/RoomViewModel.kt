@@ -282,7 +282,8 @@ internal class RoomViewModel(
             }
             is RoomAction.PlayerStateChanged -> { groupSync.player(action.state); mutableState.update { current ->
                 val playerState = action.state
-                if (playerState.status == VideoPlayerStatus.ERROR) {
+                if (playerState.status == VideoPlayerStatus.ERROR &&
+                    (current.playback != RoomPlaybackState.ERROR || current.playerError != playerState.error)) {
                     log.e("player error: ${playerState.error}")
                 }
                 current.copy(

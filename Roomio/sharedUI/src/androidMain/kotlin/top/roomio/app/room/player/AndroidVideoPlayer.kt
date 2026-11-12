@@ -1,6 +1,7 @@
 package top.roomio.app.room.player
 
 import top.roomio.app.diagnostics.loggedRunCatching
+import top.roomio.app.diagnostics.logHandledException
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -8,6 +9,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
@@ -35,6 +37,7 @@ import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.ui.PlayerView
 import co.touchlab.kermit.Logger
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.CoroutineScope
 import android.content.ContentResolver
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -62,7 +65,8 @@ internal actual fun rememberPlatformVideoPlayer(
             .setAudioAttributes(mediaAudioAttributes, /* handleAudioFocus= */ false)
             .build()
     }
-    val handle = remember(player) { ExoPlayerVideoPlayerHandle(player) }
+    val scope = rememberCoroutineScope()
+    val handle = remember(player, scope) { ExoPlayerVideoPlayerHandle(player, scope) }
 
     DisposableEffect(player, lifecycleOwner) {
         val listener = object : Player.Listener {
@@ -88,12 +92,9 @@ internal actual fun rememberPlatformVideoPlayer(
 
             override fun onPlayerError(error: PlaybackException) {
                 log.e("player.failure code=${error.errorCodeName}")
-                currentOnStateChanged(
-                    handle.toVideoPlayerState().copy(
-                        status = VideoPlayerStatus.ERROR,
-                        error = error.errorCodeName,
-                    ),
-                )
+                logHandledException("AndroidVideoPlayer.onPlayerError", error)
+                handle.recoverDecoderResources(error)
+                currentOnStateChanged(handle.toVideoPlayerState())
             }
         }
         val lifecycleObserver = LifecycleEventObserver { _, event ->
@@ -107,6 +108,7 @@ internal actual fun rememberPlatformVideoPlayer(
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(lifecycleObserver)
             player.removeListener(listener)
+            handle.cancelRecovery()
             log.i("player.released")
             player.release()
         }
@@ -194,9 +196,13 @@ private class StereoAudioRenderersFactory(context: android.content.Context) : De
 
 internal class ExoPlayerVideoPlayerHandle(
     internal val player: ExoPlayer,
+    scope: CoroutineScope,
 ) : VideoPlayerHandle {
+    private val decoderRecovery = DecoderResourceRecovery(scope)
+
     override fun load(url: String) {
         log.i("player.load requested")
+        decoderRecovery.reset()
         audioTrackSelectionId = null
         baseMediaItem = MediaItem.fromUri(url)
         externalSubtitle = null
@@ -216,7 +222,34 @@ internal class ExoPlayerVideoPlayerHandle(
     private var pendingSubtitleLabel: String? = null
     private var audioTrackSelectionId: String? = null
 
-    internal fun toVideoPlayerState(): VideoPlayerState = player.toVideoPlayerState(audioTrackSelectionId)
+    internal fun toVideoPlayerState(): VideoPlayerState {
+        val state = player.toVideoPlayerState(audioTrackSelectionId)
+        return if (decoderRecovery.isPending && player.playerError?.errorCode == PlaybackException.ERROR_CODE_DECODING_RESOURCES_RECLAIMED) {
+            state.copy(status = VideoPlayerStatus.BUFFERING, error = null)
+        } else state
+    }
+
+    internal fun recoverDecoderResources(error: PlaybackException) {
+        if (error.errorCode != PlaybackException.ERROR_CODE_DECODING_RESOURCES_RECLAIMED || player.mediaItemCount == 0) return
+        decoderRecovery.schedule {
+            if (player.playerError?.errorCode == PlaybackException.ERROR_CODE_DECODING_RESOURCES_RECLAIMED) {
+                log.i("player.decoder_recovery positionMs=${player.currentPosition} playWhenReady=${player.playWhenReady}")
+                // Re-prepare the existing source. Do not reset its position, tracks, volume, or
+                // playWhenReady: a pause or sync command during the delay must still win.
+                loggedRunCatching("AndroidVideoPlayer.decoderRecovery") { player.prepare() }
+            }
+        }
+    }
+
+    internal fun cancelRecovery() = decoderRecovery.reset()
+
+    override fun retry(url: String) {
+        decoderRecovery.reset()
+        if (baseMediaItem?.localConfiguration?.uri == Uri.parse(url) && player.mediaItemCount > 0) {
+            log.i("player.retry positionMs=${player.currentPosition}")
+            player.prepare()
+        } else load(url)
+    }
 
     override fun selectSubtitle(trackId: String?) {
         val parameters = player.trackSelectionParameters.buildUpon()
@@ -330,6 +363,7 @@ internal class ExoPlayerVideoPlayerHandle(
 
     override fun stop() {
         log.i("stop")
+        decoderRecovery.reset()
         player.stop()
         player.clearMediaItems()
         baseMediaItem = null

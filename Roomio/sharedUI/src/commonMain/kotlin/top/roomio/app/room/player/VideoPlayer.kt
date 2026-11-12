@@ -51,6 +51,9 @@ internal data class SubtitleFile(
 internal interface VideoPlayerHandle {
     fun load(url: String)
 
+    /** Retry the current source, preserving local playback settings where supported. */
+    fun retry(url: String) { load(url) }
+
     fun play()
 
     fun pause()
