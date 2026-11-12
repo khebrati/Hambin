@@ -35,6 +35,7 @@ internal interface RoomioAppGraph {
 @Composable
 fun App(
     onThemeChanged: @Composable (isDark: Boolean) -> Unit = {},
+    onAppNameChanged: (String) -> Unit = {},
 ) {
     val graph = remember { top.roomio.data.party.initializeAppLogging(); createGraph<RoomioAppGraph>() }
     val themePreferences = remember(graph) { graph.themePreferencesRepository }
@@ -49,5 +50,6 @@ fun App(
         voiceCoordinator = graph.voiceCoordinator,
         sessionKeeper = graph.sessionKeeper,
         onThemeChanged = onThemeChanged,
+        onAppNameChanged = onAppNameChanged,
     )
 }

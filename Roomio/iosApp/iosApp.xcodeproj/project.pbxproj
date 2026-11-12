@@ -7,13 +7,16 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B41000000000000000000001 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = B41000000000000000000002 /* InfoPlist.strings */; };
 		A93A953B29CC810C00F8E227 /* iosApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A93A953A29CC810C00F8E227 /* iosApp.swift */; };
 		A93A953F29CC810D00F8E227 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A93A953E29CC810D00F8E227 /* Assets.xcassets */; };
 		A93A954229CC810D00F8E227 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A93A954129CC810D00F8E227 /* Preview Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		A93A953729CC810C00F8E227 /* Roomio.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Roomio.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+        B41000000000000000000003 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
+        B41000000000000000000004 /* fa */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = fa; path = fa.lproj/InfoPlist.strings; sourceTree = "<group>"; };
+		A93A953729CC810C00F8E227 /* Watch Party.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Watch Party.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		A93A953A29CC810C00F8E227 /* iosApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iosApp.swift; sourceTree = "<group>"; };
 		A93A953E29CC810D00F8E227 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A93A954129CC810D00F8E227 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
@@ -42,7 +45,7 @@
 		A93A953829CC810C00F8E227 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				A93A953729CC810C00F8E227 /* Roomio.app */,
+				A93A953729CC810C00F8E227 /* Watch Party.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -50,6 +53,7 @@
 		A93A953929CC810C00F8E227 /* iosApp */ = {
 			isa = PBXGroup;
 			children = (
+				B41000000000000000000002 /* InfoPlist.strings */,
 				A93A953A29CC810C00F8E227 /* iosApp.swift */,
 				A93A953E29CC810D00F8E227 /* Assets.xcassets */,
 				A93A954029CC810D00F8E227 /* Preview Content */,
@@ -90,7 +94,7 @@
 			);
 			name = iosApp;
 			productName = iosApp;
-			productReference = A93A953729CC810C00F8E227 /* Roomio.app */;
+			productReference = A93A953729CC810C00F8E227 /* Watch Party.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -114,6 +118,7 @@
 			knownRegions = (
 				en,
 				Base,
+				fa,
 			);
 			mainGroup = A93A952E29CC810C00F8E227;
 			productRefGroup = A93A953829CC810C00F8E227 /* Products */;
@@ -130,6 +135,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B41000000000000000000001 /* InfoPlist.strings in Resources */,
 				A93A954229CC810D00F8E227 /* Preview Assets.xcassets in Resources */,
 				A93A953F29CC810D00F8E227 /* Assets.xcassets in Resources */,
 			);
@@ -167,6 +173,15 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXVariantGroup section */
+        B41000000000000000000002 /* InfoPlist.strings */ = {
+            isa = PBXVariantGroup;
+            children = (B41000000000000000000003 /* en */, B41000000000000000000004 /* fa */,);
+            name = InfoPlist.strings;
+            sourceTree = "<group>";
+        };
+/* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
 		A93A954329CC810D00F8E227 /* Debug */ = {
@@ -301,7 +316,7 @@
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = top.roomio.app.iosApp;
-				PRODUCT_NAME = "Roomio";
+				PRODUCT_NAME = "Watch Party";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -326,7 +341,7 @@
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = top.roomio.app.iosApp;
-				PRODUCT_NAME = "Roomio";
+				PRODUCT_NAME = "Watch Party";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";

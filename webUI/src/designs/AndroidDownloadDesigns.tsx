@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { useEffect, useState } from 'react';
 import { ArrowDownToLine, ArrowUpRight, Headphones, Mic, Moon, Plus, Settings, Smartphone, Sun, Ticket, X } from 'lucide-react';
 import { Button, Dialog, IconButton } from '../components/Material';
@@ -27,7 +28,7 @@ export default function AndroidDownloadDesigns() {
 
   return <main className="ad-designs">
     <header className="ad-intro">
-      <div><p className="eyebrow">ROOMIO / DESIGN PREVIEW</p><h1>Android app links</h1></div>
+      <div><p className="eyebrow">{t("Watch Party")} / DESIGN PREVIEW</p><h1>Android app links</h1></div>
       <div className="ad-tools" aria-label="Preview settings">
         <Button variant="outlined" aria-pressed={large} onClick={() => setLarge(!large)}>Large text</Button>
         <Button variant="outlined" aria-pressed={rtl} onClick={() => setRtl(!rtl)}>RTL</Button>
@@ -38,7 +39,7 @@ export default function AndroidDownloadDesigns() {
       {concepts.map((concept, index) => <section className="ad-concept" key={concept.title} aria-labelledby={`concept-${index}`}>
         <div className="ad-caption"><p className="eyebrow">{concept.placement}</p><h2 id={`concept-${index}`}>{concept.title}</h2></div>
         <div className="ad-phone">
-          <div className="ad-appbar"><strong>Roomio</strong><Settings size={21} aria-hidden="true" /></div>
+          <div className="ad-appbar"><strong>{t("Watch Party")}</strong><Settings size={21} aria-hidden="true" /></div>
           {index < 2 ? <div className="ad-home-context">
             <h3>Stream and chill</h3>
             <div className="identity-pill"><Avatar avatarId="comet" label="Mira" size="large" /><div><span>Watching as</span><strong>Mira</strong></div></div>

@@ -90,7 +90,7 @@ export function PartyManagerScreen({
             <p className="eyebrow">{t("You will be the host")}</p>
             <h2 id="create-title">{t("Open a room for movie night")}</h2>
             <p>
-              {t("Roomio will create a party code and take you to the empty cinema.")}</p>
+              {t("Watch Party will create a party code and take you to the empty cinema.")}</p>
             {joinStatus === 'loading' ? (
               <LoadingIndicator label={t("Opening your room")} />
             ) : (
