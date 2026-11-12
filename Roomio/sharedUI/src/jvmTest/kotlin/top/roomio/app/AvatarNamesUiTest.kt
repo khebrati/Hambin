@@ -44,7 +44,10 @@ class AvatarNamesUiTest {
         onAllNodes(hasSetTextAction()).assertCountEquals(0)
         onNodeWithText(if (persian) "قورباغهٔ جادوگر" else "Frog Wizard").performScrollTo().performClick()
         runOnIdle { assertEquals(if (persian) "قورباغهٔ جادوگر" else "Frog Wizard", viewModel.state.value.displayName) }
-        onNodeWithText(if (persian) "ذخیره آواتار" else "Save profile").assertIsEnabled().performClick()
+        onNode(hasText(if (persian) "قورباغهٔ جادوگر" else "Frog Wizard") and isSelectable()).performScrollTo().assertIsSelected()
+        File("/tmp/hambin-spotlight-native-${if(persian) "compact-fa" else "expanded-en"}.png")
+            .writeBytes(Image.makeFromBitmap(onRoot().captureToImage().asSkiaBitmap()).encodeToData()!!.bytes)
+        onNodeWithText(if (persian) "ذخیره تغییرات" else "Save changes").assertIsEnabled().performClick()
         runOnIdle { assertEquals(if (persian) "قورباغهٔ جادوگر" else "Frog Wizard", profile.currentProfile().name) }
         onNodeWithText(if (persian) "مومیایی باریستا" else "Mummy Barista").performScrollTo().assertIsDisplayed()
         File("/tmp/hambin-avatar-native-${if(persian) "compact-fa" else "expanded-en"}.png")

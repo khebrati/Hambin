@@ -51,9 +51,24 @@ export function paletteTokens(seed: string, dark: boolean): Record<string, strin
   ]));
 }
 
+/** Fresh installations get one durable seed; existing/default choices never reroll. */
+export function initialThemeColor(storage: Pick<Storage, 'getItem' | 'setItem'>, random = Math.random): string {
+  const stored = storage.getItem(themeColorKey);
+  if (stored !== null) return resolveThemeColor(stored)?.id || 'roomio';
+  const existing = ['roomio-backend-session-v1', 'roomio-auth-established', 'roomio-auth-format']
+    .some(key => storage.getItem(key) !== null);
+  const id = existing ? 'roomio' : themeColors[Math.floor(random() * themeColors.length)].id;
+  storage.setItem(themeColorKey, id);
+  return id;
+}
+
 export function useThemePalette(dark: boolean) {
   const [colorId, setColorId] = useState(() => {
-    try { return resolveThemeColor(localStorage.getItem(themeColorKey))?.id || 'roomio'; }
+    try {
+      // Fixed fixtures remain deterministic and do not initialize a real user.
+      if (new URLSearchParams(location.search).has('preview')) return resolveThemeColor(localStorage.getItem(themeColorKey))?.id || 'roomio';
+      return initialThemeColor(localStorage);
+    }
     catch { return 'roomio'; }
   });
   const [saveFailed, setSaveFailed] = useState(false);

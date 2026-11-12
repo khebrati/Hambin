@@ -1,14 +1,11 @@
 package top.roomio.app.profile
 
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
-import top.roomio.domain.profile.ThemeColor
-import top.roomio.app.theme.seed
-import top.roomio.app.theme.label
 import roomio.sharedui.generated.resources.color_theme
-import roomio.sharedui.generated.resources.color_theme_description
 import roomio.sharedui.generated.resources.color_save_error
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
@@ -80,10 +77,8 @@ import roomio.sharedui.generated.resources.profile_preview
 import roomio.sharedui.generated.resources.ready_to_watch
 import roomio.sharedui.generated.resources.save_profile
 import roomio.sharedui.generated.resources.save_profile_error
-import roomio.sharedui.generated.resources.shown_inside_every_party
 import roomio.sharedui.generated.resources.theme
 import roomio.sharedui.generated.resources.your_profile
-import top.roomio.app.theme.RoomioLightColorScheme
 import top.roomio.app.theme.AppTheme
 import top.roomio.app.theme.LocalThemeIsDark
 import top.roomio.app.theme.RoomioDesignSystem
@@ -143,30 +138,9 @@ internal fun SettingsScreen(
                 ProfileSection(
                     number = "02",
                     title = stringResource(Res.string.color_theme),
-                    description = stringResource(Res.string.color_theme_description),
                 ) {
-                    Column(modifier = Modifier.selectableGroup()) {
-                        ThemeColor.entries.forEach { color ->
-                            val isSelected = color == state.themeColor
-                            Row(
-                                modifier = Modifier.fillMaxWidth()
-                                    .selectable(selected = isSelected, role = Role.RadioButton,
-                                        onClick = { onAction(SettingsAction.ColorSelected(color)) })
-                                    .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface)
-                                    .heightIn(min = 56.dp).padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                Box(Modifier.size(24.dp).background(color.seed ?: RoomioLightColorScheme.primary, CircleShape)
-                                    .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape))
-                                Text(stringResource(color.label), modifier = Modifier.weight(1f),
-                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface)
-                                if (isSelected) Icon(Icons.Default.Check, contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onPrimaryContainer)
-                            }
-                        }
-                        if (state.colorSaveFailed) Text(stringResource(Res.string.color_save_error), color = MaterialTheme.colorScheme.error)
-                    }
+                    SettingsColorGarden(state.themeColor) { onAction(SettingsAction.ColorSelected(it)) }
+                    if (state.colorSaveFailed) Text(stringResource(Res.string.color_save_error), color = MaterialTheme.colorScheme.error)
                 }
                 ProfileSection(
                     number = "03",
@@ -174,24 +148,7 @@ internal fun SettingsScreen(
                     description = stringResource(Res.string.language_description),
                     showDivider = false,
                 ) {
-                    Column(Modifier.selectableGroup().semantics {
-                        contentDescription = "English / فارسی"
-                    }) {
-                        top.roomio.domain.profile.AppLanguage.entries.forEach { language ->
-                            val selected = state.draftLanguage == language
-                            Row(
-                                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
-                                    .selectable(selected = selected, role = Role.RadioButton,
-                                        onClick = { onAction(SettingsAction.LanguageSelected(language)) })
-                                    .padding(horizontal = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                androidx.compose.material3.RadioButton(selected = selected, onClick = null)
-                                Text(if (language == top.roomio.domain.profile.AppLanguage.PERSIAN) "فارسی" else "English")
-                            }
-                        }
-                    }
+                    SettingsLanguagePicker(state.draftLanguage) { onAction(SettingsAction.LanguageSelected(it)) }
                 }
             }
         }
@@ -213,14 +170,14 @@ private fun ProfileTopBar(onBack: () -> Unit) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(68.dp),
+                .heightIn(min = 68.dp),
             contentAlignment = Alignment.Center,
         ) {
             Row(
                 modifier = Modifier
                     .widthIn(max = 1120.dp)
                     .fillMaxWidth()
-                    .padding(horizontal = 28.dp),
+                    .padding(horizontal = 28.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
@@ -238,11 +195,6 @@ private fun ProfileTopBar(onBack: () -> Unit) {
                         text = stringResource(Res.string.your_profile),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
-                    )
-                    Text(
-                        text = stringResource(Res.string.shown_inside_every_party),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 IconButton(
@@ -310,7 +262,7 @@ private fun ProfileSpotlight(
 private fun ProfileSection(
     number: String,
     title: String,
-    description: String,
+    description: String? = null,
     showDivider: Boolean = true,
     content: @Composable () -> Unit,
 ) {
@@ -339,7 +291,7 @@ private fun ProfileSection(
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                 )
-                Text(
+                if (description != null) Text(
                     text = description,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -363,12 +315,13 @@ private fun AvatarPicker(
 ) {
     val pickerLabel = stringResource(Res.string.choose_an_avatar)
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-        val columns = if (maxWidth < 460.dp) 2 else 3
+        val columns = if (maxWidth < 600.dp) 2 else 3
         val gap = 12.dp
         val itemWidth = (maxWidth - gap * (columns - 1)) / columns
         FlowRow(
             modifier = Modifier
                 .fillMaxWidth()
+                .selectableGroup()
                 .semantics { contentDescription = pickerLabel },
             horizontalArrangement = Arrangement.spacedBy(gap),
             verticalArrangement = Arrangement.spacedBy(gap),
@@ -379,9 +332,9 @@ private fun AvatarPicker(
                     avatar = avatar,
                     selected = avatar == selectedAvatar,
                     onClick = { onSelected(avatar) },
-                    baseArtworkSize = minOf(itemWidth - 16.dp, 124.dp),
-                    selectedArtworkSize = minOf(itemWidth - 4.dp, 144.dp),
-                    modifier = Modifier.weight(1f),
+                    baseArtworkSize = minOf(itemWidth - 32.dp, 96.dp),
+                    selectedArtworkSize = 176.dp,
+                    modifier = Modifier.width(if (avatar == selectedAvatar) itemWidth * 2 + gap else itemWidth),
                 )
             }
         }
@@ -397,58 +350,41 @@ private fun AvatarChoice(
     selectedArtworkSize: androidx.compose.ui.unit.Dp,
     modifier: Modifier = Modifier,
 ) {
-    Box(
+    val shape = if (selected) RoomioDesignSystem.shapes.extraExtraLarge else MaterialTheme.shapes.large
+    Surface(
         modifier = modifier
-            .heightIn(min = selectedArtworkSize + 44.dp)
-            .clickable(
-                role = Role.RadioButton,
-                onClick = onClick,
-            )
-            .semantics {
-                this.selected = selected
-            },
+            .heightIn(min = if (selected) 304.dp else 224.dp)
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onClick),
+        shape = shape,
+        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
+        contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+        border = BorderStroke(if (selected) 2.dp else 1.dp,
+            if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
     ) {
         Column(
-            modifier = Modifier.align(Alignment.Center),
+            modifier = Modifier.padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
         ) {
-            Box {
-                ProfileAvatarImage(
-                    avatar = avatar,
-                    description = avatar.localizedLabel,
-                    selected = selected,
-                    baseArtworkSize = baseArtworkSize,
-                    selectedArtworkSize = selectedArtworkSize,
-                )
-                if (selected) {
-                    Icon(
-                        imageVector = Icons.Filled.Check,
-                        contentDescription = null,
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .size(24.dp)
-                            .clip(CircleShape)
-                            .border(
-                                width = 2.dp,
-                                color = MaterialTheme.colorScheme.surface,
-                                shape = CircleShape,
-                            )
-                            .padding(3.dp),
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                }
-            }
+            ProfileAvatarImage(
+                avatar = avatar,
+                description = avatar.localizedLabel,
+                selected = selected,
+                baseArtworkSize = baseArtworkSize,
+                selectedArtworkSize = if (selected) selectedArtworkSize else baseArtworkSize,
+            )
             Text(
                 text = avatar.localizedLabel,
-                style = MaterialTheme.typography.labelLarge,
+                style = if (selected) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = if (selected) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurface
-                },
+                textAlign = TextAlign.Center,
             )
+            if (selected) {
+                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary) {
+                    Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(32.dp).padding(6.dp))
+                }
+            }
         }
     }
 }

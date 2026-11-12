@@ -4,7 +4,7 @@ import { appLog } from './data/sessionLog';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button, LoadingIndicator, Snackbar, StatusCard } from './components/Material';
 import { errorMessage, request, ApiError, MutationRequests } from './data/api';
-import { canResetIdentity, ensureSession, resetIdentity, token, watchToken } from './data/auth';
+import { canResetIdentity, ensureSession, rememberProfile, resetIdentity, token, watchToken } from './data/auth';
 import { identityModel, partyModel, previewModel, profileBody, type ChatMessage, type Admission, type IdentityDto, type PreviewDto, type Snapshot, type StreamDto } from './data/contracts';
 import { readLastRoom, rememberLastRoom, forgetLastRoom } from './data/lastRoom';
 import { RoomConnection } from './data/realtime';
@@ -172,7 +172,7 @@ export default function LiveApp() {
   };
   const saveProfile = async (value: Identity) => {
     setSaving(true);
-    try { const result = await request<{identity: IdentityDto}>('/v1/guest-sessions/profile', profileBody(value), 'PATCH'); setLanguage(result.identity.language); setIdentity(identityModel(result.identity)); setScreen('home'); notify(t("Profile updated")); }
+    try { const result = await request<{identity: IdentityDto}>('/v1/guest-sessions/profile', profileBody(value), 'PATCH'); rememberProfile(result.identity); setLanguage(result.identity.language); setIdentity(identityModel(result.identity)); setScreen('home'); notify(t("Profile updated")); }
     catch (error) { notify(errorMessage(error)); }
     finally { setSaving(false); }
   };

@@ -17,6 +17,9 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isSelectable
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -59,10 +62,12 @@ class ThemePickerUiTest {
             }
         }
         val initial = primary
-        onNodeWithText("Sage").performScrollTo().assertIsDisplayed().performClick()
-        onNodeWithText("Sage").assertIsSelected()
+        onNodeWithContentDescription("Your colors").performScrollTo()
+        onNode(hasText("Sage") and isSelectable()).performScrollTo().assertIsDisplayed().performClick()
+        onNode(hasText("Sage") and isSelectable()).assertIsSelected()
         runOnIdle { assertNotEquals(initial, primary); expanded.value = true }
-        onNodeWithText("Cocoa").performScrollTo().assertIsDisplayed().performClick()
-        onNodeWithText("Cocoa").assertIsSelected()
+        onNodeWithContentDescription("Your colors").performScrollTo()
+        onNode(hasText("Cocoa") and isSelectable()).performScrollTo().assertIsDisplayed().performClick()
+        onNode(hasText("Cocoa") and isSelectable()).assertIsSelected()
     }
 }

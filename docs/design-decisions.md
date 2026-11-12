@@ -517,3 +517,34 @@ deployment evidence remains historical.
 - **Identity:** Everyone sees the user’s saved name, independent of the viewer’s language. Keep guest and membership IDs, credentials, ownership and historical chat snapshots unchanged. Normalize existing Persian profiles and membership labels through a backend migration.
 - **Terminology:** Use «آواتار» in Persian UI copy wherever «نمایه» was used, including avatar/profile actions and status messages.
 - **Supersedes:** DD-054’s English-only naming rule; DD-050’s prohibition on translating guest names now excludes these fixed avatar-derived names.
+
+## DD-062: Spotlight avatar picker and expandable Settings chooser studies
+
+- **Date:** 2026-11-12
+- **Accepted avatar direction:** The stakeholder selected “In the spotlight.” Use larger 96px/dp character art with a 176px/dp selected character in an expanded, two-column tonal tile. Compact pickers use two columns and expanded pickers use three. Selected state also has a check, accessible radio state and emphasized name; preserve keyboard access, large text, RTL and light/dark support. Browser and shared native Settings implement the accepted direction.
+- **Profile behavior:** Avatar and language still apply together on Save; Back discards drafts. Fixed character identity and localized names follow the existing avatar naming decision. A layout change must not change IDs or backend contracts.
+- **Language growth:** The stakeholder expects at least ten additional languages. The chooser must scale beyond two options. Review searchable list, language-library grid and focused picker concepts with twelve total entries. The ten additional catalog entries are design fixtures; English/Persian remain the only implemented app translations, and future launch-language selection is unresolved.
+- **Color studies:** The stakeholder requested three Material 3 Expressive theme-color picker variations. Review swatches, palette postcards and grouped color families using the existing twenty-five choices. Color selection continues to apply immediately and persist locally, independent of profile Save. The stakeholder subsequently selected Color garden and the focused language picker for a combined final confirmation preview with Spotlight (`settingsReview=final`). Live color/language promotion remains pending that confirmation.
+- **Preview boundary:** Additional-language selections remain local and clearly marked; block profile Save for such selections rather than sending unsupported languages into the existing service or silently applying English. Native language/color choosers retain existing behavior until a visual direction is selected.
+- **Details:** See [Settings chooser studies](settings-chooser-designs.md) for routes, states and verification.
+- **Settings copy refinement:** Remove the profile subtitle and color helper sentences. Keep only “Pick the character friends will see.” for avatar guidance and “Applies after saving.” under Language; remove the repeated language instruction below its picker. Apply the same wording in Persian and native Settings.
+
+## DD-065: Integrate the approved Settings chooser combination
+
+- **Date:** 2026-11-12
+- **Decision:** The stakeholder confirmed Spotlight avatars, Color garden and the focused language picker for main browser/shared native Settings. This supersedes DD-062’s final-review boundary. Settings no longer depends on design-preview query parameters or variation controls.
+- **Languages:** Include only English and فارسی. The ten additional study entries remain historical layout fixtures; do not show them as selectable production languages. Keep the picker extensible for future translations.
+- **Interaction:** Color changes apply and persist immediately. Language selection is staged within the focused picker; explicit Use transfers it to the Settings draft. Dismissal discards only the picker’s staged choice. Save applies the profile and app language; Back from Settings discards profile drafts. Preserve the existing network/persistence retry behavior and fixed localized avatar names.
+- **Presentation:** Keep the accepted enlarged Spotlight tile, named swatch grid with a current-color summary, and compact bottom sheet / expanded dialog language surface. Support search/no-results recovery, English/Persian, light/dark themes, large text, RTL and keyboard/focus semantics. Retain the approved Settings wording and the stakeholder’s requested helper-text removals.
+- **Implementation:** Reusable browser components own the accepted patterns; native presentation stays in sharedUI. Service contracts and backend behavior are unchanged. See [integrated Settings choosers](settings-chooser-designs.md).
+
+- **Withdrawal refinement (2026-11-12):** In the sync invitation, selecting “Change my mind & keep watching” / «بیخیال، فیلممو ادامه میدم» withdraws acceptance, dismisses the dialog and starts local playback at the viewer’s saved acceptance position. It starts playback even if the viewer had been paused before accepting. The viewer does not seek to the owner’s target and is excluded from subsequent commitment unless they accept again.
+
+## DD-066: Concise, Casual Product Voice Across Clients
+
+- **Date:** 2026-11-12
+- **Decision:** The stakeholder approved the additional thirty Persian sentence replacements and explicitly established their repeated removal of overly informative sentences as a project-wide design fact. All current and future English/Persian copy should be friendly, casual and concise across web and native clients.
+- **Information budget:** Remove redundant helper paragraphs, repeated status explanations and informational cards when existing controls and context already communicate the point. Do not restore removed copy elsewhere. Keep only the action consequences or recovery steps needed for an informed decision, preferably in a clear action label or one short message.
+- **Examples:** «از دورهمی میری؟»؛ «لینک فیلم رو چک کن و دوباره امتحان کن.»؛ «یه مشکلی پیش اومد. دوباره امتحان کن.»؛ «کنترل فیلم دوباره دست خودته.» Preserve the stakeholder's selected spelling and product terminology rather than reverting to formal Persian.
+- **Feedback:** The group-recovery completion remains an owner-only snackbar, with «با اونایی که آماده بودن شروع کردیم. کسی که قطع شد میتونه بعدا هماهنگ بشه.» It must not reappear as a persistent card or be shown to every viewer.
+- **Implementation:** Apply approved wording through existing browser translation keys, inline sync copy and matching shared native resources. This changes presentation only; identity, permissions, playback, consent, recovery timing and backend contracts are unchanged. Detailed authoring rules are in `design-principles.md`.

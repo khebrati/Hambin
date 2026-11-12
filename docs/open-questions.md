@@ -170,3 +170,9 @@ Resolved questions are preserved with their answers for traceability.
 
 - [Resolved, DD-052] The stakeholder selected the side-by-side concept and authorized backend plus browser/Android/iOS/desktop implementation. The earlier voice-only clarification and DD-050's exploration-only status are superseded for this feature.
 - Implementation defaults are documented in [chat contract](chat-contract.md): room members see room history; room tombstone cleanup removes stored messages; plain text/emoji with shared limits; no moderation/attachments/read receipts in this iteration.
+
+## Settings chooser presentation studies (2026-11-12)
+
+- [Resolved, DD-062] The stakeholder selected In the spotlight for avatars; the enlarged selected character and two-column tile are implemented in browser/shared native Settings.
+- [Resolved, DD-065] Use the focused language picker, with English and فارسی only. Additional launch languages remain a future decision; the ten study fixtures are not selectable production options.
+- [Resolved, DD-065] Use Color garden in main browser/shared native Settings, alongside Spotlight avatars. Immediate color application and DD-049 profile Save/Back semantics remain unchanged. See [integrated Settings choosers](settings-chooser-designs.md).

@@ -18,7 +18,7 @@ test('avatar sets the saved name, discards drafts, and retains a failed save for
   const frog = () => page.getByRole('radio', { name: 'Frog Wizard', exact: true });
   await open();
   await expect(page.getByRole('textbox')).toHaveCount(0);
-  await expect(page.getByRole('radio')).toHaveCount(12);
+  await expect(page.locator('.spotlight-picker').getByRole('radio')).toHaveCount(12);
   await frog().click();
   await expect(page.locator('.profile-spotlight strong')).toHaveText('Frog Wizard');
   await page.getByRole('button', { name: 'Back', exact: true }).click();
@@ -26,11 +26,11 @@ test('avatar sets the saved name, discards drafts, and retains a failed save for
   await expect(page.locator('.profile-spotlight strong')).toHaveText('Ice Queen');
   await frog().click();
   failSave = true;
-  await page.getByRole('button', { name: 'Save profile', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText('The service is unavailable. Try again.');
-  await expect(frog()).toHaveAttribute('aria-checked', 'true');
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await expect(page.locator('.md-snackbar')).toContainText('The service is unavailable. Try again.');
+  await expect(frog()).toBeChecked();
   failSave = false;
-  await page.getByRole('button', { name: 'Save profile', exact: true }).click();
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Stream and chill' })).toBeVisible();
   await page.reload();
   await open();

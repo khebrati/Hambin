@@ -19,13 +19,13 @@ beforeEach(() => {
   fetchMock = vi.fn();
   vi.stubGlobal('localStorage', storage); vi.stubGlobal('sessionStorage', new StorageFake()); vi.stubGlobal('fetch', fetchMock);
 });
-afterEach(() => { vi.clearAllTimers(); vi.useRealTimers(); vi.unstubAllGlobals(); });
+afterEach(() => { vi.clearAllTimers(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 describe('backend-owned browser identity', () => {
   it('issues a character name without digits and restores the saved profile on reload', async () => {
     fetchMock.mockResolvedValueOnce(reply({ code: 'UNAUTHENTICATED' }, 401)).mockImplementationOnce(async (_url, options) => reply({ ...session(), identity: { ...JSON.parse(options.body), id: 'identity-1' } }));
     const { ensureSession } = await import('./auth');
     const first = await ensureSession();
-    expect(first.identity.name).toBe(avatarName('comet'));
+    expect(first.identity.name).toBe(avatarName(first.identity.avatar as Parameters<typeof avatarName>[0]));
     expect(first.identity.name).not.toMatch(/\d/);
     expect(first.identity.name.length).toBeLessThanOrEqual(48);
     vi.resetModules();
@@ -111,4 +111,20 @@ describe('backend-owned browser identity', () => {
     const { ensureSession } = await import('./auth'); await ensureSession(profile);
     expect(storage.getItem('roomio-auth-established')).toBeNull(); expect(storage.getItem('roomio-last-owned-code')).toBeNull(); expect(storage.getItem('roomio-theme')).toBe('dark'); expect(storage.getItem('roomio-auth-format')).toBe('backend-v1');
   });
+});
+
+it('chooses a fresh avatar once, then retains a manually saved character through reset', async () => {
+  vi.spyOn(Math, 'random').mockReturnValue(.999);
+  fetchMock.mockResolvedValueOnce(reply({ code: 'UNAUTHENTICATED' }, 401)).mockImplementationOnce(async (_url, options) => reply({ ...session(), identity: { ...JSON.parse(options.body), id: 'identity-1' } }));
+  const auth = await import('./auth');
+  const first = await auth.ensureSession();
+  expect(first.identity.avatar).toBe('bloom');
+  expect(first.identity.name).toBe('Mummy Barista');
+  auth.rememberProfile({ avatar: 'orbit', name: 'Wolf Barista', language: 'en' });
+  fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
+  await auth.resetIdentity();
+  fetchMock.mockResolvedValueOnce(reply({ code: 'UNAUTHENTICATED' }, 401)).mockImplementationOnce(async (_url, options) => reply({ ...session('new', 'identity-2'), identity: { ...JSON.parse(options.body), id: 'identity-2' } }));
+  const reset = await auth.ensureSession();
+  expect(reset.identity.avatar).toBe('orbit');
+  expect(reset.identity.name).toBe('Wolf Barista');
 });

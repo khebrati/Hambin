@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import fa from './fa.json';
+import en from './en.json';
 
 export type Language = 'en' | 'fa';
 const storageKey = 'roomio-language';
@@ -22,6 +23,6 @@ export function useLanguage(): Language {
 }
 /** Translate only application copy. User content and protocol values never pass through this catalog. */
 export function t(text: string, values?: Record<string, string | number>): string {
-  const translated = language === 'fa' ? (fa as Record<string, string>)[text] ?? text : text;
+  const translated = language === 'fa' ? (fa as Record<string, string>)[text] ?? text : (en as Record<string, string>)[text] ?? text;
   return values ? translated.replace(/\{(\w+)\}/g, (token, key: string) => String(values[key] ?? token)) : translated;
 }

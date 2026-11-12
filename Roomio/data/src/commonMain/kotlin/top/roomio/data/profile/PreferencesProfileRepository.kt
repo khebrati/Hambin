@@ -12,6 +12,8 @@ import top.roomio.domain.profile.UserProfile
 class PreferencesProfileRepository(
     private val settings: Settings,
 ) : ProfileRepository {
+    init { initializeProfilePreferences(settings) }
+
     private val mutableProfile = MutableStateFlow(readProfile())
 
     override fun observeProfile() = mutableProfile.asStateFlow()

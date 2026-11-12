@@ -8,10 +8,10 @@ DD-054 replaces editable/random guest names in browser and native clients. Each 
 | mint | Frog Wizard | قورباغهٔ جادوگر |
 | sunny | Skeleton Detective | کارآگاه اسکلتی |
 | berry | Captain Octopus | کاپیتان اختاپوس |
-| cloud | Gamer TV | تلویزیون گیمر |
-| ember | Alien Scientist | دانشمند فضایی |
+| cloud | TV Boy | پسر تلویزیونی |
+| ember | Alien Employee | کارمند فضایی |
 | nova | Robot Poet | ربات شاعر |
-| orbit | Coffee Wolf | گرگ قهوه‌دوست |
+| orbit | Wolf Barista | گرگ باریستا |
 | prism | Professor Fox | پروفسور روباه |
 | echo | Bookworm Dragon | اژدهای کتاب‌خوان |
 | spark | Frankie | فرانکی |

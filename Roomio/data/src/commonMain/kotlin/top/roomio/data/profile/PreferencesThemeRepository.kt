@@ -9,6 +9,8 @@ import top.roomio.domain.profile.ThemePreferencesRepository
 
 @Inject
 class PreferencesThemeRepository(private val settings: Settings) : ThemePreferencesRepository {
+    init { initializeProfilePreferences(settings) }
+
     private val mutableColor = MutableStateFlow(
         ThemeColor.entries.firstOrNull { it.name == settings.getStringOrNull(KEY) } ?: ThemeColor.ROOMIO,
     )

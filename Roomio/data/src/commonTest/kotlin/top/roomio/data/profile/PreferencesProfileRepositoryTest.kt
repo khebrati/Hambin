@@ -12,11 +12,11 @@ class PreferencesProfileRepositoryTest {
     fun generatedNamePersistsBeforeAnyProfileEdit() {
         val settings = MapSettings()
         val first = PreferencesProfileRepository(settings).currentProfile()
-        assertEquals("Ice Queen", first.name)
+        assertEquals(first.avatar.displayName, first.name)
         assertTrue(first.name.none { it.isDigit() })
         assertTrue(first.name.length <= 48)
         assertEquals(first, PreferencesProfileRepository(settings).currentProfile())
-        assertEquals(ProfileAvatarId.COMET, first.avatar)
+        assertEquals(first.avatar.name, settings.getString("profile.avatar", ""))
     }
 
     @Test
@@ -49,8 +49,8 @@ class PreferencesProfileRepositoryTest {
         val repository = PreferencesProfileRepository(settings)
         val profile = repository.currentProfile().copy(language = top.roomio.domain.profile.AppLanguage.PERSIAN)
         repository.saveProfile(profile).getOrThrow()
-        assertEquals(profile.copy(name = "ملکهٔ یخی"), PreferencesProfileRepository(settings).currentProfile())
-        assertEquals("ملکهٔ یخی", repository.currentProfile().name)
+        assertEquals(profile.copy(name = profile.avatar.displayName(profile.language)), PreferencesProfileRepository(settings).currentProfile())
+        assertEquals(profile.avatar.displayName(profile.language), repository.currentProfile().name)
         settings.putString("profile.language", "unknown")
         assertEquals(top.roomio.domain.profile.AppLanguage.ENGLISH, PreferencesProfileRepository(settings).currentProfile().language)
     }

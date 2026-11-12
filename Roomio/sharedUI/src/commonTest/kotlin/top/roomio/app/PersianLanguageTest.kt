@@ -37,21 +37,25 @@ class PersianLanguageTest {
                 }
             }
         }
-        onNodeWithText("فارسی").performScrollTo().performClick()
+        onNodeWithContentDescription("App language").performScrollTo().performClick()
+        onNode(hasText("فارسی") and isSelectable()).performClick()
+        onNodeWithText("Use فارسی").performClick()
         runOnIdle {
             assertEquals(AppLanguage.PERSIAN, viewModel.state.value.draftLanguage)
             assertEquals(AppLanguage.ENGLISH, repository.currentProfile().language)
             viewModel.onAction(SettingsAction.SaveClicked)
             language.value = repository.currentProfile().language
         }
-        onNodeWithText("آواتار شما").assertExists()
+        onNodeWithText("به سلیقه خودت").assertExists()
         runOnIdle { assertEquals(LayoutDirection.Rtl, direction) }
-        onNodeWithText("English").performScrollTo().performClick()
+        onNodeWithContentDescription("زبان برنامه").performScrollTo().performClick()
+        onNode(hasText("English") and isSelectable()).performClick()
+        onNodeWithText("انتخاب English").performClick()
         runOnIdle {
             viewModel.onAction(SettingsAction.SaveClicked)
             language.value = repository.currentProfile().language
         }
-        onNodeWithText("Your profile").assertExists()
+        onNodeWithText("Make yourself at home").assertExists()
         runOnIdle { assertEquals(LayoutDirection.Ltr, direction) }
     }
 }

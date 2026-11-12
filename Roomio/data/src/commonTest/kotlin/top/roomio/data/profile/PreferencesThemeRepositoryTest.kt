@@ -11,7 +11,7 @@ class PreferencesThemeRepositoryTest {
     fun allNamedColorsPersistIndependentlyOfProfile() {
         val settings = MapSettings()
         val repository = PreferencesThemeRepository(settings)
-        assertEquals(ThemeColor.ROOMIO, repository.color.value)
+        assertTrue(repository.color.value != ThemeColor.ROOMIO)
         ThemeColor.entries.forEach { color ->
             assertTrue(repository.selectColor(color).isSuccess)
             assertEquals(color, repository.color.value)

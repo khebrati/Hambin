@@ -1,5 +1,5 @@
 import { diagnosticEvent, diagnosticError, nextOperationId } from './sessionLog';
-import { avatarName } from './avatarCatalog';
+import { avatarName, avatarOptions } from './avatarCatalog';
 import type { IdentityDto } from './contracts';
 import { backendUrl } from './config';
 import { ApiError } from './errors';
@@ -11,6 +11,7 @@ export interface GuestSession {
   accessExpiresAt: string;
   refreshExpiresAt: string;
 }
+const initialProfileKey = 'roomio-initial-profile-v1';
 const establishedKey = 'roomio-backend-session-v1';
 const formatKey = 'roomio-auth-format';
 let current: GuestSession | undefined;
@@ -69,6 +70,7 @@ function accept(value: GuestSession): GuestSession {
   if (current && current.identity.id !== value.identity.id) throw new ApiError('INVALID_TOKEN', 401);
   diagnosticEvent('auth.accepted', { restored: !!current });
   current = value;
+  rememberProfile(value.identity);
   for (const callback of listeners.keys()) callback(value.accessToken);
   scheduleRefresh();
   return value;
@@ -87,7 +89,19 @@ async function obtain(force: boolean): Promise<GuestSession> {
       // Only a genuinely new browser without a cookie may register automatically.
       if (established || current || !(error instanceof ApiError) || error.code !== 'UNAUTHENTICATED') throw error;
     }
-    if (!initialProfile) throw new ApiError('UNAUTHENTICATED', 401);
+    if (!initialProfile) {
+      const saved = localStorage.getItem(initialProfileKey);
+      if (saved) {
+        const candidate = JSON.parse(saved) as Profile;
+        if (avatarOptions.some(avatar => avatar.id === candidate.avatar) && ['en', 'fa'].includes(candidate.language)) initialProfile = candidate;
+      }
+      if (!initialProfile) {
+        const avatar = avatarOptions[Math.floor(Math.random() * avatarOptions.length)].id;
+        const language = localStorage.getItem('roomio-language') === 'fa' ? 'fa' : 'en';
+        initialProfile = { name: avatarName(avatar, language), avatar, language };
+      }
+    }
+    localStorage.setItem(initialProfileKey, JSON.stringify(initialProfile));
     // Mark before issuance: a lost response must retry the cookie, never silently issue another guest.
     localStorage.setItem(establishedKey, '1');
     return accept(await (await sessionRequest('', initialProfile)).json());
@@ -98,8 +112,13 @@ async function obtain(force: boolean): Promise<GuestSession> {
     : run()).finally(() => { pending = undefined; });
   return pending;
 }
+/** Keep explicit profile choices available for subsequent, explicitly requested identity resets. */
+export function rememberProfile(profile: Profile) {
+  initialProfile = { name: profile.name, avatar: profile.avatar, language: profile.language };
+  try { localStorage.setItem(initialProfileKey, JSON.stringify(initialProfile)); } catch { /* Backend and in-memory profile retain the accepted choice. */ }
+}
 export function ensureSession(profile?: Profile): Promise<GuestSession> {
-  initialProfile = profile ?? initialProfile ?? { name: avatarName('comet'), avatar: 'comet', language: 'en' };
+  initialProfile = profile ?? initialProfile;
   return obtain(false);
 }
 export async function token(force = false): Promise<string> {
