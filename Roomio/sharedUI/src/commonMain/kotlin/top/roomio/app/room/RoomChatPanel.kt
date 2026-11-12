@@ -81,7 +81,6 @@ internal fun RoomChatPanel(state: RoomChatState, onAction: (RoomAction) -> Unit,
                 }
                 Column(Modifier.weight(1f)) {
                     Text(stringResource(Res.string.chat_title), style = MaterialTheme.typography.titleMedium)
-                    Text(stringResource(Res.string.chat_members_only), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 if (state.unread > 0) {
                     val unread = stringResource(Res.string.chat_unread, state.unread)
@@ -167,7 +166,7 @@ internal fun RoomChatPanel(state: RoomChatState, onAction: (RoomAction) -> Unit,
                         value = field, onValueChange = { value -> if (value.text.length <= 500) { field = value; onAction(RoomAction.ChatDraftChanged(value.text)) } },
                         label = { Text(stringResource(Res.string.chat_message_label)) }, placeholder = { Text(stringResource(Res.string.chat_placeholder)) },
                         modifier = Modifier.fillMaxWidth().onPreviewKeyEvent { event ->
-                            if (event.key == Key.Enter && event.type == KeyEventType.KeyDown && !event.isShiftPressed && field.composition == null) { onAction(RoomAction.ChatSend); true } else false
+                            if (event.key == Key.Enter && event.type == KeyEventType.KeyDown && event.isCtrlPressed && !event.isShiftPressed && field.composition == null) { onAction(RoomAction.ChatSend); true } else false
                         }, minLines = 2, maxLines = 4, shape = RoundedCornerShape(20.dp),
                         textStyle = MaterialTheme.typography.bodyMedium.copy(textDirection = TextDirection.Content),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send), keyboardActions = KeyboardActions(onSend = { onAction(RoomAction.ChatSend) }),

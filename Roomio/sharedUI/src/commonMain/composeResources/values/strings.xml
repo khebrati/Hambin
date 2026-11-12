@@ -256,7 +256,6 @@
     <string name="avatar_label_bloom">Mummy Barista</string>
 
     <string name="chat_title">Party chat</string>
-    <string name="chat_members_only">Only people in this party</string>
     <string name="chat_empty_title">First word is yours</string>
     <string name="chat_empty_copy">Say hi, share a thought, or start with 🍿.</string>
     <string name="chat_loading">Loading conversation…</string>
@@ -276,7 +275,7 @@
     <string name="chat_latest">Latest messages</string>
     <string name="chat_refresh">Return to latest messages</string>
     <string name="chat_offline">Chat is offline. Your draft stays here.</string>
-    <string name="chat_hint">Only this party · Enter to send</string>
+    <string name="chat_hint">Ctrl + Enter to send</string>
     <string name="chat_pending_limit">Retry or discard pending messages to send more.</string>
     <string name="chat_invalid">Use a message of 1–500 characters.</string>
     <string name="chat_conflict">This message could not be retried. Discard it and send a new message.</string>

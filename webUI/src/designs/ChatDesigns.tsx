@@ -13,9 +13,9 @@ type Variation = 'side' | 'dock' | 'floating';
 type Scene = 'populated' | 'empty' | 'loading' | 'error' | 'offline';
 type Message = { id: number; name: string; avatar: AvatarId; text: string; self?: boolean; state?: 'sending' | 'failed' | 'sent' };
 const concepts = [
-  { id: 'side', icon: Columns2, title: ['Side by side', 'کنار هم'], description: ['A seat for the conversation. Keep the movie and the room in view.', 'جایی برای گفتگو؛ فیلم و دوستانت را کنار هم ببین.'] },
-  { id: 'dock', icon: PanelBottom, title: ['Chat dock', 'گفتگو زیر فیلم'], description: ['Movie up top. Conversation below. A little more room for every message.', 'فیلم بالا، گفتگو پایین؛ فضای بیشتر برای پیام‌ها.'] },
-  { id: 'floating', icon: PanelsTopLeft, title: ['Floating chat', 'گفتگوی شناور'], description: ['Drop into the conversation, then tuck it away and enjoy the movie.', 'وارد گفتگو شو، بعد جمعش کن و فیلم را ببین.'] },
+  { id: 'side', icon: Columns2, title: ['Side by side', 'کنار هم'], description: ['A seat for the conversation. Keep the movie and the room in view.', 'جایی برای گپ؛ فیلم و دوستانت را کنار هم ببین.'] },
+  { id: 'dock', icon: PanelBottom, title: ['Chat dock', 'گپ زیر فیلم'], description: ['Movie up top. Conversation below. A little more room for every message.', 'فیلم بالا، گپ پایین؛ فضای بیشتر برای پیام‌ها.'] },
+  { id: 'floating', icon: PanelsTopLeft, title: ['Floating chat', 'گپ شناور'], description: ['Drop into the conversation, then tuck it away and enjoy the movie.', 'وارد گپ شو، بعد جمعش کن و فیلم را ببین.'] },
 ] as const;
 const initialMessages = (): Message[] => [
   { id: 1, name: 'Ellis', avatar: 'sunny', text: 'Okay, snacks acquired. I’m ready 🍿' },
@@ -112,23 +112,23 @@ export default function ChatDesigns() {
   }
   const toggleOpen = () => { setOpen(!open); setEmojiOpen(false); if (!open) { setAtBottom(true); setUnread(0); } };
   const jumpToLatest = () => { setAtBottom(true); setUnread(0); };
-  const chat = <section className={`chat-panel chat-panel--${variation} ${open ? 'is-open' : 'is-collapsed'}`} aria-label={copy('Party chat', 'گفتگوی دورهمی')}
+  const chat = <section className={`chat-panel chat-panel--${variation} ${open ? 'is-open' : 'is-collapsed'}`} aria-label={copy('Party chat', 'گپ دورهمی')}
     onKeyDown={event => { if (event.key === 'Escape') { setOpen(false); setEmojiOpen(false); toggle.current?.focus(); } }}>
     <header className="chat-panel__header">
       <span className="chat-panel__mark"><MessageCircle size={22} aria-hidden="true" /></span>
-      <div className="chat-panel__title"><h2>{copy('Party chat', 'گفتگوی دورهمی')}</h2><span>{open ? copy('Three friends. One good movie.', 'سه دوست، یک فیلم خوب.') : copy('The conversation is right here', 'گفتگو همین‌جاست')}</span></div>
+      <div className="chat-panel__title"><h2>{copy('Party chat', 'گپ دورهمی')}</h2><span>{open ? copy('Three friends. One good movie.', 'سه دوست، یک فیلم خوب.') : copy('The conversation is right here', 'گپ همین‌جاست')}</span></div>
       {unread > 0 && <span className="chat-unread" aria-label={copy(`${unread} unread messages`, `${unread} پیام خوانده‌نشده`)}>{unread}</span>}
-      <button ref={toggle} type="button" className="md-icon-button" aria-label={open ? copy('Collapse chat', 'جمع کردن گفتگو') : copy('Open chat', 'باز کردن گفتگو')} aria-expanded={open} aria-controls="chat-body" onClick={toggleOpen}>
+      <button ref={toggle} type="button" className="md-icon-button" aria-label={open ? copy('Collapse chat', 'جمع کردن گپ') : copy('Open chat', 'باز کردن گپ')} aria-expanded={open} aria-controls="chat-body" onClick={toggleOpen}>
         {open ? <ChevronDown aria-hidden="true" size={22} /> : <ChevronUp aria-hidden="true" size={22} />}
       </button>
     </header>
     <div id="chat-body" className="chat-panel__body" hidden={!open}>
       <div className="chat-feed-wrap">
-        <div ref={feed} className="chat-feed" role="log" aria-label={copy('Chat messages', 'پیام‌های گفتگو')} aria-live="off" tabIndex={0}
+        <div ref={feed} className="chat-feed" role="log" aria-label={copy('Chat messages', 'پیام‌های گپ')} aria-live="off" tabIndex={0}
           onScroll={event => { const el = event.currentTarget; setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 40); }}>
-          {scene === 'loading' ? <div className="chat-empty"><LoadingIndicator label={copy('Loading conversation…', 'در حال بارگذاری گفتگو…')} /><Button variant="text" onClick={() => changeScene('populated')}>{copy('Finish loading', 'نمایش گفتگو')}</Button></div>
+          {scene === 'loading' ? <div className="chat-empty"><LoadingIndicator label={copy('Loading conversation…', 'در حال بارگذاری گپ…')} /><Button variant="text" onClick={() => changeScene('populated')}>{copy('Finish loading', 'نمایش گپ')}</Button></div>
             : messages.length === 0 ? <div className="chat-empty"><span className="chat-empty__icon"><Sparkles size={30} aria-hidden="true" /></span><h3>{copy('First word is yours', 'اولین پیام با تو')}</h3><p>{copy('Say hi, share a thought, or start with 🍿.', 'سلام کن، نظرت را بگو یا با 🍿 شروع کن.')}</p></div>
-            : <><div className="chat-start"><span />{copy('Tonight’s conversation', 'گفتگوی امشب')}<span /></div>
+            : <><div className="chat-start"><span />{copy('Tonight’s conversation', 'گپ امشب')}<span /></div>
               {messages.map(message => <article key={message.id} className={`chat-message ${message.self ? 'chat-message--self' : ''}`}>
                 {!message.self && <Avatar avatarId={message.avatar} label={message.name} size="small" />}
                 <div className="chat-message__main"><div className="chat-message__meta"><strong><bdi>{message.self ? copy('You', 'تو') : message.name}</bdi></strong><span>{message.id <= 4 ? '20:42' : '20:43'}</span></div>
@@ -148,19 +148,19 @@ export default function ChatDesigns() {
         {emojiOpen && <div className="chat-emoji" role="group" aria-label={copy('Choose an emoji', 'انتخاب ایموجی')}>{['🍿', '😂', '❤️', '✨', '😮'].map(emoji => <button key={emoji} type="button" aria-label={copy(`Add ${emoji}`, `افزودن ${emoji}`)} onClick={() => { setDraft(current => current + emoji); setEmojiOpen(false); composer.current?.focus(); }}>{emoji}</button>)}</div>}
         <div className="chat-composer__field"><label className="chat-sr-only" htmlFor="chat-draft">{copy('Message the party', 'پیام به دورهمی')}</label>
           <textarea ref={composer} id="chat-draft" rows={2} maxLength={500} dir="auto" placeholder={copy('Message the party…', 'پیامی برای دورهمی…')} value={draft} disabled={scene === 'loading'} aria-describedby="chat-composer-hint" onChange={event => setDraft(event.target.value)}
-            onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); send(); } }} />
+            onKeyDown={event => { if (event.key === 'Enter' && event.ctrlKey && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); send(); } }} />
           <div className="chat-composer__actions"><button className="md-icon-button" type="button" aria-label={copy('Add emoji', 'افزودن ایموجی')} aria-expanded={emojiOpen} disabled={scene === 'loading'} onClick={() => setEmojiOpen(!emojiOpen)}>☺</button><span>{draft.length > 400 ? `${draft.length}/500` : ''}</span><IconButton type="submit" icon={Send} label={copy('Send message', 'ارسال پیام')} variant="filled" disabled={!draft.trim() || scene === 'offline' || scene === 'loading'} /></div>
         </div>
-        <span className="chat-composer__hint" id="chat-composer-hint">{copy('Only this party · Enter to send', 'فقط این دورهمی · ارسال با Enter')}</span>
+        <span className="chat-composer__hint" id="chat-composer-hint">{copy('Ctrl + Enter to send', 'ارسال با Ctrl + Enter')}</span>
       </form>
     </div>
   </section>;
 
   return <div className={`chat-designs chat-designs--${variation}`}>
-    <section className="chat-preview-bar" aria-label={copy('Chat design preview', 'پیش‌نمایش طراحی گفتگو')}>
-      <div className="chat-preview-bar__intro"><span className="eyebrow">{copy('DESIGN PREVIEW / PARTY CHAT', 'پیش‌نمایش طراحی / گفتگوی دورهمی')}</span><p>{copy('Same movie. Three ways to hang out.', 'یک فیلم، سه راه برای دورهمی.')}</p><span className="chat-preview-label">{copy('Local demo · Messages aren’t shared', 'نمایش محلی · پیام‌ها به اشتراک گذاشته نمی‌شوند')}</span></div>
-      <nav className="chat-concepts" aria-label={copy('Chat variations', 'طرح‌های گفتگو')}>{concepts.map((item, index) => <button key={item.id} aria-pressed={variation === item.id} onClick={() => changeVariation(item.id)}><item.icon size={19} aria-hidden="true" /><span><small>0{index + 1}</small>{item.title[fa ? 1 : 0]}</span>{variation === item.id && <Check size={16} aria-hidden="true" />}</button>)}</nav>
-      <div className="chat-preview-tools"><label>{copy('State', 'وضعیت')}<select aria-label={copy('Preview state', 'وضعیت پیش‌نمایش')} value={scene} onChange={event => changeScene(event.target.value as Scene)}>{(['populated', 'empty', 'loading', 'error', 'offline'] as const).map((value, index) => <option key={value} value={value}>{(fa ? ['گفتگو', 'خالی', 'بارگذاری', 'خطای ارسال', 'آفلاین'] : ['Conversation', 'Empty', 'Loading', 'Send failure', 'Offline'])[index]}</option>)}</select></label><Button variant="text" onClick={incoming}>{copy('+ Incoming message', '+ پیام جدید')}</Button><Button variant="text" aria-pressed={large} onClick={() => setLarge(!large)}>Aa</Button><Button variant="text" aria-pressed={rtl} onClick={() => setRtl(!rtl)}>RTL</Button><Button variant="outlined" onClick={() => { setLanguage(fa ? 'English' : 'فارسی'); setRtl(!fa); }}>{fa ? 'English' : 'فارسی'}</Button></div>
+    <section className="chat-preview-bar" aria-label={copy('Chat design preview', 'پیش‌نمایش طراحی گپ')}>
+      <div className="chat-preview-bar__intro"><span className="eyebrow">{copy('DESIGN PREVIEW / PARTY CHAT', 'پیش‌نمایش طراحی / گپ دورهمی')}</span><p>{copy('Same movie. Three ways to hang out.', 'یک فیلم، سه راه برای دورهمی.')}</p><span className="chat-preview-label">{copy('Local demo · Messages aren’t shared', 'نمایش محلی · پیام‌ها به اشتراک گذاشته نمی‌شوند')}</span></div>
+      <nav className="chat-concepts" aria-label={copy('Chat variations', 'طرح‌های گپ')}>{concepts.map((item, index) => <button key={item.id} aria-pressed={variation === item.id} onClick={() => changeVariation(item.id)}><item.icon size={19} aria-hidden="true" /><span><small>0{index + 1}</small>{item.title[fa ? 1 : 0]}</span>{variation === item.id && <Check size={16} aria-hidden="true" />}</button>)}</nav>
+      <div className="chat-preview-tools"><label>{copy('State', 'وضعیت')}<select aria-label={copy('Preview state', 'وضعیت پیش‌نمایش')} value={scene} onChange={event => changeScene(event.target.value as Scene)}>{(['populated', 'empty', 'loading', 'error', 'offline'] as const).map((value, index) => <option key={value} value={value}>{(fa ? ['گپ', 'خالی', 'بارگذاری', 'خطای ارسال', 'آفلاین'] : ['Conversation', 'Empty', 'Loading', 'Send failure', 'Offline'])[index]}</option>)}</select></label><Button variant="text" onClick={incoming}>{copy('+ Incoming message', '+ پیام جدید')}</Button><Button variant="text" aria-pressed={large} onClick={() => setLarge(!large)}>Aa</Button><Button variant="text" aria-pressed={rtl} onClick={() => setRtl(!rtl)}>RTL</Button><Button variant="outlined" onClick={() => { setLanguage(fa ? 'English' : 'فارسی'); setRtl(!fa); }}>{fa ? 'English' : 'فارسی'}</Button></div>
     </section>
     <div className="chat-direction"><span className="chat-direction__number">0{concepts.indexOf(concept) + 1}</span><div><h1>{concept.title[fa ? 1 : 0]}</h1><p>{concept.description[fa ? 1 : 0]}</p></div></div>
     <PartyScreen party={party} streamStatus={status} theme={theme} aborting={false} onToggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')} onStartStream={() => setStatus('playing')} onSetStreamStatus={setStatus} onAbort={async () => setStatus('empty')} onLeave={() => setSnackbar(copy('You’re in a preview. Switch designs above to keep exploring.', 'این یک پیش‌نمایش است. طرح‌ها را از بالا عوض کن.'))} onNotify={setSnackbar} chatPreview={{ placement: variation, content: chat }} />

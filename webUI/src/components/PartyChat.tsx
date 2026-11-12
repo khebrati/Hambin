@@ -86,7 +86,7 @@ export function PartyChat({ chat, connected }: { chat: ChatControls; connected: 
   return <section className="chat-panel" aria-label={t('Party chat')} onKeyDown={event => {
     if (event.key === 'Escape') { setOpen(false); setEmojiOpen(false); toggle.current?.focus(); }
   }}>
-    <header className="chat-panel__header"><span className="chat-panel__mark"><MessageCircle size={22} aria-hidden="true" /></span><div className="chat-panel__title"><h2>{t('Party chat')}</h2><span>{t('Only people in this party')}</span></div>
+    <header className="chat-panel__header"><span className="chat-panel__mark"><MessageCircle size={22} aria-hidden="true" /></span><div className="chat-panel__title"><h2>{t('Party chat')}</h2></div>
       {unread > 0 && <span className="chat-unread" aria-label={t('{count} unread messages', { count: unread })}>{unread}</span>}
       <button ref={toggle} type="button" className="md-icon-button" aria-label={open ? t('Collapse chat') : t('Open chat')} aria-expanded={open} aria-controls="party-chat-body" onClick={() => { setOpen(!open); setEmojiOpen(false); if (!open) setAtBottom(true); }}>{open ? <ChevronDown aria-hidden="true" /> : <ChevronUp aria-hidden="true" />}</button>
     </header>
@@ -114,9 +114,9 @@ export function PartyChat({ chat, connected }: { chat: ChatControls; connected: 
       {!connected && <div className="chat-offline" role="status"><WifiOff size={18} aria-hidden="true" /><span>{t('Chat is offline. Your draft stays here.')}</span></div>}
       <form className="chat-composer" onSubmit={event => { event.preventDefault(); void send(); }}>
         {emojiOpen && <div className="chat-emoji" role="group" aria-label={t('Choose an emoji')}>{['🍿', '😂', '❤️', '✨', '😮'].map(emoji => <button key={emoji} type="button" aria-label={t('Add {emoji}', { emoji })} onClick={() => { setDraft(current => current.length + emoji.length <= 500 ? current + emoji : current); setEmojiOpen(false); composer.current?.focus(); }}>{emoji}</button>)}</div>}
-        <div className="chat-composer__field"><label className="chat-sr-only" htmlFor="party-chat-draft">{t('Message the party')}</label><textarea ref={composer} id="party-chat-draft" rows={2} maxLength={500} dir="auto" placeholder={t('Message the party…')} value={draft} aria-describedby="party-chat-hint" onChange={event => setDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(); } }} />
+        <div className="chat-composer__field"><label className="chat-sr-only" htmlFor="party-chat-draft">{t('Message the party')}</label><textarea ref={composer} id="party-chat-draft" rows={2} maxLength={500} dir="auto" placeholder={t('Message the party…')} value={draft} aria-describedby="party-chat-hint" onChange={event => setDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && event.ctrlKey && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(); } }} />
           <div className="chat-composer__actions"><button className="md-icon-button" type="button" aria-label={t('Add emoji')} aria-expanded={emojiOpen} onClick={() => setEmojiOpen(!emojiOpen)}>☺</button><span>{draft.length > 400 ? `${draft.length}/500` : ''}</span><IconButton type="submit" icon={Send} label={t('Send message')} variant="filled" disabled={!normalize(draft) || !connected || !chat.history || pending.length >= 20} /></div></div>
-        <span className="chat-composer__hint" id="party-chat-hint">{pending.length >= 20 ? t('Retry or discard pending messages to send more.') : t('Only this party · Enter to send')}</span>
+        <span className="chat-composer__hint" id="party-chat-hint">{pending.length >= 20 ? t('Retry or discard pending messages to send more.') : t('Ctrl + Enter to send')}</span>
       </form>
     </div><span className="chat-sr-only" role="status">{notice}</span>
   </section>;

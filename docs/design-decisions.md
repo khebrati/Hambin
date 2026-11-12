@@ -485,6 +485,18 @@ deployment evidence remains historical.
 - **Continuity:** Normalize existing profile/membership names without resetting identities or ownership. Preserve historical chat snapshots. Backend derives names and ignores the legacy name input.
 
 
+## DD-056: Persian Gathering Copy and Chat Shortcut
+
+- **Date:** 2026-11-12
+- **Decision:** Use «دورهمی» for room and «گپ» for conversation throughout Persian browser and native UI. The create panel uses «بیا یه دورهمی جدید بسازیم.»، «ورود به عنوان میزبان.» and «یه دورهمی با سینمای خالی، بعدش میتونی دوستاتو اضافه کنی.». Persian playback status is one sentence: «فیلمت داره اجرا میشه» or «فیلمت وایستاده», without the separate local playback label.
+- **Both languages:** Remove the members-only chat subtitle and the party-only composer qualifier. Keep the shortcut hint and use Ctrl + Enter to send on hardware keyboards; Enter inserts a newline. Touch send controls remain available. English copy otherwise stays unchanged.
+
+- **Terminology refinement:** The stakeholder also requested «فیلم» throughout Persian playback/stream UI. Use natural verb phrases such as «فیلمت داره اجرا میشه» and «اجرای فیلم»; voice audio remains explicitly about sound. English media terminology is unchanged.
+
+- **Host wording:** Use «میزبان» for the Persian owner role everywhere, including formerly «صاحب اتاق»/«صاحب دورهمی» and absence/rejoin messages.
+
+- **Compact layout:** Stack native playback status above the sync action when space is narrow, so the longer Persian gathering label and large text do not squeeze the status into individual letters.
+
 ## DD-057: Consecutive Chat Message Groups
 
 - **Date:** 2026-11-12

@@ -306,7 +306,7 @@ export function PartyScreen({
           {hasPlayer ? (
             <div className="sync-band">
               <div>
-                <span className="eyebrow">{t("Local playback")}</span>
+                {t("Local playback") && <span className="eyebrow">{t("Local playback")}</span>}
                 <strong>{streamStatus === 'paused' ? t("Paused for you") : t("Playing for you")}</strong>
               </div>
               <Button

@@ -1662,25 +1662,35 @@ private fun AudioTrackChoice(
 
 @Composable
 private fun SyncBand(paused: Boolean, onSync: () -> Unit) {
+    val status: @Composable () -> Unit = {
+        val playbackLabel = stringResource(Res.string.local_playback)
+        if (playbackLabel.isNotBlank()) Text(playbackLabel, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.secondary)
+        Text(stringResource(if (paused) Res.string.paused_for_you else Res.string.playing_for_you), style = MaterialTheme.typography.titleMedium)
+    }
+    val syncButton: @Composable () -> Unit = {
+        TextButton(onClick = onSync) {
+            Icon(Icons.Filled.Sync, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(stringResource(Res.string.sync_to_room))
+        }
+    }
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.extraLarge,
         color = MaterialTheme.colorScheme.secondaryContainer,
         contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(stringResource(Res.string.local_playback), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.secondary)
-                Text(stringResource(if (paused) Res.string.paused_for_you else Res.string.playing_for_you), style = MaterialTheme.typography.titleMedium)
-            }
-            TextButton(onClick = onSync) {
-                Icon(Icons.Filled.Sync, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp))
-                Text(stringResource(Res.string.sync_to_room))
+        BoxWithConstraints(Modifier.padding(horizontal = 20.dp, vertical = 14.dp)) {
+            if (maxWidth < 480.dp) {
+                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    status()
+                    syncButton()
+                }
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Column(Modifier.weight(1f)) { status() }
+                    syncButton()
+                }
             }
         }
     }

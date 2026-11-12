@@ -31,6 +31,9 @@ test('real two-browser chat, native HTTP payload, failure retry, offline recover
     await ownerDraft.fill('Hello from the browser 🍿');
     await expect(ownerSend).toBeEnabled();
     await ownerDraft.press('Enter');
+    await expect(ownerDraft).toHaveValue('Hello from the browser 🍿\n');
+    await expect(guest.locator('.chat-message__bubble', { hasText: 'Hello from the browser 🍿' })).toHaveCount(0);
+    await ownerDraft.press('Control+Enter');
     await expect(guest.locator('.chat-message__bubble', { hasText: 'Hello from the browser 🍿' })).toBeVisible();
     await guest.getByRole('button', { name: 'Collapse chat', exact: true }).click();
     // A native-style HTTP message enters the same room event stream.
