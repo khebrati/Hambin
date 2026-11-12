@@ -59,6 +59,7 @@
 .party-screen--chat .party-layout { max-width: 1376px; }
 .party-screen--chat .party-support { position: static; max-height: none; overflow: visible; padding: 0; background: transparent; }
 .party-screen--chat .party-support > :not(.chat-panel) { margin-inline: var(--md-sys-spacing-sm); }
+.party-screen--chat .party-support > .md-button--full { width: auto; min-width: 0; }
 .party-screen--chat .participants-compact { display: none; }
 .party-screen--chat .participants-wide { display: block; }
 @media (min-width: 1000px) {
