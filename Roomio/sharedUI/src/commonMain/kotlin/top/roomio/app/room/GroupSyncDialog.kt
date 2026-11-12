@@ -35,6 +35,7 @@ import top.roomio.domain.party.*
 internal fun GroupSyncDialog(state: RoomUiState, onAction: (RoomAction) -> Unit) {
     if (!state.syncDialogOpen) return
     val attempt=state.groupSync?.takeIf { it.active }
+    val acceptedViewerCount=attempt?.participants?.count { it.membershipId!=attempt.ownerMembershipId && it.response==GroupSyncResponse.ACCEPTED } ?: 0
     val draft=attempt==null
     val preparing=attempt?.phase==GroupSyncPhase.PREPARING
     val response=attempt?.participants?.find { it.membershipId==state.syncSelfId }?.response
@@ -70,7 +71,7 @@ internal fun GroupSyncDialog(state: RoomUiState, onAction: (RoomAction) -> Unit)
             }
             if(!preparing)FlowRow(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp,Alignment.End),verticalArrangement=Arrangement.spacedBy(8.dp)) {
                 if(draft)Button(enabled=!state.syncBusy && state.chat.connected,onClick={onAction(RoomAction.SyncAsk)}){Text(stringResource(Res.string.group_sync_ask))}
-                else if(state.isOwner){TextButton(enabled=!state.syncBusy && state.chat.connected,onClick={onAction(RoomAction.SyncCancel)}){Text(stringResource(Res.string.group_sync_cancel))};Button(enabled=!state.syncBusy && state.chat.connected,onClick={onAction(RoomAction.SyncCommit)}){Text(stringResource(Res.string.group_sync_start,attempt!!.participants.count{it.response==GroupSyncResponse.ACCEPTED}))}}
+                else if(state.isOwner){TextButton(enabled=!state.syncBusy && state.chat.connected,onClick={onAction(RoomAction.SyncCancel)}){Text(stringResource(Res.string.group_sync_cancel))};Button(enabled=!state.syncBusy && state.chat.connected && acceptedViewerCount>0,onClick={onAction(RoomAction.SyncCommit)}){Text(stringResource(Res.string.group_sync_start,acceptedViewerCount))}}
                 else if(response==GroupSyncResponse.ACCEPTED) {
                     if(attempt?.phase==GroupSyncPhase.INVITING)Row(
                         Modifier.widthIn(max=240.dp).align(Alignment.CenterVertically).semantics { liveRegion=LiveRegionMode.Polite },
