@@ -1,5 +1,13 @@
 package top.roomio.app.room
 
+import top.roomio.app.components.RoomioIcons
+import top.roomio.app.components.desktopChatInput
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import top.roomio.app.diagnostics.loggedRunCatching
 
 import androidx.compose.foundation.Image
@@ -13,9 +21,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -44,8 +49,11 @@ import top.roomio.domain.party.normalizeChatText
 import top.roomio.domain.party.validChatText
 
 @Composable
-internal fun RoomChatPanel(state: RoomChatState, onAction: (RoomAction) -> Unit, modifier: Modifier = Modifier) {
+internal fun RoomChatPanel(state: RoomChatState, onAction: (RoomAction) -> Unit, modifier: Modifier = Modifier, desktopInput: Boolean = desktopChatInput) {
     val list = rememberLazyListState()
+    val feedHeight = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.height.toDp() * .38f }.coerceIn(260.dp, 420.dp)
+    val canSend = state.connected && !state.loading && state.pending.size < 20 && validChatText(normalizeChatText(state.draft))
+    var composerFocused by remember { mutableStateOf(false) }
     val headerFocus = remember { FocusRequester() }
     val focus = LocalFocusManager.current
     var emojis by remember { mutableStateOf(false) }
@@ -68,34 +76,41 @@ internal fun RoomChatPanel(state: RoomChatState, onAction: (RoomAction) -> Unit,
         onAction(RoomAction.ChatToggle)
         headerFocus.requestFocus()
     }
+    BoxWithConstraints(modifier) {
+    val showMark = maxWidth >= 400.dp
     Surface(
-        modifier = modifier.fillMaxWidth().onPreviewKeyEvent { event ->
+        modifier = Modifier.fillMaxWidth().onPreviewKeyEvent { event ->
             if (event.key == Key.Escape && event.type == KeyEventType.KeyDown && state.open) { collapse(); true } else false
         },
-        shape = RoomioDesignSystem.shapes.extraLargeIncreased,
+        shape = MaterialTheme.shapes.extraLarge,
         color = MaterialTheme.colorScheme.surfaceContainerLowest,
         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
         Column {
             Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer).padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.secondaryContainer) {
-                    Icon(Icons.Default.ChatBubbleOutline, null, Modifier.padding(10.dp).size(22.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                if (showMark) Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.secondaryContainer) {
+                    Icon(RoomioIcons.ChatBubbleOutline, null, Modifier.padding(10.dp).size(22.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
                 }
                 Column(Modifier.weight(1f)) {
                     Text(stringResource(Res.string.chat_title), style = MaterialTheme.typography.titleMedium)
                 }
                 if (state.unread > 0) {
                     val unread = stringResource(Res.string.chat_unread, state.unread)
-                    Badge(Modifier.semantics { contentDescription = unread; liveRegion = LiveRegionMode.Polite }) { Text(state.unread.toString()) }
+                    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.semantics { contentDescription = unread; liveRegion = LiveRegionMode.Polite }) {
+                        Box(Modifier.defaultMinSize(minWidth = 24.dp, minHeight = 24.dp).padding(horizontal = 6.dp), contentAlignment = Alignment.Center) {
+                            Text(state.unread.toString(), style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
                 }
                 IconButton(onClick = collapse, modifier = Modifier.focusRequester(headerFocus)) {
-                    Icon(if (state.open) Icons.Default.ExpandMore else Icons.Default.ExpandLess, stringResource(if (state.open) Res.string.chat_collapse else Res.string.chat_open))
+                    Icon(if (state.open) RoomioIcons.ExpandMore else RoomioIcons.ExpandLess, stringResource(if (state.open) Res.string.chat_collapse else Res.string.chat_open))
                 }
             }
             if (state.open) {
                 Box {
                     LazyColumn(
-                        state = list, modifier = Modifier.fillMaxWidth().height(320.dp),
+                        state = list, modifier = Modifier.fillMaxWidth().height(feedHeight),
                         contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         if (state.hasMore) item(key = "history") {
@@ -112,7 +127,7 @@ internal fun RoomChatPanel(state: RoomChatState, onAction: (RoomAction) -> Unit,
                             }
                         } else if (state.messages.isEmpty() && state.pending.isEmpty()) item(key = "empty") {
                             Column(Modifier.fillMaxWidth().padding(vertical = 40.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                Surface(shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.tertiaryContainer) { Icon(Icons.Default.ChatBubbleOutline, null, Modifier.padding(20.dp).size(30.dp)) }
+                                Surface(shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.tertiaryContainer) { Icon(RoomioIcons.ChatBubbleOutline, null, Modifier.padding(20.dp).size(30.dp)) }
                                 Text(stringResource(Res.string.chat_empty_title), style = MaterialTheme.typography.titleMedium)
                             }
                         }
@@ -140,7 +155,7 @@ internal fun RoomChatPanel(state: RoomChatState, onAction: (RoomAction) -> Unit,
                     }
                     if (!state.atLatest && (state.messages.isNotEmpty() || state.pending.isNotEmpty())) {
                         FilledTonalButton(onClick = { onAction(RoomAction.ChatAtLatest(true)) }, modifier = Modifier.align(Alignment.BottomCenter).padding(8.dp)) {
-                            Icon(Icons.Default.ArrowDownward, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text(stringResource(Res.string.chat_latest))
+                            Icon(RoomioIcons.ArrowDownward, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text(stringResource(Res.string.chat_latest))
                         }
                     }
                 }
@@ -152,39 +167,81 @@ internal fun RoomChatPanel(state: RoomChatState, onAction: (RoomAction) -> Unit,
                 }
                 if (!state.connected && !state.loading) {
                     Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.tertiaryContainer).padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Icon(Icons.Default.WifiOff, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onTertiaryContainer)
+                        Icon(RoomioIcons.WifiOff, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onTertiaryContainer)
                         Text(stringResource(Res.string.chat_offline), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onTertiaryContainer)
                     }
                 }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (emojis) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        listOf("🍿", "😂", "❤️", "✨", "😮").forEach { emoji ->
-                            TextButton(onClick = { if (state.draft.length + emoji.length <= 500) onAction(RoomAction.ChatDraftChanged(state.draft + emoji)); emojis = false }) { Text(emoji) }
+                Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Surface(
+                        shape = RoomioDesignSystem.shapes.largeIncreased,
+                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        border = BorderStroke(if (composerFocused) 2.dp else 1.dp,
+                            if (composerFocused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
+                    ) {
+                        Column(Modifier.padding(start = 8.dp, top = 12.dp, end = 8.dp, bottom = 8.dp)) {
+                            val inputLabel = stringResource(Res.string.chat_message_label)
+                            BasicTextField(
+                                value = field,
+                                onValueChange = { value -> if (value.text.length <= 500) { field = value; onAction(RoomAction.ChatDraftChanged(value.text)) } },
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp).heightIn(min = 42.dp)
+                                    .semantics { contentDescription = inputLabel }
+                                    .onFocusChanged { composerFocused = it.isFocused }
+                                    .onPreviewKeyEvent { event ->
+                                        if (event.key == Key.Enter && event.type == KeyEventType.KeyDown && event.isCtrlPressed && !event.isShiftPressed && field.composition == null) {
+                                            if (canSend) onAction(RoomAction.ChatSend)
+                                            true
+                                        } else false
+                                    },
+                                minLines = 2, maxLines = 4,
+                                textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface, textDirection = TextDirection.Content),
+                                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                                keyboardActions = KeyboardActions(onSend = { if (canSend && field.composition == null) onAction(RoomAction.ChatSend) }),
+                                decorationBox = { editor ->
+                                    Box {
+                                        if (field.text.isEmpty()) Text(stringResource(Res.string.chat_placeholder),
+                                            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        editor()
+                                    }
+                                },
+                            )
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                Box {
+                                    IconButton(onClick = { emojis = !emojis }) { Icon(RoomioIcons.SentimentSatisfiedAlt, stringResource(Res.string.chat_emoji)) }
+                                    DropdownMenu(expanded = emojis, onDismissRequest = { emojis = false }, shape = MaterialTheme.shapes.extraLarge) {
+                                        FlowRow(Modifier.widthIn(max = 280.dp).padding(horizontal = 8.dp), horizontalArrangement = Arrangement.Center) {
+                                            listOf("🍿", "😂", "❤️", "✨", "😮").forEach { emoji ->
+                                                TextButton(modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp), onClick = {
+                                                    val updated = field.text.replaceRange(field.selection.min, field.selection.max, emoji)
+                                                    if (updated.length <= 500) {
+                                                        field = TextFieldValue(updated, TextRange(field.selection.min + emoji.length))
+                                                        onAction(RoomAction.ChatDraftChanged(updated))
+                                                    }
+                                                    emojis = false
+                                                }) { Text(emoji) }
+                                            }
+                                        }
+                                    }
+                                }
+                                Spacer(Modifier.weight(1f))
+                                if (state.draft.length > 400) Text("${state.draft.length}/500", style = MaterialTheme.typography.labelSmall)
+                                FilledIconButton(onClick = { if (canSend) onAction(RoomAction.ChatSend) }, enabled = canSend) {
+                                    Icon(RoomioIcons.Send, stringResource(Res.string.chat_send))
+                                }
+                            }
                         }
                     }
-                    OutlinedTextField(
-                        value = field, onValueChange = { value -> if (value.text.length <= 500) { field = value; onAction(RoomAction.ChatDraftChanged(value.text)) } },
-                        label = { Text(stringResource(Res.string.chat_message_label)) }, placeholder = { Text(stringResource(Res.string.chat_placeholder)) },
-                        modifier = Modifier.fillMaxWidth().onPreviewKeyEvent { event ->
-                            if (event.key == Key.Enter && event.type == KeyEventType.KeyDown && event.isCtrlPressed && !event.isShiftPressed && field.composition == null) { onAction(RoomAction.ChatSend); true } else false
-                        }, minLines = 2, maxLines = 4, shape = RoundedCornerShape(20.dp),
-                        textStyle = MaterialTheme.typography.bodyMedium.copy(textDirection = TextDirection.Content),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send), keyboardActions = KeyboardActions(onSend = { onAction(RoomAction.ChatSend) }),
-                    )
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = { emojis = !emojis }) { Icon(Icons.Default.SentimentSatisfiedAlt, stringResource(Res.string.chat_emoji)) }
-                        Spacer(Modifier.weight(1f))
-                        if (state.draft.length > 400) Text("${state.draft.length}/500", style = MaterialTheme.typography.labelSmall)
-                        FilledIconButton(onClick = { onAction(RoomAction.ChatSend) }, enabled = state.connected && !state.loading && state.pending.size < 20 && validChatText(normalizeChatText(state.draft))) {
-                            Icon(Icons.AutoMirrored.Filled.Send, stringResource(Res.string.chat_send))
-                        }
-                    }
-                    Text(stringResource(if (state.pending.size >= 20) Res.string.chat_pending_limit else Res.string.chat_hint), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (state.pending.size >= 20 || desktopInput) Text(
+                        stringResource(if (state.pending.size >= 20) Res.string.chat_pending_limit else Res.string.chat_hint),
+                        modifier = Modifier.fillMaxWidth(), textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
     }
+}
+
 }
 
 @Composable
@@ -211,7 +268,7 @@ private fun ChatMessageRow(message: ChatMessage, self: Boolean, first: Boolean, 
             }
             ChatBubble(message.text, self)
             if (self && last) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Icon(Icons.Default.Check, null, Modifier.size(13.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Icon(RoomioIcons.Check, null, Modifier.size(13.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(stringResource(Res.string.chat_sent), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }

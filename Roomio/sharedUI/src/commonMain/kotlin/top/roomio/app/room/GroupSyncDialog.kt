@@ -1,5 +1,6 @@
 package top.roomio.app.room
 
+import top.roomio.app.components.RoomioIcons
 import top.roomio.app.diagnostics.loggedRunCatching
 
 import androidx.compose.foundation.Image
@@ -8,10 +9,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -42,8 +39,8 @@ internal fun GroupSyncDialog(state: RoomUiState, onAction: (RoomAction) -> Unit)
     val title=stringResource(if(draft)Res.string.group_sync_together else if(state.isOwner)Res.string.group_sync_who else Res.string.group_sync_request)
     val content: @Composable () -> Unit = {
         Column(Modifier.padding(24.dp).heightIn(max=620.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(16.dp)) {
-            Row(verticalAlignment=Alignment.CenterVertically) { Text(title,Modifier.weight(1f),style=MaterialTheme.typography.headlineSmall);IconButton(onClick={onAction(RoomAction.SyncDismiss)}){Icon(Icons.Default.Close,stringResource(Res.string.close))} }
-            if(!draft&&!state.isOwner)Row(horizontalArrangement=Arrangement.spacedBy(12.dp),verticalAlignment=Alignment.CenterVertically){Icon(Icons.Default.Sync,null);Text(stringResource(Res.string.group_sync_inviter,state.model.ownerName),style=MaterialTheme.typography.titleMedium)}
+            Row(verticalAlignment=Alignment.CenterVertically) { Text(title,Modifier.weight(1f),style=MaterialTheme.typography.headlineSmall);IconButton(onClick={onAction(RoomAction.SyncDismiss)}){Icon(RoomioIcons.Close,stringResource(Res.string.close))} }
+            if(!draft&&!state.isOwner)Row(horizontalArrangement=Arrangement.spacedBy(12.dp),verticalAlignment=Alignment.CenterVertically){Icon(RoomioIcons.Sync,null);Text(stringResource(Res.string.group_sync_inviter,state.model.ownerName),style=MaterialTheme.typography.titleMedium)}
             Surface(color=MaterialTheme.colorScheme.primaryContainer,shape=MaterialTheme.shapes.extraLarge,modifier=Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(24.dp),horizontalAlignment=Alignment.CenterHorizontally) {
                     Text(stringResource(Res.string.group_sync_meet))
@@ -65,7 +62,7 @@ internal fun GroupSyncDialog(state: RoomUiState, onAction: (RoomAction) -> Unit)
                             Text(if(person.membershipId==state.syncSelfId)stringResource(Res.string.chat_you) else member?.displayName.orEmpty(),style=MaterialTheme.typography.titleSmall)
                             Text(stringResource(when(person.response){GroupSyncResponse.ACCEPTED->Res.string.group_sync_accepted;GroupSyncResponse.DECLINED->Res.string.group_sync_declined;GroupSyncResponse.WITHDRAWN->Res.string.group_sync_withdrawn;else->if(person.membershipId==state.syncSelfId)Res.string.group_sync_pending_you else Res.string.group_sync_pending}),style=MaterialTheme.typography.bodySmall)
                         }
-                        if(accepted)Icon(Icons.Default.Check,null)else if(declined)Icon(Icons.Default.Close,null)
+                        if(accepted)Icon(RoomioIcons.Check,null)else if(declined)Icon(RoomioIcons.Close,null)
                     }
                 }
             }

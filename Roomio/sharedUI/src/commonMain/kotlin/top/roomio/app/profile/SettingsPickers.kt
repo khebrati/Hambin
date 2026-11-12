@@ -1,5 +1,6 @@
 package top.roomio.app.profile
 
+import top.roomio.app.components.RoomioIcons
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -9,18 +10,12 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -47,7 +42,7 @@ internal fun SettingsColorGarden(selected: ThemeColor, onSelect: (ThemeColor) ->
             contentColor = MaterialTheme.colorScheme.onSecondaryContainer) {
             Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Icon(Icons.Default.Palette, contentDescription = null)
+                Icon(RoomioIcons.Palette, contentDescription = null)
                 Column(Modifier.weight(1f)) {
                     Text(stringResource(Res.string.settings_current_color), style = MaterialTheme.typography.labelMedium)
                     Text(stringResource(selected.label), style = MaterialTheme.typography.titleLarge)
@@ -80,7 +75,7 @@ internal fun SettingsColorGarden(selected: ThemeColor, onSelect: (ThemeColor) ->
                             Text(stringResource(color.label), style = MaterialTheme.typography.labelLarge, textAlign = TextAlign.Center)
                             Box(Modifier.size(24.dp).background(if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent, CircleShape),
                                 contentAlignment = Alignment.Center) {
-                                if (isSelected) Icon(Icons.Default.Check, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onPrimary)
+                                if (isSelected) Icon(RoomioIcons.Check, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onPrimary)
                             }
                         }
                     }
@@ -113,13 +108,13 @@ internal fun SettingsLanguagePicker(value: AppLanguage, onSelect: (AppLanguage) 
                 horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.tertiaryContainer,
                     contentColor = MaterialTheme.colorScheme.onTertiaryContainer) {
-                    Box(Modifier.size(56.dp), contentAlignment = Alignment.Center) { Icon(Icons.Default.Language, null) }
+                    Box(Modifier.size(56.dp), contentAlignment = Alignment.Center) { Icon(RoomioIcons.Language, null) }
                 }
                 Column(Modifier.weight(1f)) {
                     Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(value.nativeName, style = MaterialTheme.typography.titleLarge)
                 }
-                Icon(Icons.Default.ExpandMore, null)
+                Icon(RoomioIcons.ExpandMore, null)
             }
         }
         if (open) Dialog(onDismissRequest = { open = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -134,7 +129,7 @@ internal fun SettingsLanguagePicker(value: AppLanguage, onSelect: (AppLanguage) 
                             verticalAlignment = Alignment.CenterVertically) {
                             Text(stringResource(Res.string.settings_language_title), Modifier.weight(1f),
                                 style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                            IconButton(onClick = { open = false }) { Icon(Icons.Default.Close, stringResource(Res.string.close)) }
+                            IconButton(onClick = { open = false }) { Icon(RoomioIcons.Close, stringResource(Res.string.close)) }
                         }
                         val query = search.trim().lowercase()
                         val filtered = AppLanguage.entries.filter {
@@ -143,23 +138,28 @@ internal fun SettingsLanguagePicker(value: AppLanguage, onSelect: (AppLanguage) 
                         }
                         Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = 24.dp),
                             verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                            OutlinedTextField(value = search, onValueChange = { search = it }, singleLine = true,
-                                modifier = Modifier.fillMaxWidth(), shape = CircleShape,
-                                label = { Text(stringResource(Res.string.settings_language_search)) },
+                            val searchLabel = stringResource(Res.string.settings_language_search)
+                            TextField(value = search, onValueChange = { search = it }, singleLine = true,
+                                modifier = Modifier.fillMaxWidth().semantics { contentDescription = searchLabel }, shape = CircleShape,
+                                colors = TextFieldDefaults.colors(focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                    focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent),
                                 placeholder = { Text(stringResource(Res.string.settings_language_search_placeholder)) },
-                                leadingIcon = { Icon(Icons.Default.Search, null) },
+                                leadingIcon = { Icon(RoomioIcons.Search, null) },
                                 trailingIcon = if (search.isNotEmpty()) ({
-                                    IconButton(onClick = { search = "" }) { Icon(Icons.Default.Close, stringResource(Res.string.settings_clear_search)) }
+                                    IconButton(onClick = { search = "" }) { Icon(RoomioIcons.Close, stringResource(Res.string.settings_clear_search)) }
                                 }) else null)
                             if (filtered.isEmpty()) {
                                 Text(stringResource(Res.string.settings_no_languages))
                                 TextButton(onClick = { search = "" }) { Text(stringResource(Res.string.settings_show_languages)) }
                             } else Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                filtered.forEach { language ->
+                                filtered.forEachIndexed { index, language ->
                                     val isSelected = pending == language
                                     Surface(modifier = Modifier.fillMaxWidth().selectable(selected = isSelected, role = Role.RadioButton,
                                         onClick = { pending = language }),
-                                        shape = if (isSelected) MaterialTheme.shapes.extraLarge else MaterialTheme.shapes.large,
+                                        shape = if (isSelected) MaterialTheme.shapes.extraLarge else RoundedCornerShape(
+                                            topStart = if (index == 0) 28.dp else 4.dp, topEnd = if (index == 0) 28.dp else 4.dp,
+                                            bottomStart = if (index == filtered.lastIndex) 28.dp else 4.dp, bottomEnd = if (index == filtered.lastIndex) 28.dp else 4.dp),
                                         color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
                                         contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
                                         border = if (isSelected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null) {
@@ -176,7 +176,7 @@ internal fun SettingsLanguagePicker(value: AppLanguage, onSelect: (AppLanguage) 
                                                 Text(language.translatedName(), style = MaterialTheme.typography.bodyMedium)
                                             }
                                             Box(Modifier.size(24.dp).border(1.dp, LocalContentColor.current, CircleShape), contentAlignment = Alignment.Center) {
-                                                if (isSelected) Icon(Icons.Default.Check, null, Modifier.size(18.dp))
+                                                if (isSelected) Icon(RoomioIcons.Check, null, Modifier.size(18.dp))
                                             }
                                         }
                                     }

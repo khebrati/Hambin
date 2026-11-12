@@ -66,8 +66,8 @@ class ComposeTest {
         onNodeWithContentDescription("Invite friends").performClick()
 
         onNodeWithText("Share either option. Friends will preview the room before they join.").assertExists()
-        onNodeWithText("Invite code").assertExists()
-        onNodeWithText("Prototype invite link").assertExists()
+        onNodeWithContentDescription("Invite code").assertExists()
+        onNodeWithContentDescription("Prototype invite link").assertExists()
         onNodeWithText("Copy code").assertExists()
         onNodeWithText("Copy link").assertExists()
     }
@@ -159,7 +159,7 @@ class ComposeTest {
         onNodeWithText("Got a code?").performClick()
 
         onNodeWithText("Step into their room").assertExists()
-        onNodeWithText("Invite code").assertExists()
+        onNodeWithContentDescription("Invite code").assertExists()
         onNodeWithText("Take a look").assertIsNotEnabled()
     }
 
@@ -213,7 +213,7 @@ class ComposeTest {
         }
 
         onNodeWithText("Got a code?").performClick()
-        onNodeWithText("Invite code").performTextInput("MOON-42")
+        onNodeWithContentDescription("Invite code").performTextInput("MOON-42")
         onNodeWithText("Take a look").performClick()
 
         onNodeWithText("Room preview").assertExists()
@@ -235,7 +235,7 @@ class ComposeTest {
         }
 
         onNodeWithText("Got a code?").performClick()
-        onNodeWithText("Invite code").performTextInput("MOON-42")
+        onNodeWithContentDescription("Invite code").performTextInput("MOON-42")
         onNodeWithText("Take a look").performClick()
         onNodeWithText("Not now").performClick()
 

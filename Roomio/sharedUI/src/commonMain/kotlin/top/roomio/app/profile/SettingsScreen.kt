@@ -1,5 +1,6 @@
 package top.roomio.app.profile
 
+import top.roomio.app.components.RoomioIcons
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.text.style.TextAlign
@@ -33,11 +34,6 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -182,7 +178,7 @@ private fun ProfileTopBar(onBack: () -> Unit) {
             ) {
                 IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        imageVector = RoomioIcons.ArrowBack,
                         contentDescription = stringResource(Res.string.back),
                     )
                 }
@@ -203,9 +199,9 @@ private fun ProfileTopBar(onBack: () -> Unit) {
                 ) {
                     Icon(
                         imageVector = if (themeIsDark.value) {
-                            Icons.Filled.LightMode
+                            RoomioIcons.LightMode
                         } else {
-                            Icons.Filled.DarkMode
+                            RoomioIcons.DarkMode
                         },
                         contentDescription = stringResource(Res.string.theme),
                     )
@@ -363,7 +359,7 @@ private fun AvatarChoice(
         shape = shape,
         color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
         contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-        border = BorderStroke(if (selected) 2.dp else 1.dp,
+        border = BorderStroke(2.dp,
             if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
     ) {
         Column(
@@ -387,7 +383,7 @@ private fun AvatarChoice(
             if (selected) {
                 Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary) {
-                    Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(32.dp).padding(6.dp))
+                    Icon(RoomioIcons.Check, contentDescription = null, modifier = Modifier.size(32.dp).padding(6.dp))
                 }
             }
         }
@@ -405,48 +401,13 @@ private fun ProfileAvatarImage(
     val artworkSize by animateDpAsState(
         targetValue = if (selected) selectedArtworkSize else baseArtworkSize,
     )
-    val frameSize by animateDpAsState(
-        targetValue = (if (selected) selectedArtworkSize else baseArtworkSize) + 4.dp,
+    Image(
+        painter = painterResource(avatar.resource),
+        contentDescription = description,
+        modifier = Modifier.size(artworkSize).clip(CircleShape)
+            .border(2.dp, MaterialTheme.colorScheme.surfaceContainerLowest, CircleShape),
+        contentScale = ContentScale.Crop,
     )
-
-    Box(
-        modifier = Modifier.size(selectedArtworkSize),
-        contentAlignment = Alignment.Center,
-    ) {
-        Surface(
-            modifier = Modifier.size(frameSize),
-            shape = CircleShape,
-            color = if (selected) {
-                MaterialTheme.colorScheme.tertiaryContainer
-            } else {
-                MaterialTheme.colorScheme.surfaceContainerLowest
-            },
-            content = {},
-        )
-        Image(
-            painter = painterResource(avatar.resource),
-            contentDescription = description,
-            modifier = Modifier
-                .size(artworkSize)
-                .zIndex(1f)
-                .graphicsLayer {
-                    translationY = if (selected) -3.dp.toPx() else 0f
-                    shadowElevation = if (selected) 5.dp.toPx() else 0f
-                    shape = CircleShape
-                    clip = true
-                }
-                .border(
-                    width = if (selected) 3.dp else 2.dp,
-                    color = if (selected) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.surfaceContainerLowest
-                    },
-                    shape = CircleShape,
-                ),
-            contentScale = ContentScale.Crop,
-        )
-    }
 }
 
 @Composable

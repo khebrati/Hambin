@@ -1,5 +1,6 @@
 package top.roomio.app.home
 
+import top.roomio.app.components.RoomioIcons
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -25,13 +26,6 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.LightMode
-import androidx.compose.material.icons.filled.LocalActivity
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalButton
@@ -216,12 +210,12 @@ private fun HomeControls(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         HomeIconButton(
-            icon = if (isDark) Icons.Filled.LightMode else Icons.Filled.DarkMode,
+            icon = if (isDark) RoomioIcons.LightMode else RoomioIcons.DarkMode,
             label = stringResource(Res.string.theme),
             onClick = onToggleTheme,
         )
         HomeIconButton(
-            icon = Icons.Filled.Settings,
+            icon = RoomioIcons.Settings,
             label = stringResource(Res.string.settings),
             onClick = onSettings,
         )
@@ -323,7 +317,7 @@ private fun IdentityPill(
                 )
             }
             HomeIconButton(
-                icon = Icons.Filled.Settings,
+                icon = RoomioIcons.Settings,
                 label = stringResource(Res.string.edit_profile),
                 onClick = onSettings,
             )
@@ -337,7 +331,7 @@ private fun CreatePartyButton(onClick: () -> Unit, modifier: Modifier = Modifier
         onClick = onClick,
         modifier = modifier.fillMaxWidth().heightIn(min = 58.dp),
     ) {
-        Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(20.dp))
+        Icon(RoomioIcons.Add, contentDescription = null, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(RoomioDesignSystem.spacing.extraSmall))
         Text(stringResource(Res.string.create_party))
     }
@@ -349,7 +343,7 @@ private fun JoinPartyButton(onClick: () -> Unit, modifier: Modifier = Modifier) 
         onClick = onClick,
         modifier = modifier.fillMaxWidth().heightIn(min = 58.dp),
     ) {
-        Icon(Icons.Filled.LocalActivity, contentDescription = null, modifier = Modifier.size(20.dp))
+        Icon(RoomioIcons.LocalActivity, contentDescription = null, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(RoomioDesignSystem.spacing.extraSmall))
         Text(stringResource(Res.string.join_with_code))
     }
@@ -451,7 +445,7 @@ private fun RoomCardDetails(
         }
         IconButton(onClick = onClick, modifier = Modifier.size(48.dp)) {
             Icon(
-                Icons.AutoMirrored.Filled.ArrowForward,
+                RoomioIcons.ArrowForward,
                 contentDescription = stringResource(Res.string.return_to_last_room),
             )
         }

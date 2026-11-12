@@ -1,5 +1,8 @@
 package top.roomio.app.manager
 
+import top.roomio.app.components.RoomioTextField
+import top.roomio.app.components.RoomioDialog
+import top.roomio.app.components.RoomioIcons
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
 import androidx.compose.foundation.text.KeyboardOptions
@@ -23,14 +26,6 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ConfirmationNumber
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.LightMode
-import androidx.compose.material.icons.filled.MeetingRoom
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -38,7 +33,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -119,7 +113,7 @@ internal fun PartyManagerScreen(
         }
     }
     if (state.showResetConfirmation) {
-        AlertDialog(
+        RoomioDialog(
             onDismissRequest = { onAction(PartyManagerAction.ResetCancelled) },
             title = { Text(stringResource(Res.string.reset_guest_identity)) },
             text = { Text(stringResource(Res.string.reset_guest_identity_description)) },
@@ -214,7 +208,7 @@ private fun ManagerTopBar(onBack: () -> Unit) {
             ) {
                 IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        imageVector = RoomioIcons.ArrowBack,
                         contentDescription = stringResource(Res.string.back),
                     )
                 }
@@ -240,9 +234,9 @@ private fun ManagerTopBar(onBack: () -> Unit) {
                 ) {
                     Icon(
                         imageVector = if (themeIsDark.value) {
-                            Icons.Filled.LightMode
+                            RoomioIcons.LightMode
                         } else {
-                            Icons.Filled.DarkMode
+                            RoomioIcons.DarkMode
                         },
                         contentDescription = stringResource(Res.string.theme),
                     )
@@ -277,7 +271,7 @@ private fun ManagerTabs(
                 enabled = enabled,
                 icon = {
                     Icon(
-                        imageVector = Icons.Filled.Add,
+                        imageVector = RoomioIcons.Add,
                         contentDescription = null,
                         modifier = Modifier.size(18.dp),
                     )
@@ -291,7 +285,7 @@ private fun ManagerTabs(
                 enabled = enabled,
                 icon = {
                     Icon(
-                        imageVector = Icons.Filled.ConfirmationNumber,
+                        imageVector = RoomioIcons.ConfirmationNumber,
                         contentDescription = null,
                         modifier = Modifier.size(18.dp),
                     )
@@ -394,7 +388,7 @@ private fun CreatePartyPanel(
                         .heightIn(min = 48.dp),
                 ) {
                     Icon(
-                        imageVector = Icons.Filled.MeetingRoom,
+                        imageVector = RoomioIcons.MeetingRoom,
                         contentDescription = null,
                     )
                     Spacer(Modifier.size(8.dp))
@@ -434,7 +428,7 @@ private fun JoinPartyPanel(
                 style = MaterialTheme.typography.headlineLarge,
                 fontWeight = FontWeight.Bold,
             )
-            OutlinedTextField(
+            RoomioTextField(
                 value = code,
             textStyle = MaterialTheme.typography.bodyLarge.copy(textDirection = androidx.compose.ui.text.style.TextDirection.Ltr),
                 onValueChange = onCodeChange,
@@ -442,8 +436,8 @@ private fun JoinPartyPanel(
                 enabled = !loading,
                 singleLine = true,
                 isError = codeError,
-                label = { Text(stringResource(Res.string.party_code)) },
-                placeholder = { Text("MOON-42") },
+                label = stringResource(Res.string.party_code),
+                placeholder = { Text("ABCD1234") },
                 supportingText = if (codeError) {
                     { Text(stringResource(Res.string.party_code_error)) }
                 } else {
@@ -464,19 +458,14 @@ private fun JoinPartyPanel(
                     enabled = canPreview,
                 ) {
                     Icon(
-                        imageVector = Icons.Filled.ConfirmationNumber,
+                        imageVector = RoomioIcons.ConfirmationNumber,
                         contentDescription = null,
                     )
                     Spacer(Modifier.size(8.dp))
                     Text(stringResource(Res.string.preview_party))
                 }
             }
-            Text(
-                text = stringResource(Res.string.party_code_hints),
-                modifier = Modifier.fillMaxWidth(),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+
         }
     }
 }

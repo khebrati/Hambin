@@ -56,11 +56,11 @@ class RoomChatUiTest {
             }
         }
         onNodeWithContentDescription("Send message").performScrollTo().assertIsNotEnabled()
-        onNodeWithText("Message the party").performScrollTo().performTextInput("Hello 🍿")
-        onNodeWithText("Message the party").performKeyInput { pressKey(Key.Enter) }
+        onNodeWithContentDescription("Message the party").performScrollTo().performTextInput("Hello 🍿")
+        onNodeWithContentDescription("Message the party").performKeyInput { pressKey(Key.Enter) }
         runOnIdle { assertFalse(RoomAction.ChatSend in actions) }
-        onNodeWithText("Message the party").assertTextContains("Hello 🍿\n", substring = true)
-        onNodeWithText("Message the party").performKeyInput {
+        onNodeWithContentDescription("Message the party").assertTextContains("Hello 🍿\n", substring = true)
+        onNodeWithContentDescription("Message the party").performKeyInput {
             keyDown(Key.CtrlLeft)
             pressKey(Key.Enter)
             keyUp(Key.CtrlLeft)
@@ -72,7 +72,7 @@ class RoomChatUiTest {
         runOnIdle { assertTrue(RoomAction.ChatRetry("failed") in actions) }
         onNodeWithContentDescription("Collapse chat").performScrollTo().performClick()
         onNodeWithContentDescription("Open chat").assertIsDisplayed().performClick()
-        onNodeWithText("Message the party").performScrollTo().assertTextContains("Hello 🍿", substring = true)
+        onNodeWithContentDescription("Message the party").performScrollTo().assertTextContains("Hello 🍿", substring = true)
         runOnIdle { state.value=state.value.copy(connected=false) }
         onNodeWithContentDescription("Send message").performScrollTo().assertIsNotEnabled()
     }
@@ -96,7 +96,7 @@ class RoomChatUiTest {
         onNodeWithText("فیلمت داره اجرا میشه").performScrollTo().assertIsDisplayed()
         File("/tmp/hambin-sync-native-compact.png").writeBytes(Image.makeFromBitmap(onRoot().captureToImage().asSkiaBitmap()).encodeToData()!!.bytes)
         onNodeWithText("گپ دورهمی").performScrollTo().assertIsDisplayed()
-        onNodeWithText("پیام به دورهمی").performScrollTo()
+        onNodeWithContentDescription("پیام به دورهمی").performScrollTo()
         File("/tmp/hambin-chat-native-debug.png").writeBytes(Image.makeFromBitmap(onRoot().captureToImage().asSkiaBitmap()).encodeToData()!!.bytes)
         onNodeWithText("سلام 🍿\nMovie night").performScrollTo().assertIsDisplayed()
         File("/tmp/hambin-chat-native-compact.png").writeBytes(Image.makeFromBitmap(onRoot().captureToImage().asSkiaBitmap()).encodeToData()!!.bytes)

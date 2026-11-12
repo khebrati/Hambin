@@ -1,5 +1,13 @@
 package top.roomio.app.room
 
+import top.roomio.app.components.RoomioTextField
+import top.roomio.app.components.RoomioDialog
+import top.roomio.app.components.rememberReportNetworkAvailable
+import top.roomio.app.components.RoomioIcons
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import top.roomio.app.diagnostics.loggedRunCatching
 
 import androidx.compose.foundation.Canvas
@@ -31,32 +39,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.filled.BugReport
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.ContentPaste
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.FastForward
-import androidx.compose.material.icons.filled.FastRewind
-import androidx.compose.material.icons.filled.Fullscreen
-import androidx.compose.material.icons.filled.FullscreenExit
-import androidx.compose.material.icons.filled.GraphicEq
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.MicOff
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PersonAdd
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.filled.Subtitles
-import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material.icons.filled.VolumeOff
-import androidx.compose.material.icons.filled.VolumeUp
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -75,7 +57,6 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
@@ -234,8 +215,35 @@ internal fun joinedRoomModel(partyCode: String): RoomScreenModel = when (partyCo
     else -> guestPlayingRoom.copy(partyCode = partyCode)
 }
 
+private data class RoomSyncAction(val owner: Boolean = false, val active: Boolean = false, val enabled: Boolean = true)
+private val LocalRoomSyncAction = staticCompositionLocalOf { RoomSyncAction() }
+
+@Composable
+private fun roomSyncActionLabel(): String {
+    val action = LocalRoomSyncAction.current
+    return stringResource(when {
+        action.active -> Res.string.group_sync_view
+        action.owner -> Res.string.group_sync_ask
+        else -> Res.string.sync_to_room
+    })
+}
+
 @Composable
 internal fun RoomScreen(
+    state: RoomUiState = RoomUiState(ownerEmptyRoom),
+    effects: Flow<RoomEffect> = emptyFlow(),
+    onAction: (RoomAction) -> Unit = {},
+    modifier: Modifier = Modifier,
+    playerContent: (@Composable (Modifier) -> Unit)? = null,
+) {
+    CompositionLocalProvider(LocalRoomSyncAction provides RoomSyncAction(
+        owner = state.isOwner, active = state.groupSync?.active == true,
+        enabled = state.chat.connected && !state.syncBusy && state.groupSync?.phase != top.roomio.domain.party.GroupSyncPhase.SCHEDULED,
+    )) { RoomScreenContent(state, effects, onAction, modifier, playerContent) }
+}
+
+@Composable
+private fun RoomScreenContent(
     state: RoomUiState = RoomUiState(ownerEmptyRoom),
     effects: Flow<RoomEffect> = emptyFlow(),
     onAction: (RoomAction) -> Unit = {},
@@ -245,12 +253,14 @@ internal fun RoomScreen(
     var isDark by LocalThemeIsDark.current
     val snackbarHost = remember { SnackbarHostState() }
     val clipboard = LocalClipboardManager.current
+    val scope = rememberCoroutineScope()
     val syncComplete = stringResource(Res.string.sync_complete)
     val syncUnavailable = stringResource(Res.string.sync_unavailable)
     val sampleUrl = stringResource(Res.string.sample_video_url)
     val partyCodeCopied = stringResource(Res.string.party_code_copied)
     val inviteLinkCopied = stringResource(Res.string.invite_link_copied)
     val copyUnavailable = stringResource(Res.string.copy_unavailable)
+    val videoLinkCopied = stringResource(Res.string.video_link_copied)
     val offlineMessage = stringResource(Res.string.offline_message)
     val requestFailed = stringResource(Res.string.request_failed)
     val syncNoticeMessages=mapOf(GroupSyncNotice.CANCELLED to stringResource(Res.string.group_sync_cancelled),GroupSyncNotice.STOPPED to stringResource(Res.string.group_sync_stopped),GroupSyncNotice.EXCLUDED to stringResource(Res.string.group_sync_excluded),GroupSyncNotice.OWNER_RECOVERY to stringResource(Res.string.group_sync_owner_recovery),GroupSyncNotice.UNAVAILABLE to stringResource(Res.string.group_sync_unavailable))
@@ -489,6 +499,7 @@ internal fun RoomScreen(
                 RoomChatPanel(state.chat, onAction)
                 RoomSupportPanel(
                     participants = state.model.participants,
+                    expandedRoom = !compact,
                     micMuted = state.micMuted,
                     voiceState = state.voiceState,
                     voiceFailureCode = state.voiceFailureCode,
@@ -499,7 +510,10 @@ internal fun RoomScreen(
                     ownerPresent = state.model.ownerPresent,
                     onJoinVoice = requestMicThenJoin,
                     onToggleMic = { onAction(RoomAction.ToggleMicClicked) },
-                    onShowLink = { onAction(RoomAction.LinkClicked) },
+                    onCopyLink = {
+                        val copied = loggedRunCatching("RoomScreen.copySource") { clipboard.setText(AnnotatedString(state.videoUrl)) }.isSuccess
+                        scope.launch { snackbarHost.showSnackbar(if (copied) videoLinkCopied else copyUnavailable) }
+                    },
                     onEndStream = { onAction(RoomAction.EndStreamClicked) },
                 )
                 }
@@ -580,12 +594,13 @@ internal fun RoomScreen(
         )
     }
     if (state.leaveOpen) {
-        AlertDialog(
+        RoomioDialog(
             onDismissRequest = { onAction(RoomAction.LeaveDismissed) },
             title = { Text(stringResource(Res.string.leave_party)) },
             text = { Text(stringResource(if (state.isOwner) Res.string.leave_owner_copy else Res.string.leave_guest_copy)) },
             confirmButton = {
-                TextButton(
+                Button(
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer, contentColor = MaterialTheme.colorScheme.onErrorContainer),
                     onClick = {
                         playerHandle?.stop()
                         onAction(RoomAction.LeaveConfirmed)
@@ -602,12 +617,12 @@ internal fun RoomScreen(
         )
     }
     if (state.abortOpen) {
-        AlertDialog(
+        RoomioDialog(
             onDismissRequest = { onAction(RoomAction.EndStreamDismissed) },
             title = { Text(stringResource(Res.string.end_stream_question)) },
             text = { Text(stringResource(Res.string.end_stream_copy)) },
             confirmButton = {
-                TextButton(onClick = {
+                Button(colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer, contentColor = MaterialTheme.colorScheme.onErrorContainer), onClick = {
                     playerHandle?.stop()
                     onAction(RoomAction.EndStreamConfirmed)
                 }) {
@@ -665,12 +680,12 @@ private fun RoomTopBar(
                             )
                         }
                     }
-                    MaterialIconButton(Icons.Filled.PersonAdd, stringResource(Res.string.invite_friends), tonal = true, onClick = onInvite)
-                    MaterialIconButton(Icons.Filled.BugReport, stringResource(Res.string.report_bug), onClick = onReportBug)
-                    if (showLink) MaterialIconButton(Icons.Filled.Link, stringResource(Res.string.current_video_link), onClick = onShowLink)
-                    MaterialIconButton(Icons.AutoMirrored.Filled.Logout, stringResource(Res.string.leave), onClick = onLeave)
+                    MaterialIconButton(RoomioIcons.PersonAdd, stringResource(Res.string.invite_friends), tonal = true, onClick = onInvite)
+                    MaterialIconButton(RoomioIcons.BugReport, stringResource(Res.string.report_bug), onClick = onReportBug)
+                    if (showLink) MaterialIconButton(RoomioIcons.Link, stringResource(Res.string.current_video_link), onClick = onShowLink)
+                    MaterialIconButton(RoomioIcons.Logout, stringResource(Res.string.leave), onClick = onLeave)
                     if (showTheme && !compactBar) {
-                        MaterialIconButton(Icons.Filled.DarkMode, stringResource(Res.string.theme), onClick = onToggleTheme)
+                        MaterialIconButton(RoomioIcons.DarkMode, stringResource(Res.string.theme), onClick = onToggleTheme)
                     }
                 }
             }
@@ -685,12 +700,14 @@ private fun MaterialIconButton(
     label: String,
     tonal: Boolean = false,
     size: Dp = 48.dp,
-    iconSize: Dp = 24.dp,
+    iconSize: Dp = 22.dp,
+    enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
     if (tonal) {
         FilledIconButton(
             onClick = onClick,
+            enabled = enabled,
             modifier = Modifier.size(size).semantics { contentDescription = label },
             colors = IconButtonDefaults.filledIconButtonColors(
                 containerColor = MaterialTheme.colorScheme.secondaryContainer,
@@ -698,7 +715,7 @@ private fun MaterialIconButton(
             ),
         ) { Icon(icon, contentDescription = null, modifier = Modifier.size(iconSize)) }
     } else {
-        IconButton(onClick = onClick, modifier = Modifier.size(size).semantics { contentDescription = label }) {
+        IconButton(onClick = onClick, enabled = enabled, modifier = Modifier.size(size).semantics { contentDescription = label }) {
             Icon(icon, contentDescription = null, modifier = Modifier.size(iconSize))
         }
     }
@@ -759,7 +776,7 @@ private fun CinemaCard(
                         modifier = Modifier.align(Alignment.Center).size(72.dp),
                         colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.primary),
                     ) {
-                        Icon(Icons.Filled.PlayArrow, contentDescription = stringResource(Res.string.play), modifier = Modifier.size(38.dp))
+                        Icon(RoomioIcons.PlayArrow, contentDescription = stringResource(Res.string.play), modifier = Modifier.size(38.dp))
                     }
                 }
                 GroupSyncCountdown(syncCountdown)
@@ -902,18 +919,18 @@ private fun OwnerCinemaEntry(
     ) {
         Text(stringResource(if (playback == RoomPlaybackState.ABORTED) Res.string.stream_aborted else Res.string.your_cinema_empty), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.inversePrimary)
         Text(stringResource(Res.string.bring_direct_video), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        OutlinedTextField(
+        RoomioTextField(
             value = videoUrl,
             textStyle = MaterialTheme.typography.bodyLarge.copy(textDirection = androidx.compose.ui.text.style.TextDirection.Ltr),
             onValueChange = onVideoUrlChange,
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             isError = playback == RoomPlaybackState.ERROR,
-            label = { Text(stringResource(Res.string.direct_video_url)) },
+            label = stringResource(Res.string.direct_video_url),
             placeholder = { Text(stringResource(Res.string.url_hint)) },
             trailingIcon = {
                 MaterialIconButton(
-                    Icons.Filled.ContentPaste,
+                    RoomioIcons.ContentPaste,
                     stringResource(Res.string.paste_video_link),
                     size = 40.dp,
                     iconSize = 20.dp,
@@ -1183,7 +1200,7 @@ private fun TransportControls(
 ) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
         if (!live) {
-            MaterialIconButton(Icons.Filled.FastRewind, stringResource(Res.string.rewind_15), size = 48.dp, onClick = { onSkip(-1f) })
+            MaterialIconButton(RoomioIcons.FastRewind, stringResource(Res.string.rewind_15), size = 48.dp, onClick = { onSkip(-1f) })
         }
         FilledIconButton(
             onClick = onTogglePlayback,
@@ -1191,13 +1208,13 @@ private fun TransportControls(
             colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.primary),
         ) {
             Icon(
-                if (paused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
+                if (paused) RoomioIcons.PlayArrow else RoomioIcons.Pause,
                 contentDescription = stringResource(if (paused) Res.string.play else Res.string.pause),
                 modifier = Modifier.size(28.dp),
             )
         }
         if (!live) {
-            MaterialIconButton(Icons.Filled.FastForward, stringResource(Res.string.forward_15), size = 48.dp, onClick = { onSkip(1f) })
+            MaterialIconButton(RoomioIcons.FastForward, stringResource(Res.string.forward_15), size = 48.dp, onClick = { onSkip(1f) })
         }
     }
 }
@@ -1219,9 +1236,9 @@ private fun VolumeControls(
     modifier: Modifier = Modifier,
 ) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End) {
-        MaterialIconButton(Icons.Filled.Sync, stringResource(Res.string.sync_to_room), size = 40.dp, iconSize = 20.dp, onClick = onSync)
+        MaterialIconButton(RoomioIcons.Sync, roomSyncActionLabel(), enabled = LocalRoomSyncAction.current.enabled, size = 40.dp, iconSize = 20.dp, onClick = onSync)
         MaterialIconButton(
-            Icons.Filled.Subtitles,
+            RoomioIcons.Subtitles,
             stringResource(Res.string.subtitles),
             tonal = subtitlesSelected,
             size = 40.dp,
@@ -1230,7 +1247,7 @@ private fun VolumeControls(
         )
         if (hasAlternativeAudioTracks) {
             MaterialIconButton(
-                Icons.Filled.GraphicEq,
+                RoomioIcons.GraphicEq,
                 stringResource(Res.string.audio_tracks),
                 tonal = audioTrackSelected,
                 size = 40.dp,
@@ -1239,14 +1256,14 @@ private fun VolumeControls(
             )
         }
         MaterialIconButton(
-            if (micMuted) Icons.Filled.MicOff else Icons.Filled.Mic,
+            if (micMuted) RoomioIcons.MicOff else RoomioIcons.Mic,
             stringResource(if (micMuted) Res.string.unmute else Res.string.mute),
             size = 40.dp,
             iconSize = 20.dp,
             onClick = onToggleMic,
         )
         MaterialIconButton(
-            if (volume == 0f) Icons.Filled.VolumeOff else Icons.Filled.VolumeUp,
+            if (volume == 0f) RoomioIcons.VolumeOff else RoomioIcons.VolumeUp,
             stringResource(if (volume == 0f) Res.string.unmute_video else Res.string.mute_video),
             size = 40.dp,
             iconSize = 22.dp,
@@ -1262,7 +1279,7 @@ private fun VolumeControls(
                 inactiveTrackColor = RoomioDesignSystem.colors.mediaOutline,
             ),
         )
-        MaterialIconButton(Icons.Filled.Fullscreen, stringResource(Res.string.enter_fullscreen), size = 40.dp, iconSize = 22.dp, onClick = onToggleFullscreen)
+        MaterialIconButton(RoomioIcons.Fullscreen, stringResource(Res.string.enter_fullscreen), size = 40.dp, iconSize = 22.dp, onClick = onToggleFullscreen)
     }
 }
 
@@ -1330,7 +1347,7 @@ private fun FullscreenCinema(
                 modifier = Modifier.align(Alignment.Center).size(72.dp),
                 colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.primary),
             ) {
-                Icon(Icons.Filled.PlayArrow, contentDescription = stringResource(Res.string.play), modifier = Modifier.size(38.dp))
+                Icon(RoomioIcons.PlayArrow, contentDescription = stringResource(Res.string.play), modifier = Modifier.size(38.dp))
             }
         }
         if (controlsVisible) {
@@ -1472,9 +1489,9 @@ private fun FullscreenActionControls(
     modifier: Modifier = Modifier,
 ) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End) {
-        MaterialIconButton(Icons.Filled.Sync, stringResource(Res.string.sync_to_room), size = 40.dp, iconSize = 20.dp, onClick = onSync)
+        MaterialIconButton(RoomioIcons.Sync, roomSyncActionLabel(), enabled = LocalRoomSyncAction.current.enabled, size = 40.dp, iconSize = 20.dp, onClick = onSync)
         MaterialIconButton(
-            Icons.Filled.Subtitles,
+            RoomioIcons.Subtitles,
             stringResource(Res.string.subtitles),
             tonal = subtitlesSelected,
             size = 40.dp,
@@ -1483,7 +1500,7 @@ private fun FullscreenActionControls(
         )
         if (hasAlternativeAudioTracks) {
             MaterialIconButton(
-                Icons.Filled.GraphicEq,
+                RoomioIcons.GraphicEq,
                 stringResource(Res.string.audio_tracks),
                 tonal = audioTrackSelected,
                 size = 40.dp,
@@ -1492,14 +1509,14 @@ private fun FullscreenActionControls(
             )
         }
         MaterialIconButton(
-            if (micMuted) Icons.Filled.MicOff else Icons.Filled.Mic,
+            if (micMuted) RoomioIcons.MicOff else RoomioIcons.Mic,
             stringResource(if (micMuted) Res.string.unmute else Res.string.mute),
             size = 40.dp,
             iconSize = 20.dp,
             onClick = onToggleMic,
         )
         MaterialIconButton(
-            if (volume == 0f) Icons.Filled.VolumeOff else Icons.Filled.VolumeUp,
+            if (volume == 0f) RoomioIcons.VolumeOff else RoomioIcons.VolumeUp,
             stringResource(if (volume == 0f) Res.string.unmute_video else Res.string.mute_video),
             size = 40.dp,
             iconSize = 20.dp,
@@ -1515,7 +1532,7 @@ private fun FullscreenActionControls(
                 inactiveTrackColor = RoomioDesignSystem.colors.mediaOutline,
             ),
         )
-        MaterialIconButton(Icons.Filled.FullscreenExit, stringResource(Res.string.exit_fullscreen), size = 40.dp, iconSize = 20.dp, onClick = onToggleFullscreen)
+        MaterialIconButton(RoomioIcons.FullscreenExit, stringResource(Res.string.exit_fullscreen), size = 40.dp, iconSize = 20.dp, onClick = onToggleFullscreen)
     }
 }
 
@@ -1527,7 +1544,7 @@ private fun SubtitleSelectionDialog(
     onSelect: (String?) -> Unit,
     onChooseFile: () -> Unit,
 ) {
-    AlertDialog(
+    RoomioDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(Res.string.subtitles)) },
         text = {
@@ -1558,7 +1575,7 @@ private fun SubtitleSelectionDialog(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (canChooseFile) {
                     TextButton(onClick = onChooseFile) {
-                        Icon(Icons.Filled.Subtitles, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(RoomioIcons.Subtitles, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
                         Text(stringResource(Res.string.choose_subtitle_file))
                     }
@@ -1594,7 +1611,7 @@ private fun AudioTrackSelectionDialog(
     onDismiss: () -> Unit,
     onSelect: (String?) -> Unit,
 ) {
-    AlertDialog(
+    RoomioDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(Res.string.audio_tracks)) },
         text = {
@@ -1655,10 +1672,10 @@ private fun SyncBand(paused: Boolean, onSync: () -> Unit) {
         Text(stringResource(if (paused) Res.string.paused_for_you else Res.string.playing_for_you), style = MaterialTheme.typography.titleMedium)
     }
     val syncButton: @Composable () -> Unit = {
-        TextButton(onClick = onSync) {
-            Icon(Icons.Filled.Sync, contentDescription = null, modifier = Modifier.size(18.dp))
+        FilledTonalButton(enabled = LocalRoomSyncAction.current.enabled, onClick = onSync) {
+            Icon(RoomioIcons.Sync, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(6.dp))
-            Text(stringResource(Res.string.sync_to_room))
+            Text(roomSyncActionLabel())
         }
     }
     Surface(
@@ -1702,6 +1719,7 @@ private fun OwnerAwayBanner(ownerName: String) {
 @Composable
 private fun RoomSupportPanel(
     participants: List<RoomParticipant>,
+    expandedRoom: Boolean,
     micMuted: Boolean,
     voiceState: VoiceConnectionState,
     voiceFailureCode: String?,
@@ -1712,19 +1730,18 @@ private fun RoomSupportPanel(
     ownerPresent: Boolean,
     onJoinVoice: () -> Unit,
     onToggleMic: () -> Unit,
-    onShowLink: () -> Unit,
+    onCopyLink: () -> Unit,
     onEndStream: () -> Unit,
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoomioDesignSystem.shapes.extraLargeIncreased,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        color = androidx.compose.ui.graphics.Color.Transparent,
     ) {
         Column(
-            modifier = Modifier.padding(20.dp),
+            modifier = Modifier.padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            ParticipantSection(participants, micMuted)
+            ParticipantSection(participants, micMuted, expandedRoom)
             HorizontalDivider(color = DividerDefaults.color)
             VoicePanel(voiceState, voiceFailureCode, micMuted, onJoinVoice, onToggleMic)
             if (voiceState == VoiceConnectionState.DEGRADED || participants.any { it.voiceStatus == VoicePeerStatus.UNAVAILABLE }) {
@@ -1738,7 +1755,7 @@ private fun RoomSupportPanel(
             }
             if (streamActive) {
                 HorizontalDivider(color = DividerDefaults.color)
-                SourceRow(videoUrl, onShowLink)
+                SourceRow(videoUrl, onCopyLink)
             }
             if (isOwner && ownerPresent && streamActive) {
                 Button(
@@ -1749,7 +1766,7 @@ private fun RoomSupportPanel(
                         contentColor = MaterialTheme.colorScheme.onErrorContainer,
                     ),
                 ) {
-                    Icon(Icons.Filled.Stop, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(RoomioIcons.Stop, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
                     Text(stringResource(Res.string.end_stream_for_everyone))
                 }
@@ -1759,7 +1776,7 @@ private fun RoomSupportPanel(
 }
 
 @Composable
-private fun ParticipantSection(participants: List<RoomParticipant>, micMuted: Boolean) {
+private fun ParticipantSection(participants: List<RoomParticipant>, micMuted: Boolean, expandedRoom: Boolean) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -1775,27 +1792,30 @@ private fun ParticipantSection(participants: List<RoomParticipant>, micMuted: Bo
                 )
             }
         }
-        participants.forEach { ParticipantRow(it, micMuted) }
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val largeText = androidx.compose.ui.platform.LocalDensity.current.fontScale > 1.3f
+            val columns = if (largeText || maxWidth < 280.dp) 1 else if (expandedRoom) 3 else 2
+            val gap = 10.dp
+            val itemWidth = (maxWidth - gap * (columns - 1)) / columns
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(gap), verticalArrangement = Arrangement.spacedBy(gap), maxItemsInEachRow = columns) {
+                participants.forEach { ParticipantRow(it, micMuted, expandedRoom && columns > 1, Modifier.width(itemWidth)) }
+            }
+        }
     }
 }
 
 @Composable
-private fun ParticipantRow(participant: RoomParticipant, micMuted: Boolean) {
+private fun ParticipantRow(participant: RoomParticipant, micMuted: Boolean, stacked: Boolean, modifier: Modifier = Modifier) {
     val speaking = participant.isPresent && participant.isSpeaking && !(participant.isSelf && micMuted)
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = if (speaking) RoomioDesignSystem.shapes.extraLargeIncreased else MaterialTheme.shapes.large,
         color = if (speaking) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerLowest,
         contentColor = if (speaking) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface,
     ) {
-        Row(
-            modifier = Modifier.padding(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            ParticipantAvatar(participant, speaking)
-            Column(Modifier.weight(1f)) {
-                Text(participant.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        val copy: @Composable () -> Unit = {
+            Column(horizontalAlignment = if (stacked) Alignment.CenterHorizontally else Alignment.Start) {
+                Text(if (participant.isSelf) stringResource(Res.string.chat_you) else participant.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, textAlign = if (stacked) androidx.compose.ui.text.style.TextAlign.Center else androidx.compose.ui.text.style.TextAlign.Start)
                 Text(
                     when {
                         participant.voiceStatus == VoicePeerStatus.CONNECTING -> stringResource(Res.string.voice_peer_connecting)
@@ -1811,6 +1831,13 @@ private fun ParticipantRow(participant: RoomParticipant, micMuted: Boolean) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+        }
+        if (stacked) Column(Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            ParticipantAvatar(participant, speaking)
+            copy()
+        } else Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            ParticipantAvatar(participant, speaking)
+            Box(Modifier.weight(1f)) { copy() }
         }
     }
 }
@@ -1834,7 +1861,7 @@ private fun ParticipantAvatar(participant: RoomParticipant, speaking: Boolean) {
     val avatarShape = if (speaking) RoomioDesignSystem.shapes.largeIncreased else CircleShape
     Box(
         modifier = Modifier
-            .size(72.dp)
+            .size(56.dp)
             .clip(avatarShape)
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .border(
@@ -1846,12 +1873,12 @@ private fun ParticipantAvatar(participant: RoomParticipant, speaking: Boolean) {
     ) {
         Image(painter = painter, contentDescription = participant.name, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
         Surface(
-            modifier = Modifier.align(Alignment.BottomEnd).size(24.dp),
+            modifier = Modifier.align(Alignment.BottomEnd).size(22.dp),
             shape = CircleShape,
             color = MaterialTheme.colorScheme.surfaceContainerHighest,
         ) {
             Icon(
-                imageVector = if (participant.isMuted) Icons.Filled.MicOff else Icons.Filled.Mic,
+                imageVector = if (participant.isMuted) RoomioIcons.MicOff else RoomioIcons.Mic,
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize().padding(3.dp),
             )
@@ -1891,7 +1918,7 @@ private fun VoicePanel(
                 colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer),
             ) {
                 Icon(
-                    if (micMuted) Icons.Filled.MicOff else Icons.Filled.Mic,
+                    if (micMuted) RoomioIcons.MicOff else RoomioIcons.Mic,
                     contentDescription = stringResource(if (micMuted) Res.string.unmute else Res.string.mute),
                     modifier = Modifier.size(24.dp),
                 )
@@ -1904,14 +1931,14 @@ private fun VoicePanel(
 }
 
 @Composable
-private fun SourceRow(videoUrl: String, onShowLink: () -> Unit) {
+private fun SourceRow(videoUrl: String, onCopyLink: () -> Unit) {
     val fileName = videoUrl.videoFileName() ?: stringResource(Res.string.video_link)
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(stringResource(Res.string.video_source), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(fileName, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        MaterialIconButton(Icons.Filled.ContentCopy, stringResource(Res.string.current_video_link), size = 40.dp, iconSize = 22.dp, onClick = onShowLink)
+        MaterialIconButton(RoomioIcons.ContentCopy, stringResource(Res.string.copy_video_link), size = 48.dp, iconSize = 22.dp, onClick = onCopyLink)
     }
 }
 
@@ -2007,7 +2034,7 @@ private fun InviteFriendsDialogCard(
                     onClick = onDismiss,
                     modifier = Modifier.semantics { contentDescription = closeLabel },
                 ) {
-                    Icon(Icons.Filled.Close, contentDescription = null)
+                    Icon(RoomioIcons.Close, contentDescription = null)
                 }
             }
 
@@ -2095,25 +2122,25 @@ private fun InviteShareOption(
         BoxWithConstraints(Modifier.padding(RoomioDesignSystem.spacing.small)) {
             val horizontal = maxWidth >= 400.dp
             val field: @Composable (Modifier) -> Unit = { fieldModifier ->
-                OutlinedTextField(
+                RoomioTextField(
                     value = value,
                     textStyle = MaterialTheme.typography.bodyLarge.copy(textDirection = androidx.compose.ui.text.style.TextDirection.Ltr),
                     onValueChange = {},
                     modifier = fieldModifier,
                     readOnly = true,
                     singleLine = true,
-                    label = { Text(label) },
+                    label = label,
                 )
             }
             val action: @Composable () -> Unit = {
                 val icon = if (copied) {
-                    Icons.Filled.Check
+                    RoomioIcons.Check
                 } else if (share) {
-                    Icons.Filled.Share
+                    RoomioIcons.Share
                 } else if (tonal) {
-                    Icons.Filled.ContentCopy
+                    RoomioIcons.ContentCopy
                 } else {
-                    Icons.Filled.Link
+                    RoomioIcons.Link
                 }
                 if (tonal) {
                     FilledTonalButton(
@@ -2167,7 +2194,7 @@ private fun CurrentVideoLinkDialog(
     var copied by remember(videoUrl) { mutableStateOf(false) }
     var copyFailed by remember(videoUrl) { mutableStateOf(false) }
     val copyLabel = stringResource(if (copied) Res.string.link_copied else Res.string.copy_link)
-    AlertDialog(
+    RoomioDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(Res.string.current_video_link)) },
         text = {
@@ -2181,7 +2208,7 @@ private fun CurrentVideoLinkDialog(
                     verticalAlignment = Alignment.Top,
                     horizontalArrangement = Arrangement.spacedBy(RoomioDesignSystem.spacing.extraSmall),
                 ) {
-                    OutlinedTextField(
+                    RoomioTextField(
                         value = videoUrl,
                         textStyle = MaterialTheme.typography.bodyLarge.copy(textDirection = androidx.compose.ui.text.style.TextDirection.Ltr),
                         onValueChange = {},
@@ -2189,7 +2216,7 @@ private fun CurrentVideoLinkDialog(
                         readOnly = true,
                         minLines = 2,
                         maxLines = 4,
-                        label = { Text(stringResource(Res.string.video_link)) },
+                        label = stringResource(Res.string.video_link),
                     )
                     FilledTonalIconButton(
                         onClick = {
@@ -2207,7 +2234,7 @@ private fun CurrentVideoLinkDialog(
                         modifier = Modifier.semantics { contentDescription = copyLabel },
                     ) {
                         Icon(
-                            imageVector = if (copied) Icons.Filled.Check else Icons.Filled.ContentCopy,
+                            imageVector = if (copied) RoomioIcons.Check else RoomioIcons.ContentCopy,
                             contentDescription = null,
                         )
                     }
@@ -2330,7 +2357,7 @@ private fun BugReportDialog(state: RoomUiState, onAction: (RoomAction) -> Unit) 
         onError = { onAction(RoomAction.BugScreenshotFailed(it)) },
         onBusy = { readingScreenshot = it },
     )
-    BugReportDialogContent(state, onAction, screenshotActions, readingScreenshot)
+    BugReportDialogContent(state, onAction, screenshotActions, readingScreenshot, rememberReportNetworkAvailable() != false)
 }
 
 @Composable
@@ -2339,28 +2366,31 @@ internal fun BugReportDialogContent(
     onAction: (RoomAction) -> Unit,
     screenshotActions: ReportScreenshotActions?,
     readingScreenshot: Boolean = false,
+    online: Boolean = true,
 ) {
     val busy = state.bugSending || readingScreenshot
-    AlertDialog(
+    RoomioDialog(
         onDismissRequest = { if (!busy) onAction(RoomAction.BugReportDismissed) },
-        icon = { Icon(Icons.Filled.BugReport, contentDescription = null) },
+        dismissEnabled = !busy,
         title = { Text(stringResource(Res.string.report_bug)) },
         text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 if (state.bugSent) {
                     Text(stringResource(Res.string.bug_report_sent))
                 } else {
-                    OutlinedTextField(
+                    RoomioTextField(
                         value = state.bugDescription,
                         onValueChange = { onAction(RoomAction.BugDescriptionChanged(it)) },
-                        label = { Text(stringResource(Res.string.bug_report_description)) },
+                        label = stringResource(Res.string.bug_report_description),
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 4, maxLines = 8, enabled = !busy,
                     )
                     if (screenshotActions != null) {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(onClick = screenshotActions.pick, enabled = !busy && state.bugScreenshots.size < 3) { Text(stringResource(Res.string.bug_screenshot_attach)) }
+                            OutlinedButton(onClick = screenshotActions.paste, enabled = !busy && state.bugScreenshots.size < 3) { Text(stringResource(Res.string.bug_screenshot_paste)) }
+                        }
                         Text(stringResource(Res.string.bug_screenshot_hint), style = MaterialTheme.typography.bodySmall)
-                        OutlinedButton(onClick = screenshotActions.pick, enabled = !busy && state.bugScreenshots.size < 3) { Text(stringResource(Res.string.bug_screenshot_attach)) }
-                        OutlinedButton(onClick = screenshotActions.paste, enabled = !busy && state.bugScreenshots.size < 3) { Text(stringResource(Res.string.bug_screenshot_paste)) }
                     }
                     if (readingScreenshot) Text(stringResource(Res.string.bug_screenshot_reading))
                     state.bugScreenshots.forEachIndexed { index, image ->
@@ -2382,6 +2412,8 @@ internal fun BugReportDialogContent(
                             else -> Res.string.bug_screenshot_unreadable
                         }), color = MaterialTheme.colorScheme.error)
                     }
+                    if (!online) Text(stringResource(Res.string.bug_report_offline), style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite })
                     if (state.bugError != null) {
                         Text(stringResource(when (state.bugError) {
                             "REPORT_TOO_LARGE" -> Res.string.bug_report_too_large
@@ -2394,7 +2426,7 @@ internal fun BugReportDialogContent(
         },
         confirmButton = {
             if (state.bugSent) TextButton(onClick = { onAction(RoomAction.BugReportDismissed) }) { Text(stringResource(Res.string.done)) }
-            else Button(onClick = { onAction(RoomAction.BugReportSend) }, enabled = !busy && state.bugDescription.isNotBlank()) {
+            else Button(onClick = { onAction(RoomAction.BugReportSend) }, enabled = online && !busy && state.bugDescription.isNotBlank()) {
                 Text(stringResource(if (state.bugSending) Res.string.bug_report_sending else Res.string.bug_report_send))
             }
         },

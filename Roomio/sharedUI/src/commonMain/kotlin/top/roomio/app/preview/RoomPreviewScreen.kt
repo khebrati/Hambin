@@ -1,5 +1,6 @@
 package top.roomio.app.preview
 
+import top.roomio.app.components.RoomioIcons
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,16 +22,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.Block
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.Groups
-import androidx.compose.material.icons.filled.LightMode
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.MeetingRoom
-import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -253,7 +244,7 @@ private fun PreviewTopBar(onBack: () -> Unit) {
             ) {
                 IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
                     Icon(
-                        Icons.AutoMirrored.Filled.ArrowBack,
+                        RoomioIcons.ArrowBack,
                         contentDescription = stringResource(Res.string.back),
                     )
                 }
@@ -278,7 +269,7 @@ private fun PreviewTopBar(onBack: () -> Unit) {
                     modifier = Modifier.size(48.dp),
                 ) {
                     Icon(
-                        if (themeIsDark.value) Icons.Filled.LightMode else Icons.Filled.DarkMode,
+                        if (themeIsDark.value) RoomioIcons.LightMode else RoomioIcons.DarkMode,
                         contentDescription = stringResource(Res.string.theme),
                     )
                 }
@@ -364,7 +355,7 @@ private fun PreviewCard(
                     modifier = Modifier.heightIn(min = 48.dp),
                 ) {
                     Icon(
-                        Icons.AutoMirrored.Filled.ArrowForward,
+                        RoomioIcons.ArrowForward,
                         contentDescription = null,
                     )
                     Spacer(Modifier.size(8.dp))
@@ -412,7 +403,7 @@ private fun PreviewFacts(model: RoomPreviewModel) {
         val compact = maxWidth < 560.dp
         val facts = listOf(
             Triple(
-                Icons.Filled.MeetingRoom,
+                RoomioIcons.MeetingRoom,
                 stringResource(Res.string.owner),
                 if (model.ownerPresent) {
                     model.ownerName
@@ -421,7 +412,7 @@ private fun PreviewFacts(model: RoomPreviewModel) {
                 },
             ),
             Triple(
-                Icons.Filled.Groups,
+                RoomioIcons.Groups,
                 stringResource(Res.string.in_the_room),
                 stringResource(
                     if (model.participantCount == 1) {
@@ -433,7 +424,7 @@ private fun PreviewFacts(model: RoomPreviewModel) {
                 ),
             ),
             Triple(
-                Icons.Filled.Schedule,
+                RoomioIcons.Schedule,
                 stringResource(Res.string.stream),
                 stringResource(
                     if (model.streamStatus == PreviewStreamStatus.PLAYING) {
@@ -522,7 +513,7 @@ private fun PreviewNotice(
             verticalAlignment = Alignment.Top,
         ) {
             Icon(
-                if (unavailable) Icons.Filled.Block else Icons.Filled.Lock,
+                if (unavailable) RoomioIcons.Block else RoomioIcons.Lock,
                 contentDescription = null,
             )
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {

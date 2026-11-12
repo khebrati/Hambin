@@ -326,4 +326,7 @@
     <string name="bug_screenshot_limit">Choose up to 3 screenshots, 5 MiB total.</string>
     <string name="bug_screenshot_clipboard_empty">No image on the clipboard. Copy an image, then try again.</string>
     <string name="bug_screenshot_unreadable">Couldn’t read the image. Choose a PNG, JPEG, or WebP screenshot and try again.</string>
+    <string name="copy_video_link">Copy video link</string>
+    <string name="bug_report_offline">You’re offline. Your draft is kept. Reconnect to send.</string>
+    <string name="group_sync_view">View sync</string>
 </resources>

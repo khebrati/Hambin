@@ -6,6 +6,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -55,17 +58,20 @@ class CurrentVideoLinkTest {
         }
 
         onNodeWithText("aurora-station.mp4").assertExists()
-        onAllNodesWithContentDescription("Current video link")[0].performScrollTo().performClick()
+        onNodeWithContentDescription("Copy video link").performScrollTo().performClick()
+        assertEquals(CURRENT_VIDEO_URL, copiedText?.text)
+        onNodeWithText(CURRENT_VIDEO_URL).assertDoesNotExist()
+        onAllNodesWithContentDescription("Current video link")[0].performClick()
         onNodeWithText(CURRENT_VIDEO_URL).assertExists()
         onNodeWithContentDescription("Copy link").assertExists()
         onNodeWithContentDescription("Copy link").performClick()
         assertEquals(CURRENT_VIDEO_URL, copiedText?.text)
-        onNodeWithText("Video link copied").assertExists()
+        onNode(hasText("Video link copied") and hasAnyAncestor(isDialog())).assertExists()
         onNodeWithText("Done").performClick()
 
         runOnIdle { showGuestRoom() }
         onNodeWithText("aurora-station.mp4").assertExists()
-        onAllNodesWithContentDescription("Current video link")[0].performScrollTo().performClick()
+        onAllNodesWithContentDescription("Current video link")[0].performClick()
         onNodeWithText(CURRENT_VIDEO_URL).assertExists()
         onNodeWithContentDescription("Copy link").assertExists()
         onNodeWithContentDescription("Copy link").performClick()
