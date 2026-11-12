@@ -634,3 +634,9 @@ deployment evidence remains historical.
 - **Decision:** Per stakeholder request, Android and web allow selecting or pasting from the clipboard up to three PNG/JPEG/WebP screenshots (5 MiB total), previewing and removing them before Send. Screenshots persist with a failed or dismissed draft, are frozen during upload, and clear after durable success.
 - **Delivery:** Extend the shared [report contract](bug-report-contract.md) and private PostgreSQL storage; deliver images as Sentry attachments with the existing feedback and log. Content changes use a new report ID; unchanged retries reuse the payload.
 - **Scope:** This supersedes the earlier exclusion of manual screenshot attachments. Automatic screenshots, replay, and usage-analytics image capture remain disabled. Android uses the system document picker without storage permissions; other native platforms retain text reports.
+
+## DD-071 — Inline waiting-for-owner indicator (2026-11-12)
+
+- **Status:** Inline selected by stakeholder; integrated in browser and shared native dialog.
+- **Intent:** An accepted viewer sees a loading indicator while waiting for the owner to start synchronization. Preserve paused playback, pre-commit withdrawal and the separate preparation/countdown phases in DD-059.
+- **Presentation:** A small spinner and “Waiting for the owner…” / «منتظر تصمیم میزبان…» alongside the existing withdrawal button. Allow wrapping under compact/large-text layout pressure. Show only to accepted non-owners during INVITING; withdrawal remains available until commitment. See [waiting indicator preview](sync-waiting-designs.md).

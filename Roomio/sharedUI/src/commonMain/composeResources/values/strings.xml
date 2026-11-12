@@ -301,6 +301,7 @@
     <string name="group_sync_accepted">Joining</string>
     <string name="group_sync_declined">Not joining</string>
     <string name="group_sync_withdrawn">Changed their mind</string>
+    <string name="group_sync_waiting_owner">Waiting for the owner…</string>
     <string name="group_sync_pending_you">You haven’t replied</string>
     <string name="group_sync_pending">Hasn’t replied</string>
     <string name="group_sync_ask">Ask everyone to sync</string>

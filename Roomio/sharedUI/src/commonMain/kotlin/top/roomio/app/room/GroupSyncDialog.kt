@@ -18,6 +18,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -68,7 +71,17 @@ internal fun GroupSyncDialog(state: RoomUiState, onAction: (RoomAction) -> Unit)
             if(!preparing)FlowRow(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp,Alignment.End),verticalArrangement=Arrangement.spacedBy(8.dp)) {
                 if(draft)Button(enabled=!state.syncBusy && state.chat.connected,onClick={onAction(RoomAction.SyncAsk)}){Text(stringResource(Res.string.group_sync_ask))}
                 else if(state.isOwner){TextButton(enabled=!state.syncBusy && state.chat.connected,onClick={onAction(RoomAction.SyncCancel)}){Text(stringResource(Res.string.group_sync_cancel))};Button(enabled=!state.syncBusy && state.chat.connected,onClick={onAction(RoomAction.SyncCommit)}){Text(stringResource(Res.string.group_sync_start,attempt!!.participants.count{it.response==GroupSyncResponse.ACCEPTED}))}}
-                else if(response==GroupSyncResponse.ACCEPTED)OutlinedButton(enabled=!state.syncBusy && state.chat.connected,onClick={onAction(RoomAction.SyncRespond(GroupSyncResponse.WITHDRAWN))}){Text(stringResource(Res.string.group_sync_withdraw))}
+                else if(response==GroupSyncResponse.ACCEPTED) {
+                    if(attempt?.phase==GroupSyncPhase.INVITING)Row(
+                        Modifier.widthIn(max=240.dp).align(Alignment.CenterVertically).semantics { liveRegion=LiveRegionMode.Polite },
+                        horizontalArrangement=Arrangement.spacedBy(10.dp),
+                        verticalAlignment=Alignment.CenterVertically,
+                    ) {
+                        CircularProgressIndicator(Modifier.size(18.dp),strokeWidth=2.dp)
+                        Text(stringResource(Res.string.group_sync_waiting_owner),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    OutlinedButton(enabled=!state.syncBusy && state.chat.connected,onClick={onAction(RoomAction.SyncRespond(GroupSyncResponse.WITHDRAWN))}){Text(stringResource(Res.string.group_sync_withdraw))}
+                }
                 else {TextButton(enabled=!state.syncBusy && state.chat.connected,onClick={onAction(RoomAction.SyncRespond(GroupSyncResponse.DECLINED))}){Text(stringResource(Res.string.group_sync_no))};Button(enabled=!state.syncBusy && state.chat.connected,onClick={onAction(RoomAction.SyncRespond(GroupSyncResponse.ACCEPTED))}){Text(stringResource(Res.string.group_sync_accept))}}
             }
         }

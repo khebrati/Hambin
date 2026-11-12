@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Check, RefreshCw, Users, X } from 'lucide-react';
 import { t, useLanguage } from '../i18n';
 import { Avatar } from './Avatar';
@@ -5,7 +6,7 @@ import { Button, Dialog, LoadingIndicator } from './Material';
 import { avatarId, type MemberDto } from '../data/contracts';
 import type { GroupSyncState } from '../data/groupSync';
 import './group-sync.css';
-interface Props { open:boolean;owner:boolean;ownerName:string;selfId:string;state:GroupSyncState|null;positionMs:number;members:MemberDto[];busy:boolean;connected:boolean;close():void;ask():void;respond(value:'ACCEPTED'|'DECLINED'|'WITHDRAWN'):void;commit():void;cancel():void }
+interface Props { waitingIndicator?:ReactNode;previewControls?:ReactNode;open:boolean;owner:boolean;ownerName:string;selfId:string;state:GroupSyncState|null;positionMs:number;members:MemberDto[];busy:boolean;connected:boolean;close():void;ask():void;respond(value:'ACCEPTED'|'DECLINED'|'WITHDRAWN'):void;commit():void;cancel():void }
 export function GroupSyncDialog(p:Props) {
  const fa=useLanguage()==='fa';const text=(en:string,pe:string)=>fa?pe:t(en);
  const draft=!p.state||!['INVITING','PREPARING','SCHEDULED'].includes(p.state.phase);
@@ -13,6 +14,7 @@ export function GroupSyncDialog(p:Props) {
  const title=draft?t('Sync together'):p.owner?text("Who's joining?","کی همراه می‌شه؟"):text('Sync request','درخواست هماهنگی');
  const ms=draft?p.positionMs:p.state!.targetPositionMs;const seconds=Math.max(0,Math.floor(ms/1000));
  return <Dialog className="group-sync-dialog" open={p.open} title={title} onClose={p.close} actions={null}>
+  {p.previewControls}
   {!draft&&!p.owner&&<div className="group-sync-inviter"><RefreshCw aria-hidden="true"/><strong><bdi>{p.ownerName}</bdi> {text('wants to watch together','ازت خواسته باهم ببینید')}</strong></div>}
   <div className="group-sync-time"><span>{t('Meet at')}</span><strong dir="ltr">{Math.floor(seconds/60)}:{String(seconds%60).padStart(2,'0')}</strong></div>
   {preparing?<LoadingIndicator expressive label={t('Getting everyone ready')}/>:!draft&&<div className="group-sync-roster">{p.state!.participants.map(person=>{
@@ -21,6 +23,6 @@ export function GroupSyncDialog(p:Props) {
     const label=person.response==='ACCEPTED'?text('Joining','پایه است'):person.response==='DECLINED'?text('Not joining','نمیاد'):person.response==='WITHDRAWN'?text('Changed their mind','بیخیال شد'):text(own?'You haven’t replied':'Hasn’t replied',own?'هنوز جواب ندادی':'هنوز جواب نداده');
     return <div key={person.membershipId} className={`group-sync-person group-sync-person--${person.response.toLowerCase()}`}><Avatar avatarId={avatarId(member?.avatar||'comet')} label={member?.displayName||''} size="small"/><div><strong><bdi>{own?t('You'):member?.displayName||t('Guest')}</bdi></strong><span>{label}</span></div>{person.response==='ACCEPTED'?<Check aria-hidden="true" size={18}/>:person.response==='DECLINED'?<X aria-hidden="true" size={18}/>:null}</div>;
   })}</div>}
-  {!preparing&&<div className="group-sync-actions">{draft?<Button disabled={p.busy||!p.connected} icon={<Users size={18}/>} onClick={p.ask}>{t('Ask for sync')}</Button>:p.owner?<><Button variant="text" disabled={p.busy||!p.connected} onClick={p.cancel}>{t('Cancel request')}</Button><Button disabled={p.busy||!p.connected} onClick={p.commit}>{text('Start with','شروع با')} {p.state!.participants.filter(x=>x.response==='ACCEPTED').length}</Button></>:response==='ACCEPTED'?<Button variant="outlined" disabled={p.busy||!p.connected} onClick={()=>p.respond('WITHDRAWN')}>{t('Withdraw & keep watching')}</Button>:<><Button variant="text" disabled={p.busy||!p.connected} onClick={()=>p.respond('DECLINED')}>{text('Not joining','نمیام')}</Button><Button disabled={p.busy||!p.connected} onClick={()=>p.respond('ACCEPTED')}>{text('Accept & pause','پذیرش و توقف فیلم')}</Button></>}</div>}
+  {!preparing&&<div className="group-sync-actions">{draft?<Button disabled={p.busy||!p.connected} icon={<Users size={18}/>} onClick={p.ask}>{t('Ask for sync')}</Button>:p.owner?<><Button variant="text" disabled={p.busy||!p.connected} onClick={p.cancel}>{t('Cancel request')}</Button><Button disabled={p.busy||!p.connected} onClick={p.commit}>{text('Start with','شروع با')} {p.state!.participants.filter(x=>x.response==='ACCEPTED').length}</Button></>:response==='ACCEPTED'?<>{p.state?.phase==='INVITING'&&(p.waitingIndicator??<span className="group-sync-waiting" role="status"><span className="group-sync-waiting__spinner" aria-hidden="true"/><span>{text('Waiting for the owner…','منتظر تصمیم میزبان…')}</span></span>)}<Button variant="outlined" disabled={p.busy||!p.connected} onClick={()=>p.respond('WITHDRAWN')}>{t('Withdraw & keep watching')}</Button></>:<><Button variant="text" disabled={p.busy||!p.connected} onClick={()=>p.respond('DECLINED')}>{text('Not joining','نمیام')}</Button><Button disabled={p.busy||!p.connected} onClick={()=>p.respond('ACCEPTED')}>{text('Accept & pause','پذیرش و توقف فیلم')}</Button></>}</div>}
  </Dialog>;
 }

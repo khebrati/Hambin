@@ -301,6 +301,7 @@
     <string name="group_sync_accepted">پایه است</string>
     <string name="group_sync_declined">نمیاد</string>
     <string name="group_sync_withdrawn">بیخیال شد</string>
+    <string name="group_sync_waiting_owner">منتظر تصمیم میزبان…</string>
     <string name="group_sync_pending_you">هنوز جواب ندادی</string>
     <string name="group_sync_pending">هنوز جواب نداده</string>
     <string name="group_sync_ask">درخواست هماهنگی</string>
