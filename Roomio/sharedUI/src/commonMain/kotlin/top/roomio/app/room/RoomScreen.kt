@@ -273,7 +273,6 @@ internal fun RoomScreen(
             if(playerContent!=null) playerContent(Modifier.fillMaxSize())
             else if(playerHandle!=null) VideoPlayerSurface(playerHandle,Modifier.fillMaxSize())
             else CinemaScene(modifier=Modifier.fillMaxSize(),showTitle=true,muted=false)
-            GroupSyncCountdown(state.syncCountdown)
         }
     }
     LaunchedEffect(state.groupSync?.phase,playerHandle) {
@@ -346,6 +345,8 @@ internal fun RoomScreen(
     if (fullscreenActive) {
         FullscreenCinema(
             playback = state.playback,
+            syncLocked = state.syncLocked,
+            syncCountdown = state.syncCountdown,
             positionMs = state.positionMs,
             durationMs = state.durationMs,
             isLive = state.isLive,
@@ -419,6 +420,8 @@ internal fun RoomScreen(
                 }
                 CinemaCard(
                     playback = state.playback,
+                    syncLocked = state.syncLocked,
+                    syncCountdown = state.syncCountdown,
                     isOwner = state.isOwner,
                     ownerName = state.model.ownerName,
                     videoUrl = state.videoUrl,
@@ -702,6 +705,8 @@ private fun MaterialIconButton(
 @Composable
 private fun CinemaCard(
     playback: RoomPlaybackState,
+    syncLocked: Boolean,
+    syncCountdown: String?,
     isOwner: Boolean,
     ownerName: String,
     videoUrl: String,
@@ -746,7 +751,7 @@ private fun CinemaCard(
                 } else {
                     CinemaScene(modifier = playerModifier, showTitle = false, muted = true)
                 }
-                if (playback == RoomPlaybackState.PAUSED) {
+                if (playback == RoomPlaybackState.PAUSED && !syncLocked) {
                     FilledIconButton(
                         onClick = onTogglePlayback,
                         modifier = Modifier.align(Alignment.Center).size(72.dp),
@@ -755,6 +760,7 @@ private fun CinemaCard(
                         Icon(Icons.Filled.PlayArrow, contentDescription = stringResource(Res.string.play), modifier = Modifier.size(38.dp))
                     }
                 }
+                GroupSyncCountdown(syncCountdown)
             }
             when {
                 hasPlayer -> PlayerControls(
@@ -1261,6 +1267,8 @@ private fun VolumeControls(
 @Composable
 private fun FullscreenCinema(
     playback: RoomPlaybackState,
+    syncLocked: Boolean,
+    syncCountdown: String?,
     positionMs: Long,
     durationMs: Long,
     isLive: Boolean,
@@ -1314,7 +1322,7 @@ private fun FullscreenCinema(
             }
             player(playerModifier)
         }
-        if (paused) {
+        if (paused && !syncLocked) {
             FilledIconButton(
                 onClick = onTogglePlayback,
                 modifier = Modifier.align(Alignment.Center).size(72.dp),
@@ -1356,6 +1364,7 @@ private fun FullscreenCinema(
                 .align(Alignment.BottomCenter)
                 .padding(bottom = if (controlsVisible) 128.dp else 24.dp),
         )
+        GroupSyncCountdown(syncCountdown)
     }
 }
 
