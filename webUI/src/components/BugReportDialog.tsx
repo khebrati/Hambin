@@ -34,7 +34,6 @@ export function BugReportDialog({ open, roomId, onClose, onSent, enabled }: {ope
     <Button disabled={!enabled || !description.trim() || sending || !online} onClick={() => void send()}>{sending ? t("Sending…") : t("Send")}</Button>
   </>}>
     <label className="bug-report-field"><span>{t("What went wrong?")}</span><textarea dir="auto" autoFocus rows={7} maxLength={8000} value={description} disabled={sending} onChange={event => { setDescription(event.target.value); setError(''); }} placeholder={t("Describe the bug and what you were doing…")} /></label>
-    {!enabled && <p role="status">{t("Reports can be sent from a connected room.")}</p>}
     {!online && <p role="status">{t("You’re offline. Your draft is kept. Reconnect to send.")}</p>}
     {error && <StatusCard title={t("Report wasn’t sent")} tone="error">{error} {t("Your draft is kept; try Send again.")}</StatusCard>}
   </Dialog>;

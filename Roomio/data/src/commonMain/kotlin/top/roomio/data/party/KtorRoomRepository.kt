@@ -38,6 +38,7 @@ class KtorRoomRepository(
     private val config: BackendConfig,
     private val sessions: SessionRepository,
     private val lastRooms: LastRoomStore,
+    private val observability: top.roomio.data.observability.ProductAnalytics,
 ) : RoomRepository {
     @kotlinx.serialization.Serializable
     private data class BugReportRequest(val reportId: String, val description: String, val clientInfo: Map<String, String>, val sessionStartedAt: String, val log: String)
@@ -79,6 +80,7 @@ class KtorRoomRepository(
         } ?: false
         if (!sent) throw PartyException(PARTY_CODE_NETWORK, "Report request timed out")
         log.i("report.accepted")
+        observability.track("bug_report_submitted")
         pendingReport = null
     }
 
@@ -99,7 +101,7 @@ class KtorRoomRepository(
         http.post("${config.baseUrl}/v1/rooms") {
             contentType(ContentType.Application.Json)
             setBody(CreateRoomRequest(title = title))
-        }.bodyOrThrow<RoomAndMembershipDto>().room.toDomain().let { remember(it) }
+        }.bodyOrThrow<RoomAndMembershipDto>().room.toDomain().let { remember(it) }.also { observability.track("room_created") }
     }
 
     override suspend fun preview(code: String): RoomPreview = authed {
@@ -115,7 +117,7 @@ class KtorRoomRepository(
 
     override suspend fun join(code: String): Room = authed {
         try {
-            http.post("${config.baseUrl}/v1/rooms/$code/join").bodyOrThrow<RoomAndMembershipDto>().room.toDomain().let { remember(it) }
+            http.post("${config.baseUrl}/v1/rooms/$code/join").bodyOrThrow<RoomAndMembershipDto>().room.toDomain().let { remember(it) }.also { observability.track("room_joined") }
         } catch (error: PartyException) {
             if (error.code in setOf("ROOM_ENDED", "ROOM_NOT_FOUND")) forget(code)
             throw error
@@ -134,7 +136,7 @@ class KtorRoomRepository(
         http.post("${config.baseUrl}/v1/rooms/$roomId/stream/start") {
             contentType(ContentType.Application.Json)
             setBody(StartStreamRequest(url = url))
-        }.bodyOrThrow<StreamResponseDto>().stream.toDomain()
+        }.bodyOrThrow<StreamResponseDto>().stream.toDomain().also { observability.track("playback_started") }
     }
 
     override suspend fun abortStream(roomId: String): StreamInfo = authed {

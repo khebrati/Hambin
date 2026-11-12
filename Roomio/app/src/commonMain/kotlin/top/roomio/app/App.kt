@@ -2,6 +2,7 @@ package top.roomio.app
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.DisposableEffect
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.DependencyGraph
 import dev.zacsweers.metro.createGraph
@@ -21,6 +22,7 @@ import top.roomio.domain.profile.ProfileRepository
     bindingContainers = [ProfileDataBindings::class, PartyDataBindings::class, top.roomio.data.launcher.LauncherIconDataBindings::class],
 )
 internal interface RoomioAppGraph {
+    val observability: top.roomio.data.observability.AppObservability
     val launcherIconController: top.roomio.domain.launcher.LauncherIconController
     val themePreferencesRepository: top.roomio.domain.profile.ThemePreferencesRepository
     val profileRepository: ProfileRepository
@@ -38,6 +40,8 @@ fun App(
     onAppNameChanged: (String) -> Unit = {},
 ) {
     val graph = remember { top.roomio.data.party.initializeAppLogging(); createGraph<RoomioAppGraph>() }
+    val monitoring = remember(graph) { graph.observability }
+    DisposableEffect(monitoring) { onDispose { monitoring.close() } }
     val themePreferences = remember(graph) { graph.themePreferencesRepository }
     val launcherIconController = remember(graph) { graph.launcherIconController }
     RoomioUi(

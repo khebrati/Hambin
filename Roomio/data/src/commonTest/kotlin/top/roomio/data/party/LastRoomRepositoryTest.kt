@@ -42,7 +42,7 @@ class LastRoomRepositoryTest {
                 else respond("""{"room":{"id":"room","code":"ABCD2345","title":"Movie night","ownerIdentityId":"owner","endedAt":null},"membership":{"id":"member","roomId":"room","displayName":"Mira","avatar":"COMET","identityId":"$identity","isOwner":${identity == "owner"}}}""", HttpStatusCode.OK, headers)
             }) { install(ContentNegotiation) { json(json) } }
             val config = BackendConfig("https://backend.test")
-            fun repository() = KtorRoomRepository(client, config, sessions, LastRoomStore(settings, json))
+            fun repository() = KtorRoomRepository(client, config, sessions, LastRoomStore(settings, json), top.roomio.data.observability.ProductAnalytics {})
             assertNull(repository().lastRoom())
             val room = if (identity == "owner") repository().createRoom("Movie night") else repository().join("ABCD2345")
             assertEquals(room, repository().lastRoom())
@@ -67,7 +67,7 @@ class LastRoomRepositoryTest {
         val client = HttpClient(MockEngine { respond(body, status, headers) }) {
             install(ContentNegotiation) { json(json) }
         }
-        val repository = KtorRoomRepository(client, BackendConfig(backend), sessions, store)
+        val repository = KtorRoomRepository(client, BackendConfig(backend), sessions, store, top.roomio.data.observability.ProductAnalytics {})
         store.remember(backend, "guest", room)
         assertTrue(runCatching { repository.preview(room.code) }.isFailure)
         assertEquals(room, repository.lastRoom())

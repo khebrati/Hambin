@@ -1,5 +1,6 @@
 buildscript {
     repositories {
+        google { content { includeModule("com.android.tools", "r8") } }
         maven(url = "https://storage.googleapis.com/r8-releases/raw") {
             content { includeModule("com.android.tools", "r8") }
         }
@@ -7,7 +8,7 @@ buildscript {
         google()
     }
     dependencies {
-        // AGP 9.0's bundled shrinker predates Kotlin 2.4 metadata support.
+        // Use the tested stable D8/R8 for Kotlin 2.4 and the monitoring SDK dependency graph.
         classpath(libs.android.r8)
     }
 }

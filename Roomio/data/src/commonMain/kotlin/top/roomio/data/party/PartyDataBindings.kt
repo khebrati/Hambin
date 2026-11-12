@@ -31,6 +31,8 @@ import kotlinx.coroutines.Dispatchers
 @BindingContainer
 interface PartyDataBindings {
     @Binds
+    fun bindProductAnalytics(impl: top.roomio.data.observability.AppObservability): top.roomio.data.observability.ProductAnalytics
+    @Binds
     fun bindSessionRepository(impl: KtorSessionRepository): SessionRepository
 
     @Binds

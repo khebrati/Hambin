@@ -1,10 +1,41 @@
+import java.util.Properties
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import io.sentry.kotlin.multiplatform.gradle.AppleDependencyProvider
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.android.kmp.library)
     alias(libs.plugins.kotlinx.serialization)
     alias(libs.plugins.metro)
+    alias(libs.plugins.sentry.kmp)
+}
+
+sentryKmp {
+    autoInstall.apple.provider = if (System.getProperty("os.name").startsWith("Mac")) AppleDependencyProvider.AUTO else AppleDependencyProvider.NONE
+}
+
+abstract class GenerateMonitoringConfig : DefaultTask() {
+    @get:Input abstract val configurationText: Property<String>
+    @get:OutputDirectory abstract val outputDirectory: DirectoryProperty
+    @TaskAction fun generate() {
+        val values = Properties().apply { configurationText.get().reader().use { load(it) } }
+        fun quoted(key: String): String = "\"" + values.getProperty(key, "").replace("\\", "\\\\").replace("\"", "\\\"").replace("$", "\\$") + "\""
+        val output = outputDirectory.get().file("top/roomio/data/observability/MonitoringConfig.kt").asFile
+        output.parentFile.mkdirs()
+        output.writeText("""
+            package top.roomio.data.observability
+            internal object MonitoringConfig {
+                const val sentryDsn = ${quoted("sentry.dsn")}
+                const val posthogToken = ${quoted("posthog.token")}
+                const val posthogHost = ${quoted("posthog.host")}
+                const val release = ${quoted("release")}
+            }
+        """.trimIndent())
+    }
+}
+val generateObservability by tasks.registering(GenerateMonitoringConfig::class) {
+    configurationText.set(providers.fileContents(rootProject.layout.projectDirectory.file("observability.properties")).asText.orElse(""))
+    outputDirectory.set(layout.buildDirectory.dir("generated/observability/kotlin"))
 }
 
 kotlin {
@@ -26,6 +57,7 @@ kotlin {
     iosSimulatorArm64()
 
     sourceSets {
+        commonMain { kotlin.srcDir(generateObservability) }
         commonMain.dependencies {
             implementation(project(":domain"))
             implementation(libs.kermit)

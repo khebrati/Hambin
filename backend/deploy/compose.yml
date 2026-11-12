@@ -24,6 +24,9 @@ services:
       dockerfile: Dockerfile
     environment:
       NODE_ENV: production
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_ENVIRONMENT: production
+      SENTRY_RELEASE: ${RELEASE_ID}
       HOST: 0.0.0.0
       PORT: '8080'
       DATABASE_URL: postgresql://hambin:${POSTGRES_PASSWORD}@postgres:5432/hambin

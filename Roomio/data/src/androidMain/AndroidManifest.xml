@@ -9,7 +9,7 @@
     <application>
         <provider
             android:name="top.roomio.data.party.RoomioContextProvider"
-            android:authorities="top.roomio.data.roomio-init"
+            android:authorities="${applicationId}.roomio-init"
             android:exported="false" />
 
         <service

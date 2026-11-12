@@ -5,6 +5,19 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 plugins {
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.android.application)
+    alias(libs.plugins.sentry.android)
+}
+
+sentry {
+    org.set("erfan-co")
+    projectName.set("watchparty-native")
+    includeProguardMapping.set(true)
+    autoUploadProguardMapping.set(providers.environmentVariable("SENTRY_AUTH_TOKEN").map { it.isNotBlank() }.orElse(false))
+    uploadNativeSymbols.set(false)
+    includeSourceContext.set(false)
+    telemetry.set(false)
+    tracingInstrumentation { enabled.set(false) }
+    autoInstallation { enabled.set(false) }
 }
 
 // Release signing is configured from a local, untracked keystore.properties.

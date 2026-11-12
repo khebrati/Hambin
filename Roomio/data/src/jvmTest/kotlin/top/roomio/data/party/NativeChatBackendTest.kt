@@ -29,7 +29,7 @@ class NativeChatBackendTest {
         }
         val sessions = KtorSessionRepository(http,config,BackendSessionClient(http,config),tokens)
         sessions.ensureSession(name,"comet","en")
-        return Client(http,KtorRoomRepository(http,config,sessions,LastRoomStore(MapSettings(),json)),KtorRealtimeClient(http,config,json,sessions,tokens))
+        return Client(http,KtorRoomRepository(http,config,sessions,LastRoomStore(MapSettings(),json), top.roomio.data.observability.ProductAnalytics {}),KtorRealtimeClient(http,config,json,sessions,tokens))
     }
     @Test fun nativeHttpAndSocketIoUseTheRealChatContract() = runBlocking {
         val base = System.getenv("CHAT_BACKEND_URL")

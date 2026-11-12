@@ -75,7 +75,7 @@ class ChatContractTest {
             override suspend fun updateProfile(name: String, avatar: String, language: String) = currentSession().identity
         }
         try {
-            val repository = KtorRoomRepository(client, BackendConfig("https://backend.test"), sessions, LastRoomStore(MapSettings(),json))
+            val repository = KtorRoomRepository(client, BackendConfig("https://backend.test"), sessions, LastRoomStore(MapSettings(),json), top.roomio.data.observability.ProductAnalytics {})
             assertFailsWith<PartyException> { repository.sendChatMessage("room","stable-uuid","سلام 🍿") }
             assertEquals("سلام 🍿", repository.sendChatMessage("room","stable-uuid","سلام 🍿").text)
             assertEquals(bodies[0],bodies[1])

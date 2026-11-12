@@ -1,4 +1,5 @@
 import { t } from '../i18n';
+import { trackApiSuccess } from '../observability';
 import { diagnosticEvent, diagnosticRoute, diagnosticError, nextOperationId } from './sessionLog';
 import { token } from './auth';
 import { ApiError } from './errors';
@@ -36,6 +37,7 @@ export async function request<T>(path: string, body?: unknown, method = body ===
     }
     const result = response.status === 204 ? undefined as T : await response.json();
     diagnosticEvent('http.complete', { operation, elapsedMs: Math.round(performance.now() - started) });
+    trackApiSuccess(route, method);
     return result;
   } catch (error) {
     diagnosticEvent('http.failure', { operation, code: diagnosticError(error), elapsedMs: Math.round(performance.now() - started) });

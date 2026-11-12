@@ -16,6 +16,8 @@ Response `201 {"reportId":"…"}` only after PostgreSQL commit. Identical report
 
 Application logs begin at web module initialization/native application graph startup and reset with page reload/process restart. Keep the full session in process memory until exit; do not collect system-wide Android logcat, cookies, credentials, microphone audio, screenshots, or local files. Capture Kermit messages in native, browser console/errors and HTTP outcomes plus room/voice/player state transitions. Redact URLs, authorization values, JWTs, and known credential fields before retaining log messages; structured HTTP diagnostics omit request/response bodies. Device metadata does not include serial numbers or persistent hardware identifiers.
 
+New reports also enqueue background Sentry delivery under DD-055; descriptions, allowlisted client context and redacted session logs are forwarded after durable acceptance. See [observability operations](observability.md). Historical reports are not forwarded automatically.
+
 Store reports privately in the backend PostgreSQL `bug_reports` table with authenticated identity, room, server timestamp and diagnostic payload. No client read API. Retain for 30 days, delete expired reports at startup/hourly and before new writes. Operators inspect through privileged database access; never expose reports in public HTTP logs. This feature does not deploy itself.
 
 ## Validation (2026-11-11)

@@ -21,7 +21,17 @@ remote() {
 build() {
   [[ ! -e "$OUTPUT" ]] || fail "Output exists: $OUTPUT; choose a new DEPLOY_RELEASE_ID"
   (cd "$ROOT/backend/watchparty"; npm ci; npm run typecheckServer; npm run test:backend)
-  (cd "$ROOT/webUI"; npm ci; npm test; VITE_BACKEND_URL='' npm run build)
+  (
+    cd "$ROOT/webUI"
+    npm ci
+    npm test
+    # Use existing local CLI authentication for build-only source-map uploads.
+    if [[ -z "${SENTRY_AUTH_TOKEN:-}" ]] && command -v sentry >/dev/null 2>&1; then
+      SENTRY_AUTH_TOKEN="$(sentry auth token)"
+      export SENTRY_AUTH_TOKEN
+    fi
+    VITE_APP_BUILD="$RELEASE_ID" VITE_BACKEND_URL='' npm run build
+  )
   mkdir -p "$OUTPUT/api" "$OUTPUT/web"
   cp "$ROOT/backend/watchparty/package.json" "$ROOT/backend/watchparty/package-lock.json" "$OUTPUT/api/"
   cp -R "$ROOT/backend/watchparty/server" "$ROOT/backend/watchparty/sql" "$OUTPUT/api/"
