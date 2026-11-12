@@ -254,4 +254,35 @@
     <string name="avatar_label_echo">Echo</string>
     <string name="avatar_label_spark">Spark</string>
     <string name="avatar_label_bloom">Bloom</string>
+
+    <string name="chat_title">Party chat</string>
+    <string name="chat_members_only">Only people in this party</string>
+    <string name="chat_empty_title">First word is yours</string>
+    <string name="chat_empty_copy">Say hi, share a thought, or start with 🍿.</string>
+    <string name="chat_loading">Loading conversation…</string>
+    <string name="chat_message_label">Message the party</string>
+    <string name="chat_placeholder">Message the party…</string>
+    <string name="chat_send">Send message</string>
+    <string name="chat_sending">Sending…</string>
+    <string name="chat_sent">Sent</string>
+    <string name="chat_not_sent">Not sent</string>
+    <string name="chat_collapse">Collapse chat</string>
+    <string name="chat_open">Open chat</string>
+    <string name="chat_emoji">Add emoji</string>
+    <string name="chat_choose_emoji">Choose an emoji</string>
+    <string name="chat_retry">Retry</string>
+    <string name="chat_discard">Discard</string>
+    <string name="chat_earlier">Load earlier messages</string>
+    <string name="chat_latest">Latest messages</string>
+    <string name="chat_refresh">Return to latest messages</string>
+    <string name="chat_offline">Chat is offline. Your draft stays here.</string>
+    <string name="chat_hint">Only this party · Enter to send</string>
+    <string name="chat_pending_limit">Retry or discard pending messages to send more.</string>
+    <string name="chat_invalid">Use a message of 1–500 characters.</string>
+    <string name="chat_conflict">This message could not be retried. Discard it and send a new message.</string>
+    <string name="chat_failed">Could not load the conversation. Try again.</string>
+    <string name="chat_rate_limited">Too many messages. Wait a moment and retry.</string>
+    <string name="chat_you">You</string>
+    <string name="chat_unread">%1$d unread messages</string>
+    <string name="chat_history_loading">Loading…</string>
 </resources>

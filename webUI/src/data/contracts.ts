@@ -5,10 +5,12 @@ export interface IdentityDto { id: string; name: string; avatar: string; languag
 export interface RoomDto { id: string; code: string; title: string; ownerIdentityId: string; endedAt?: string }
 export interface MemberDto { membershipId: string; identityId: string; displayName: string; avatar: string; isOwner: boolean; present: boolean }
 export interface StreamDto { sessionId: string; revision: number; state: 'EMPTY' | 'ACTIVE' | 'ABORTED'; url: string }
-export interface Snapshot { ownerName?: string; room: RoomDto; members: MemberDto[]; stream: StreamDto; sequence: number }
+export interface ChatMessage { id: string; roomId: string; identityId: string; membershipId: string; displayName: string; avatar: string; text: string; createdAt: string; sequence: number }
+export interface ChatPage { messages: ChatMessage[]; hasMore: boolean }
+export interface Snapshot { chat?: ChatPage; ownerName?: string; room: RoomDto; members: MemberDto[]; stream: StreamDto; sequence: number }
 export interface Admission { room: RoomDto; membership: { id: string; identityId: string; isOwner: boolean } }
 export interface PreviewDto { code: string; title: string; ownerName: string; ownerPresent: boolean; participantCount: number; availability: 'OPEN' | 'FULL' | 'ENDED'; streamState: string }
-export interface RoomEvent { topic: string; eventId: string; sequence: number; payload: { member?: MemberDto; present?: boolean; ownerName?: string; streamSessionId?: string; revision?: number; url?: string } }
+export interface RoomEvent { topic: string; eventId: string; sequence: number; payload: { message?: ChatMessage; member?: MemberDto; present?: boolean; ownerName?: string; streamSessionId?: string; revision?: number; url?: string } }
 export interface SyncResult { requestId: string; status: 'APPLIED' | 'ALREADY_LEADING' | 'UNAVAILABLE'; targetPositionMs: number }
 
 export const avatarId = (value: string): AvatarId => avatarOptions.some(a => a.id === value) ? value as AvatarId : 'comet';
@@ -26,6 +28,11 @@ export function reduceEvent(snapshot: Snapshot, event: RoomEvent): Snapshot | nu
   if (event.sequence !== snapshot.sequence + 1) return null;
   const next = { ...snapshot, ownerName: snapshot.members.find(m => m.isOwner)?.displayName || snapshot.ownerName, sequence: event.sequence, members: [...snapshot.members] };
   const p = event.payload;
+  if (event.topic === 'chat.message') {
+    if (!p.message || p.message.sequence !== event.sequence || p.message.roomId !== snapshot.room.id) return null;
+    const messages = [...(snapshot.chat?.messages || []).filter(m => m.id !== p.message!.id), p.message].sort((a, b) => a.sequence - b.sequence);
+    next.chat = { messages: messages.slice(-500), hasMore: !!snapshot.chat?.hasMore || messages.length > 500 };
+  }
   if (event.topic.startsWith('member.') && p.member) {
     next.members = next.members.filter(m => m.membershipId !== p.member!.membershipId);
     if (event.topic !== 'member.left') next.members.push(p.member);

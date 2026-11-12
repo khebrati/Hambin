@@ -37,6 +37,8 @@ import { VideoPlayer } from '../components/VideoPlayer';
 import type { VoiceState } from '../data/voice';
 import { sampleVideoUrl } from '../data/fakeRepository';
 import type { Party, StreamStatus } from '../types';
+import type { ReactNode } from 'react';
+import { PartyChat, type ChatControls } from '../components/PartyChat';
 
 const TOTAL_SECONDS = 6138;
 const LEADING_POSITION = 1542;
@@ -64,6 +66,7 @@ function formatTime(value: number) {
 }
 
 export interface LivePartyControls {
+  chat?: ChatControls;
   connected: boolean;
   leaving: boolean;
   voice: VoiceState;
@@ -76,6 +79,7 @@ export interface LivePartyControls {
   onReport: (positionMs: number, playing: boolean) => void;
 }
 interface PartyScreenProps {
+  chatPreview?: { placement: 'side' | 'dock' | 'floating'; content: ReactNode };
   live?: LivePartyControls;
   party: Party;
   streamStatus: StreamStatus;
@@ -101,6 +105,7 @@ export function PartyScreen({
   onLeave,
   onNotify,
   live,
+  chatPreview,
 }: PartyScreenProps) {
   const [bugReportOpen, setBugReportOpen] = useState(false);
   const [urlDraft, setUrlDraft] = useState(
@@ -224,7 +229,7 @@ export function PartyScreen({
   };
 
   return (
-    <div className="screen party-screen screen-enter">
+    <div className={`screen party-screen screen-enter${live?.chat ? ' party-screen--chat' : ''}${chatPreview ? ` party-chat-preview party-chat-preview--${chatPreview.placement}` : ''}`}>
       <AppBar
         title={party.title}
         subtitle={`${partyCode} · ${isOwner ? t("Owner") : party.ownerPresent ? t("Guest") : t("Owner away")}`}
@@ -318,9 +323,12 @@ export function PartyScreen({
           <div className="participants-compact">
             <ParticipantStrip participants={participants} voiceMembers={live?.voice.members} />
           </div>
+          {chatPreview?.placement === 'dock' && chatPreview.content}
         </section>
 
         <aside className="party-support" aria-label={t("Party details")}>
+          {live?.chat && <PartyChat chat={live.chat} connected={live.connected && !live.leaving} />}
+          {chatPreview?.placement === 'side' && chatPreview.content}
           <div className="participants-wide">
             <ParticipantStrip participants={participants} voiceMembers={live?.voice.members} />
           </div>
@@ -376,6 +384,7 @@ export function PartyScreen({
           ) : null}
         </aside>
       </main>
+      {chatPreview?.placement === 'floating' && chatPreview.content}
 
       <BugReportDialog open={bugReportOpen} roomId={party.id} enabled={!!live} onClose={() => setBugReportOpen(false)} onSent={() => onNotify(t("Bug report sent. Thank you."))} />
       <Dialog

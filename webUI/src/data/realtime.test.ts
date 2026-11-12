@@ -60,3 +60,14 @@ describe('room session recovery',()=>{
     socket.deliver('disconnect');client.report(3000,true);expect(socket.sent).toHaveLength(1);
   });
 });
+
+it('chat history requests cannot overwrite a newer reconnect snapshot',async()=>{
+  const {client,onSnapshot}=setup();await flush();const socket=mocks.sockets[0];
+  const message={id:'m5',roomId:'room',identityId:'guest',membershipId:'member',displayName:'Jo',avatar:'berry',text:'Hello',createdAt:'2026-11-12T06:00:00Z',sequence:5};
+  socket.deliver('snapshot',{...initial,sequence:5,chat:{messages:[message],hasMore:true}});
+  let resolve!:(value:unknown)=>void;mocks.request.mockReturnValue(new Promise(r=>{resolve=r;}));
+  const loading=client.loadEarlierChat();
+  socket.deliver('snapshot',{...initial,sequence:6,chat:{messages:[{...message,id:'m6',sequence:6}],hasMore:false}});
+  resolve({messages:[{...message,id:'old',sequence:1}],hasMore:false});await loading;
+  expect(onSnapshot.mock.lastCall?.[0].chat.messages.map((m:any)=>m.id)).toEqual(['m6']);
+});

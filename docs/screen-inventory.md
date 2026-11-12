@@ -24,7 +24,7 @@
 - Screens should support light theme, dark theme, large text, and responsive layouts. Supported by REQ-030.
 - Current designs should be English-only and do not need RTL examples now, while future RTL status remains uncertain. Supported by REQ-041 and temporary decision based on ASM-015.
 - Custom video controls should follow Material Design 3 Expressive rather than default browser/platform controls. Supported by REQ-039.
-- Text chat screens are not included because chat is voice-only. Supported by REQ-024, REQ-040.
+- Party text chat is an embedded side panel on expanded screens and appears below player/sync controls on compact screens. It includes loading/empty/populated, send/retry, offline draft, history recovery, collapse/unread and latest-message states. Supported by REQ-024, REQ-040; DD-052.
 - Visible playback drift views are not included because local playback differences should not be visible. Supported by REQ-038.
 
 ## Not Included as Screens in the Current Phase

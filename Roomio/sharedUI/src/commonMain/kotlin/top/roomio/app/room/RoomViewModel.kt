@@ -46,6 +46,7 @@ internal enum class VoiceConnectionState { IDLE, CONNECTING, CONNECTED, DEGRADED
 
 internal data class RoomUiState(
     val model: RoomScreenModel,
+    val chat: RoomChatState = RoomChatState(),
     val playback: RoomPlaybackState = model.playback,
     val videoUrl: String = "",
     val positionMs: Long = 0L,
@@ -86,6 +87,15 @@ internal data class RoomUiState(
 }
 
 internal sealed interface RoomAction {
+    data class ChatDraftChanged(val text: String) : RoomAction
+    data object ChatSend : RoomAction
+    data class ChatRetry(val messageId: String) : RoomAction
+    data class ChatDiscard(val messageId: String) : RoomAction
+    data object ChatToggle : RoomAction
+    data class ChatAtLatest(val value: Boolean) : RoomAction
+    data object ChatLoadEarlier : RoomAction
+    data object ChatRefresh : RoomAction
+
     data object BugReportClicked : RoomAction
     data object BugReportDismissed : RoomAction
     data class BugDescriptionChanged(val description: String) : RoomAction
@@ -156,9 +166,11 @@ internal class RoomViewModel(
     private var speakingMembershipIds: Set<String> = emptySet()
     private var closedByServer = false
     private val log = Logger.withTag("RoomVM")
+    private var chatVersion = 0L
+    private var connectionJob: Job? = null
 
     init {
-        viewModelScope.launch { connect() }
+        connectionJob = viewModelScope.launch { connect() }
         viewModelScope.launch { reportLoop() }
         viewModelScope.launch {
             voiceCoordinator.state.collect { voice ->
@@ -193,6 +205,20 @@ internal class RoomViewModel(
 
     fun onAction(action: RoomAction) {
         when (action) {
+            is RoomAction.ChatDraftChanged -> if (action.text.length <= 500) mutableState.update { it.copy(chat = it.chat.copy(draft = action.text)) }
+            RoomAction.ChatSend -> sendChat()
+            is RoomAction.ChatRetry -> sendChat(action.messageId)
+            is RoomAction.ChatDiscard -> mutableState.update { it.copy(chat = it.chat.copy(pending = it.chat.pending.filterNot { pending -> pending.id == action.messageId })) }
+            RoomAction.ChatToggle -> mutableState.update { it.copy(chat = it.chat.copy(open = !it.chat.open, unread = if (!it.chat.open) 0 else it.chat.unread, atLatest = if (!it.chat.open) true else it.chat.atLatest)) }
+            is RoomAction.ChatAtLatest -> mutableState.update { it.copy(chat = it.chat.copy(atLatest = action.value, unread = if (action.value && it.chat.open) 0 else it.chat.unread)) }
+            RoomAction.ChatLoadEarlier -> loadChatHistory()
+            RoomAction.ChatRefresh -> {
+                if (realtime == null && connectionJob?.isActive != true) {
+                    mutableState.update { it.copy(chat = it.chat.copy(loading = true, error = null)) }
+                    connectionJob = viewModelScope.launch { connect() }
+                } else loadChatHistory(refresh = true)
+            }
+
             RoomAction.BugReportClicked -> mutableState.update { it.copy(bugReportOpen = true, bugSent = false) }
             RoomAction.BugReportDismissed -> if (!state.value.bugSending) mutableState.update { it.copy(bugReportOpen = false) }
             is RoomAction.BugDescriptionChanged -> if (!state.value.bugSending) mutableState.update { it.copy(bugDescription = action.description.take(8000), bugError = null, bugSent = false) }
@@ -268,6 +294,64 @@ internal class RoomViewModel(
         }
     }
 
+    @OptIn(kotlin.uuid.ExperimentalUuidApi::class)
+    private fun sendChat(retryId: String? = null) {
+        val current = state.value.chat
+        val previous = retryId?.let { id -> current.pending.firstOrNull { it.id == id && it.state == ChatSendState.FAILED } }
+        if (retryId != null && previous == null) return
+        val text = previous?.text ?: top.roomio.domain.party.normalizeChatText(current.draft)
+        if (!current.connected || current.loading || !top.roomio.domain.party.validChatText(text) || (previous == null && current.pending.size >= 20)) return
+        val pending = previous?.copy(state = ChatSendState.SENDING, error = null)
+            ?: PendingChatMessage(kotlin.uuid.Uuid.random().toString(), text)
+        mutableState.update { it.copy(chat = it.chat.copy(
+            draft = if (previous == null) "" else it.chat.draft,
+            pending = it.chat.pending.filterNot { message -> message.id == pending.id } + pending,
+            atLatest = true,
+        )) }
+        viewModelScope.launch {
+            try {
+                val accepted = roomRepository.sendChatMessage(roomId, pending.id, text)
+                if (accepted.roomId == roomId) mutableState.update { it.copy(chat = it.chat.receive(accepted)) }
+                else throw PartyException("UNAVAILABLE", "Unexpected chat room")
+            } catch (cancelled: CancellationException) { throw cancelled
+            } catch (error: Throwable) {
+                val code = (error as? PartyException)?.code ?: "NETWORK"
+                mutableState.update { it.copy(chat = it.chat.copy(pending = it.chat.pending.map { message ->
+                    if (message.id == pending.id) message.copy(state = ChatSendState.FAILED, error = code) else message
+                })) }
+            }
+        }
+    }
+
+    private fun loadChatHistory(refresh: Boolean = false) {
+        val current = state.value.chat
+        if (current.loadingMore || (!refresh && (!current.hasMore || current.messages.size >= 500))) return
+        val before = if (refresh) null else current.messages.firstOrNull()?.sequence
+        val version = chatVersion
+        mutableState.update { it.copy(chat = it.chat.copy(loadingMore = true, error = null, atLatest = if (refresh) true else false)) }
+        viewModelScope.launch {
+            try {
+                val page = roomRepository.chatHistory(roomId, before)
+                if (version != chatVersion) return@launch
+                mutableState.update {
+                    if (!refresh && it.chat.messages.firstOrNull()?.sequence != before) it
+                    else {
+                        // Refresh pages may race a newer room event: retain only known messages newer than the page.
+                        val newer = if (refresh) it.chat.messages.filter { message -> message.sequence > (page.messages.lastOrNull()?.sequence ?: 0L) } else it.chat.messages
+                        val all = (page.messages + newer).distinctBy { message -> message.id }.sortedBy { message -> message.sequence }
+                        it.copy(chat = it.chat.copy(messages = all.takeLast(500), hasMore = page.hasMore || all.size > 500,
+                            pending = it.chat.pending.filterNot { pending -> all.any { message -> message.id == pending.id } }, loading = false))
+                    }
+                }
+            } catch (cancelled: CancellationException) { throw cancelled
+            } catch (error: Throwable) {
+                if (version == chatVersion) mutableState.update { it.copy(chat = it.chat.copy(error = (error as? PartyException)?.code ?: "NETWORK", loading = false)) }
+            } finally {
+                if (version == chatVersion) mutableState.update { it.copy(chat = it.chat.copy(loadingMore = false)) }
+            }
+        }
+    }
+
     private fun sendBugReport() {
         val current = state.value
         if (current.bugSending || current.bugDescription.isBlank() || current.bugSent) return
@@ -305,7 +389,7 @@ internal class RoomViewModel(
             // The network snapshot can fail while offline (DNS, connection, timeout).
             // Map it to an error state and an offline snackbar instead of crashing.
             log.e("snapshot failed: ${(error as? PartyException)?.code ?: "UNKNOWN"} connectivity=$connectivity")
-            mutableState.update { it.copy(playback = RoomPlaybackState.ERROR) }
+            mutableState.update { it.copy(playback = RoomPlaybackState.ERROR, chat = it.chat.copy(loading = false, connected = false, error = (error as? PartyException)?.code ?: "NETWORK")) }
             mutableEffects.tryEmit(RoomEffect.Error(connectivity))
             return
         }
@@ -327,6 +411,7 @@ internal class RoomViewModel(
             } finally {
                 if (realtime != null) log.w("realtime detached")
                 realtime = null
+                mutableState.update { it.copy(chat = it.chat.copy(connected = false)) }
             }
             if (!closedByServer) {
                 log.i("reconnecting in ${RECONNECT_DELAY_MS}ms")
@@ -372,9 +457,12 @@ internal class RoomViewModel(
                 log.i("stream.aborted session=${event.sessionId} revision=${event.revision}")
                 mutableState.update { it.copy(playback = RoomPlaybackState.ABORTED) }
             }
+            is RealtimeEvent.ChatMessageReceived -> if (event.message.roomId == roomId) {
+                mutableState.update { it.copy(chat = it.chat.receive(event.message)) }
+            }
             RealtimeEvent.RoomClosed -> {
                 closedByServer = true
-                mutableState.update { it.copy(playback = RoomPlaybackState.ABORTED) }
+                mutableState.update { it.copy(playback = RoomPlaybackState.ABORTED, chat = it.chat.copy(connected = false)) }
             }
             is RealtimeEvent.SyncResult -> {
                 val pending = pendingSyncRequestId
@@ -405,12 +493,18 @@ internal class RoomViewModel(
                     }
                 }
             }
-            is RealtimeEvent.Failure -> log.w("realtime failure code=${event.code}")
+            is RealtimeEvent.Failure -> {
+                log.w("realtime failure code=${event.code}")
+                if (event.code in setOf("NETWORK", "UNAVAILABLE", "AUTH_UNAVAILABLE", "SESSION_EXPIRED", "INVALID_TOKEN", "UNAUTHENTICATED", "SESSION_REVOKED", "NOT_A_MEMBER", "ROOM_ENDED")) {
+                    mutableState.update { it.copy(chat = it.chat.copy(connected = false)) }
+                }
+            }
             RealtimeEvent.Ignored -> Unit
         }
     }
 
     private fun applySnapshot(snapshot: RoomSnapshot) {
+        chatVersion++
         val incomingSessionId = snapshot.stream.sessionId.takeIf { snapshot.stream.state == StreamState.ACTIVE && it.isNotEmpty() }
         val sameActiveStream = incomingSessionId != null && incomingSessionId == streamSessionId
         streamRevision = snapshot.stream.revision
@@ -442,6 +536,14 @@ internal class RoomViewModel(
                     participants = members.map { it.toParticipant() },
                 ),
                 playback = effectivePlayback,
+                chat = current.chat.copy(
+                    identityId = identityId.orEmpty(), messages = snapshot.chat.messages.takeLast(500),
+                    hasMore = snapshot.chat.hasMore, loading = false, loadingMore = false, error = null, connected = true,
+                    pending = current.chat.pending.filterNot { pending -> snapshot.chat.messages.any { it.id == pending.id } },
+                    unread = current.chat.unread + if (!current.chat.open || !current.chat.atLatest) snapshot.chat.messages.count { message ->
+                        message.sequence > (current.chat.messages.lastOrNull()?.sequence ?: if (current.chat.loading) Long.MAX_VALUE else 0L) && message.identityId != identityId
+                    } else 0,
+                ),
                 // A reconnect snapshot describes the same shared stream. Keep
                 // viewer-local playback, position and track selections intact.
                 videoUrl = if (sameActiveStream) current.videoUrl else snapshot.stream.url,

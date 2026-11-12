@@ -378,7 +378,7 @@ internal fun RoomScreen(
         )
     } else {
         Scaffold(
-            modifier = modifier.windowInsetsPadding(WindowInsets.safeDrawing),
+            modifier = modifier.windowInsetsPadding(WindowInsets.safeDrawing).imePadding(),
             topBar = {
                 RoomTopBar(
                     title = state.model.title,
@@ -404,7 +404,7 @@ internal fun RoomScreen(
                     .padding(contentPadding)
                     .verticalScroll(rememberScrollState()),
             ) {
-                val compact = maxWidth < 840.dp
+                val compact = maxWidth < 1000.dp
             val cinema: @Composable ColumnScope.() -> Unit = {
                 if (!state.model.ownerPresent) {
                     OwnerAwayBanner(state.model.ownerName)
@@ -473,6 +473,8 @@ internal fun RoomScreen(
             }
 
             val support: @Composable () -> Unit = {
+                Column(verticalArrangement = Arrangement.spacedBy(RoomioDesignSystem.spacing.small)) {
+                RoomChatPanel(state.chat, onAction)
                 RoomSupportPanel(
                     participants = state.model.participants,
                     micMuted = state.micMuted,
@@ -489,6 +491,7 @@ internal fun RoomScreen(
                     onShowLink = { onAction(RoomAction.LinkClicked) },
                     onEndStream = { onAction(RoomAction.EndStreamClicked) },
                 )
+                }
             }
 
             if (compact) {
@@ -506,7 +509,7 @@ internal fun RoomScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .widthIn(max = 1120.dp)
+                        .widthIn(max = 1376.dp)
                         .padding(horizontal = RoomioDesignSystem.spacing.small, vertical = RoomioDesignSystem.spacing.medium),
                     horizontalArrangement = Arrangement.spacedBy(RoomioDesignSystem.spacing.medium),
                     verticalAlignment = Alignment.Top,
@@ -514,7 +517,7 @@ internal fun RoomScreen(
                     Column(Modifier.weight(1.7f), verticalArrangement = Arrangement.spacedBy(RoomioDesignSystem.spacing.small)) {
                         cinema()
                     }
-                    Box(Modifier.weight(.75f)) { support() }
+                    Box(Modifier.width(360.dp)) { support() }
                 }
             }
         }

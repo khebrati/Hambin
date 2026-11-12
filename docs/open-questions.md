@@ -15,9 +15,9 @@ Resolved questions are preserved with their answers for traceability.
    - Answer: Cross-platform mobile focused on Material Design 3 Expressive.
    - Design decision affected: Sets mobile-first cross-platform screen structure and confirms Material 3 Expressive as the visual system. The production runtime remains unspecified.
 
-2. [Resolved] Is "chatroom" text chat, voice chat, or both?
-   - Answer: Only voice chat.
-   - Design decision affected: Removes text message composer and message list from the design; adds voice activity, microphone, and speaking-indicator states.
+2. [Resolved, updated DD-052] Is "chatroom" text chat, voice chat, or both?
+   - Answer: Voice and room-scoped plain text/emoji. The stakeholder selected side-by-side text chat on 2026-11-12, superseding the earlier voice-only scope.
+   - Design decision affected: Retain voice activity/microphone controls and add an adaptive chat panel, history, composer, unread and offline/retry states; see chat-contract.md.
 
 3. [Resolved] What does "logo" mean in settings: a personal avatar, room logo, app logo, or selectable icon?
    - Answer: A personal avatar selected from a list of fun illustrated cartoonic avatars.
@@ -159,3 +159,14 @@ Resolved questions are preserved with their answers for traceability.
 
 - [Resolved, DD-042] Use AVPlayer for all HTTP(S) browser media, with one automatic browser/native-HLS/hls.js fallback on failure or a 30-second initial startup stall while online.
 - Physical-device/mobile Safari and full-movie acceptance remain unverified. Embedded track availability can differ between AVPlayer and fallback engines; no universal codec or track-parity promise is made.
+
+## Party text-chat exploration (2026-11-12)
+
+- The stakeholder requested three web chat design previews (DD-050), following the backend readiness assessment. That exploration-only scope was superseded when the stakeholder selected side-by-side and authorized production implementation (DD-052).
+- Choose among side-by-side, below-player dock and floating conversation, including the preferred mobile behavior. Local previews are available at `/?preview=chat` with a design switcher.
+- Before production implementation, confirm message history visibility for new/rejoining members, room-lifetime retention, limits and moderation scope, then define shared HTTP/realtime contracts and native behavior. The preview's 500-character composer limit is an exploratory UI value, not a backend contract.
+
+## Party text chat selection (2026-11-12)
+
+- [Resolved, DD-052] The stakeholder selected the side-by-side concept and authorized backend plus browser/Android/iOS/desktop implementation. The earlier voice-only clarification and DD-050's exploration-only status are superseded for this feature.
+- Implementation defaults are documented in [chat contract](chat-contract.md): room members see room history; room tombstone cleanup removes stored messages; plain text/emoji with shared limits; no moderation/attachments/read receipts in this iteration.

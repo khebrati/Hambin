@@ -10,6 +10,7 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.platform.ClipboardManager
@@ -54,7 +55,7 @@ class CurrentVideoLinkTest {
         }
 
         onNodeWithText("aurora-station.mp4").assertExists()
-        onAllNodesWithContentDescription("Current video link")[0].performClick()
+        onAllNodesWithContentDescription("Current video link")[0].performScrollTo().performClick()
         onNodeWithText(CURRENT_VIDEO_URL).assertExists()
         onNodeWithContentDescription("Copy link").assertExists()
         onNodeWithContentDescription("Copy link").performClick()
@@ -64,7 +65,7 @@ class CurrentVideoLinkTest {
 
         runOnIdle { showGuestRoom() }
         onNodeWithText("aurora-station.mp4").assertExists()
-        onAllNodesWithContentDescription("Current video link")[0].performClick()
+        onAllNodesWithContentDescription("Current video link")[0].performScrollTo().performClick()
         onNodeWithText(CURRENT_VIDEO_URL).assertExists()
         onNodeWithContentDescription("Copy link").assertExists()
         onNodeWithContentDescription("Copy link").performClick()

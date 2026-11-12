@@ -7,6 +7,7 @@ import { PreviewApp } from './PreviewApp';
 const LiveApp = lazy(() => import('./LiveApp'));
 const AndroidDownloadDesigns = lazy(() => import('./designs/AndroidDownloadDesigns'));
 const BugReportDesigns = lazy(() => import('./designs/BugReportDesigns'));
+const ChatDesigns = lazy(() => import('./designs/ChatDesigns'));
 export function App() {
   const language = useLanguage();
   useLayoutEffect(() => {
@@ -16,6 +17,7 @@ export function App() {
     document.documentElement.dir = language === 'fa' || new URLSearchParams(location.search).get('dir') === 'rtl' ? 'rtl' : 'ltr';
   }, [language]);
   const preview = new URLSearchParams(location.search).get('preview');
+  if (preview === 'chat') return <Suspense fallback={<LoadingIndicator label={t("Opening designs")} />}><ChatDesigns /></Suspense>;
   if (preview === 'bug-reports') return <Suspense fallback={<LoadingIndicator label={t("Opening designs")} />}><BugReportDesigns /></Suspense>;
   if (preview === 'android-downloads') return <Suspense fallback={<LoadingIndicator label={t("Opening designs")} />}><AndroidDownloadDesigns /></Suspense>;
   return preview && previewStates[preview] ? <PreviewApp /> : <Suspense fallback={<main className="form-page"><LoadingIndicator label={t("Opening Watch Party")} /></main>}><LiveApp /></Suspense>;

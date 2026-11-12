@@ -33,7 +33,7 @@ Existing requirement IDs are preserved. New confirmed requirements from stakehol
 | REQ-021 | When anyone clicks the synchronization button, their playback is fast forwarded to the leading participant. | Functional requirement | Explicit | REQ-020, REQ-022, REQ-038 | Behavior for a user who is already the leading participant remains unspecified. | Relevant |
 | REQ-022 | The synchronization target is the leading participant, defined as the participant currently furthest ahead in playback. | Business rule | Explicit | REQ-020, REQ-021, REQ-038 | None for target definition. Edge cases remain: tied leaders and the current leader pressing sync. | Relevant |
 | REQ-023 | Users can see their own avatar/icon and other users in the party screen. | Content requirement | Explicit | REQ-007, REQ-011, REQ-024 | Member overflow and party size remain unspecified. | Relevant |
-| REQ-024 | The chatroom is voice chat only. | Functional requirement | Explicit | REQ-011, REQ-025 | Voice permissions, mute behavior, and push-to-talk vs open mic are unspecified. | Relevant |
+| REQ-024 | Party members can use voice and independent room text/emoji chat. | Functional requirement | Explicit, updated 2026-11-12 | REQ-011, REQ-025, REQ-040 | Voice follows DD-031; text follows DD-052 and chat-contract.md. | Relevant |
 | REQ-025 | When users speak in voice chat, an indicator appears on their avatar/icon. | Visual requirement | Explicit | REQ-023, REQ-024 | Indicator style, duration, and sensitivity are unspecified. | Relevant |
 | REQ-026 | Video playback includes play/pause controls. | Functional requirement | Explicit | REQ-013, REQ-017, REQ-039 | None. | Relevant |
 | REQ-027 | Video playback includes forward/backward controls. | Functional requirement | Explicit | REQ-013, REQ-017, REQ-039 | Step size and scrub behavior are unspecified. | Relevant |
@@ -49,7 +49,7 @@ Existing requirement IDs are preserved. New confirmed requirements from stakehol
 | REQ-037 | Leaving a party requires a confirmation prompt. | Business rule | Explicit | REQ-011, REQ-034 | Whether the room owner leaving transfers ownership or ends the room is unspecified. | Relevant |
 | REQ-038 | Local playback position differences should not be visible to users; synchronization is only performed when a user intentionally presses the sync button. | Visual requirement | Explicit | REQ-020, REQ-021, REQ-022 | No visible ahead/behind status should be designed unless later requested. | Relevant |
 | REQ-039 | Playback controls should be custom-designed based on Material Design 3 Expressive guidelines rather than using default platform/browser controls as the primary design. | Visual requirement | Explicit | REQ-013, REQ-026, REQ-027, REQ-028, REQ-029 | Implementation feasibility is outside this design-analysis phase. | Relevant |
-| REQ-040 | The design should not include text chat. | Functional requirement | Explicit | REQ-024, REQ-025 | None. | Relevant |
+| REQ-040 | Include the selected side-by-side chat panel, adapted below the player on compact screens, across browser and native clients. | Functional requirement | Explicit, DD-052 supersedes the earlier exclusion | REQ-024, REQ-025 | History, limits, retries and privacy follow chat-contract.md. | Relevant |
 | REQ-041 | Current design work should proceed only in English and does not need RTL examples now. | Content requirement | Explicit | REQ-006, REQ-030 | This conflicts with repository guidance to support RTL; whether RTL is deferred or removed remains uncertain. | Relevant |
 | REQ-042 | Party members can invite others through a prominent share action that copies the party code or a mock invite link. | Functional requirement | Explicit | REQ-010, REQ-011, REQ-031 | Native share integration and production deep linking are outside the prototype scope. | Relevant |
 | REQ-043 | Before joining, an invitee can preview the party title, current owner status, participant count, and stream status, then confirm or cancel joining. | Navigation requirement | Explicit | REQ-010, REQ-023, REQ-042 | The preview uses local mock data and does not require production room lookup. | Relevant |
@@ -62,7 +62,7 @@ Existing requirement IDs are preserved. New confirmed requirements from stakehol
 - REQ-015 and REQ-016 depend on an owner role created or assigned during party creation, but the source does not define ownership details.
 - REQ-017, REQ-018, REQ-020, REQ-021, REQ-022, and REQ-038 depend on an active stream state.
 - REQ-023 and REQ-025 depend on user identity details from REQ-007.
-- REQ-024, REQ-025, and REQ-040 define the communication model as voice-only.
+- REQ-024, REQ-025, and REQ-040 define voice plus room text chat; DD-052 supersedes the original voice-only scope.
 - REQ-032 depends on the room owner restriction in REQ-015 because non-owners need read/copy access without start permission.
 - REQ-034 and REQ-037 depend on being inside an active party.
 - REQ-039 depends on the Material 3 Expressive design direction in REQ-029.
@@ -73,7 +73,7 @@ Existing requirement IDs are preserved. New confirmed requirements from stakehol
 
 ## Resolved Conflicts and Clarifications
 
-- Voice chat is confirmed as the only chat mode. Text chat should not be designed unless requirements change.
+- Voice and room text chat are confirmed modes (DD-052). Chat remains independent of voice and playback.
 - "Logo" in settings is confirmed as a personal avatar selected from a list of fun illustrated cartoonic avatars.
 - The synchronization target is confirmed as the leading participant, meaning the participant currently furthest ahead.
 - Non-owners can see, copy, and inspect the current URL but cannot start a new stream URL.

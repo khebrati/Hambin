@@ -26,3 +26,13 @@ describe('backend boundary', () => {
     expect(reduceEvent(snapshot,event(5,'stream.started',{revision:3,streamSessionId:'session-2',url:'https://example.test/next.mp4'}))!.stream).toMatchObject({sessionId:'session-2',revision:3,state:'ACTIVE'});
   });
 });
+
+it('chat events preserve playback and reject a wrong room or sequence', () => {
+  const message = {id:'message',roomId:'room-id',identityId:'guest',membershipId:'guest-member',displayName:'Nika',avatar:'comet',text:'سلام 🍿',createdAt:'2026-11-12T06:00:00Z',sequence:5};
+  const value = reduceEvent(snapshot,event(5,'chat.message',{message}))!;
+  expect(value.chat?.messages).toEqual([message]);
+  expect(value.stream).toBe(snapshot.stream);
+  expect(reduceEvent(value,event(5,'chat.message',{message}))).toBe(value);
+  expect(reduceEvent(snapshot,event(5,'chat.message',{message:{...message,roomId:'other'}}))).toBeNull();
+  expect(reduceEvent(snapshot,event(5,'chat.message',{message:{...message,sequence:6}}))).toBeNull();
+});

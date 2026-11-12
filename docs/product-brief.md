@@ -48,7 +48,7 @@ The interface should make global actions feel materially different from local ac
 
 ## Scope
 
-In scope for the current design phase: product experience documentation, screen structure, core user flows, invite/share and pre-join preview states, role-specific and owner-absent states, custom Material 3 Expressive playback controls, voice-only party presence, settings, party creation/joining, simple errors, and leave confirmation. Supported by REQ-003, REQ-004, REQ-005, REQ-008, REQ-011, REQ-024, REQ-030, REQ-033, REQ-034, REQ-039, REQ-042, REQ-043, REQ-044, ASM-012.
+In scope for the current design phase: product experience documentation, screen structure, core user flows, invite/share and pre-join preview states, role-specific and owner-absent states, custom Material 3 Expressive playback controls, voice and text party communication (DD-052), settings, party creation/joining, simple errors, and leave confirmation. Supported by REQ-003, REQ-004, REQ-005, REQ-008, REQ-011, REQ-024, REQ-030, REQ-033, REQ-034, REQ-039, REQ-042, REQ-043, REQ-044, ASM-012.
 
 The prototype direction can be represented as a mobile-first browser prototype while targeting a cross-platform mobile product direction. Temporary decision based on ASM-001 and supported by REQ-001.
 
@@ -58,7 +58,7 @@ The current design pass proceeds in English only while avoiding decisions that w
 
 - Production backend services, databases, authentication, production networking, and real-time synchronization infrastructure are out of scope for this design phase. Supported by REQ-031.
 - Production media compatibility and real direct-video validation logic are out of scope; validation can be represented visually. Supported by REQ-002 and temporary decision based on ASM-014.
-- Text chat is out of scope because communication is voice-only. Supported by REQ-024 and REQ-040.
+- Plain text/emoji party chat is included under DD-052, superseding the earlier voice-only exclusion in REQ-024/REQ-040. Attachments, reactions, typing indicators and read receipts remain outside this iteration.
 - Visible playback drift indicators are out of scope because local playback differences should not be shown. Supported by REQ-038.
 - RTL design examples are out of scope for the current pass, though future RTL support remains unresolved against repository guidance. Supported by REQ-041 and temporary decision based on ASM-015.
 

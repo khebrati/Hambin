@@ -51,12 +51,14 @@ internal fun SnapshotDto.toDomain() = RoomSnapshot(
     room = room.toDomain(),
     members = members.map { it.toDomain() },
     stream = stream.toDomain(),
+    chat = chat.toDomain(),
 )
 
 internal fun SnapshotMessageDto.toDomain() = RoomSnapshot(
     room = room.toDomain(),
     members = members.map { it.toDomain() },
     stream = stream.toDomain(),
+    chat = chat.toDomain(),
 )
 
 internal fun RoomPreviewDto.toDomain() = RoomPreview(
@@ -78,3 +80,8 @@ internal fun String.toStreamState(): StreamState = when (uppercase()) {
     "ABORTED" -> StreamState.ABORTED
     else -> StreamState.EMPTY
 }
+
+internal fun ChatMessageDto.toDomain() = top.roomio.domain.party.ChatMessage(
+    id, roomId, identityId, membershipId, displayName, avatar, text, createdAt, sequence,
+)
+internal fun ChatPageDto.toDomain() = top.roomio.domain.party.ChatPage(messages.map { it.toDomain() }, hasMore)

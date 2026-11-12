@@ -42,6 +42,14 @@ interface SessionRepository {
 
 /** Room lifecycle, shared stream control, and voice credentials. */
 interface RoomRepository {
+    /** Durable room-scoped UUID; unchanged retries return the original accepted message. */
+    suspend fun sendChatMessage(roomId: String, messageId: String, text: String): ChatMessage =
+        throw PartyException("UNAVAILABLE", "Chat unavailable")
+
+    /** Latest 50 messages, or an exclusive earlier sequence page. Active members only. */
+    suspend fun chatHistory(roomId: String, before: Long? = null): ChatPage =
+        throw PartyException("UNAVAILABLE", "Chat unavailable")
+
     /** Submit diagnostics captured through this action; retry unchanged descriptions idempotently. */
     suspend fun reportBug(roomId: String, description: String) { throw PartyException("UNAVAILABLE", "Reports unavailable") }
 

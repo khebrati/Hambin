@@ -41,6 +41,25 @@ class KtorRoomRepository(
 ) : RoomRepository {
     @kotlinx.serialization.Serializable
     private data class BugReportRequest(val reportId: String, val description: String, val clientInfo: Map<String, String>, val sessionStartedAt: String, val log: String)
+    override suspend fun sendChatMessage(roomId: String, messageId: String, text: String): top.roomio.domain.party.ChatMessage =
+        kotlinx.coroutines.withTimeoutOrNull(15_000) {
+            authed {
+                http.post("${config.baseUrl}/v1/rooms/$roomId/chat/messages") {
+                    contentType(ContentType.Application.Json)
+                    setBody(top.roomio.data.party.dto.SendChatRequest(messageId, text))
+                }.bodyOrThrow<top.roomio.data.party.dto.ChatResponseDto>().message.toDomain()
+            }
+        } ?: throw PartyException(PARTY_CODE_NETWORK, "Chat request timed out")
+
+    override suspend fun chatHistory(roomId: String, before: Long?): top.roomio.domain.party.ChatPage =
+        kotlinx.coroutines.withTimeoutOrNull(15_000) {
+            authed {
+                http.get("${config.baseUrl}/v1/rooms/$roomId/chat/messages") {
+                    before?.let { url.parameters.append("before", it.toString()) }
+                }.bodyOrThrow<top.roomio.data.party.dto.ChatPageDto>().toDomain()
+            }
+        } ?: throw PartyException(PARTY_CODE_NETWORK, "Chat history request timed out")
+
     private var pendingReport: Pair<String, BugReportRequest>? = null
 
     override suspend fun reportBug(roomId: String, description: String) {

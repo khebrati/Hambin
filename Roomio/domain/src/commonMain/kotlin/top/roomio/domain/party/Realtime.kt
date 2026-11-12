@@ -32,6 +32,8 @@ sealed interface RealtimeEvent {
         val revision: Long,
     ) : RealtimeEvent
 
+    data class ChatMessageReceived(val message: ChatMessage) : RealtimeEvent
+
     data object RoomClosed : RealtimeEvent
 
     data class SyncResult(

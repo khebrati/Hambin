@@ -254,4 +254,35 @@
     <string name="avatar_label_echo">پژواک</string>
     <string name="avatar_label_spark">جرقه</string>
     <string name="avatar_label_bloom">شکوفه</string>
+
+    <string name="chat_title">گفتگوی دورهمی</string>
+    <string name="chat_members_only">فقط افراد این دورهمی</string>
+    <string name="chat_empty_title">اولین پیام با تو</string>
+    <string name="chat_empty_copy">سلام کن، نظرت را بگو یا با 🍿 شروع کن.</string>
+    <string name="chat_loading">در حال بارگذاری گفتگو…</string>
+    <string name="chat_message_label">پیام به دورهمی</string>
+    <string name="chat_placeholder">پیامی برای دورهمی…</string>
+    <string name="chat_send">ارسال پیام</string>
+    <string name="chat_sending">در حال ارسال…</string>
+    <string name="chat_sent">ارسال شد</string>
+    <string name="chat_not_sent">ارسال نشد</string>
+    <string name="chat_collapse">جمع کردن گفتگو</string>
+    <string name="chat_open">باز کردن گفتگو</string>
+    <string name="chat_emoji">افزودن ایموجی</string>
+    <string name="chat_choose_emoji">انتخاب ایموجی</string>
+    <string name="chat_retry">تلاش مجدد</string>
+    <string name="chat_discard">حذف پیش‌نویس</string>
+    <string name="chat_earlier">نمایش پیام‌های قبلی</string>
+    <string name="chat_latest">تازه‌ترین پیام‌ها</string>
+    <string name="chat_refresh">بازگشت به تازه‌ترین پیام‌ها</string>
+    <string name="chat_offline">گفتگو آفلاین است. پیش‌نویس اینجا می‌ماند.</string>
+    <string name="chat_hint">فقط این دورهمی · ارسال با Enter</string>
+    <string name="chat_pending_limit">برای ارسال پیام بیشتر، پیام‌های ناموفق را دوباره بفرست یا حذف کن.</string>
+    <string name="chat_invalid">پیامی بین ۱ تا ۵۰۰ نویسه بنویس.</string>
+    <string name="chat_conflict">ارسال دوباره این پیام ممکن نیست. آن را حذف کن و پیام تازه‌ای بفرست.</string>
+    <string name="chat_failed">گفتگو بارگذاری نشد. دوباره تلاش کن.</string>
+    <string name="chat_rate_limited">پیام‌ها خیلی زیادند. کمی صبر کن و دوباره تلاش کن.</string>
+    <string name="chat_you">تو</string>
+    <string name="chat_unread">%1$d پیام خوانده‌نشده</string>
+    <string name="chat_history_loading">در حال بارگذاری…</string>
 </resources>

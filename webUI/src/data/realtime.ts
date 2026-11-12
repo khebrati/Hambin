@@ -1,7 +1,7 @@
 import { diagnosticEvent, diagnosticError } from './sessionLog';
 import { io, type Socket } from 'socket.io-client';
 import { ApiError, backendUrl, request } from './api';
-import type { RoomEvent, Snapshot, SyncResult } from './contracts';
+import type { ChatPage, RoomEvent, Snapshot, SyncResult } from './contracts';
 import { reduceEvent } from './contracts';
 
 interface Options { roomId: string; onSnapshot(value: Snapshot): void; onConnection(connected: boolean): void; onError(error: unknown): void; onClosed(reason?: string): void }
@@ -16,6 +16,7 @@ export class RoomConnection {
   private pendingEvents: RoomEvent[] = [];
   private syncRequest = '';
   private authReady = false;
+  private chatVersion = 0;
   private diagnosticState = '';
   private syncWaiters = new Map<string, { resolve: (value: SyncResult) => void; reject: (error: unknown) => void; timer: ReturnType<typeof setTimeout> }>();
   constructor(private options: Options) {}
@@ -33,7 +34,7 @@ export class RoomConnection {
         diagnosticEvent('room.connected', { generation, sequence: value.sequence, members: value.members.length });
         this.retry = 0;
         this.authReady = true;
-        this.applySnapshot(value);
+        this.applySnapshot(value, true);
         this.options.onConnection(true);
       });
       socket.on('event', (event: RoomEvent) => {
@@ -77,7 +78,7 @@ export class RoomConnection {
     this.socket?.removeAllListeners(); this.socket?.disconnect(); this.socket = undefined;
     this.timer = setTimeout(() => { this.timer = undefined; void this.connect(); }, Math.min(10000, 500 * 2 ** Math.min(this.retry++, 5)));
   }
-  applySnapshot(value: Snapshot) {
+  applySnapshot(value: Snapshot, resetChat = false) {
     if (this.closed || (this.snapshot && value.sequence < this.snapshot.sequence)) return;
     if (this.snapshot && value.stream.revision < this.snapshot.stream.revision) return;
     const diagnosticState = `${value.stream.state}:${value.stream.revision}:${value.members.length}:${value.members.find(member => member.isOwner)?.present}`;
@@ -85,6 +86,7 @@ export class RoomConnection {
       this.diagnosticState = diagnosticState;
       diagnosticEvent('room.state', { stream: value.stream.state, revision: value.stream.revision, members: value.members.length, sequence: value.sequence });
     }
+    if (resetChat) this.chatVersion++;
     if (this.snapshot?.stream.sessionId !== value.stream.sessionId) this.syncRequest = '';
     value = { ...value, ownerName: value.members.find(m => m.isOwner)?.displayName || value.ownerName || this.snapshot?.ownerName };
     this.snapshot = value;
@@ -95,7 +97,7 @@ export class RoomConnection {
     const generation = this.generation;
     diagnosticEvent('room.snapshot_recovery', { generation, sequence: this.snapshot?.sequence, pending: this.pendingEvents.length });
     this.recovery = request<Snapshot>(`/v1/rooms/${this.options.roomId}/snapshot`).then(value => {
-      if (!this.closed && generation === this.generation) this.applySnapshot(value);
+      if (!this.closed && generation === this.generation) this.applySnapshot(value, true);
     }).finally(() => { this.recovery = undefined; });
     await this.recovery;
     if (this.closed || generation !== this.generation) { this.pendingEvents = []; return; }
@@ -106,6 +108,17 @@ export class RoomConnection {
       if (!next) { this.schedule(); break; }
       this.applySnapshot(next);
     }
+  }
+  async loadEarlierChat() {
+    const chat = this.snapshot?.chat;
+    const before = chat?.messages[0]?.sequence;
+    if (!chat?.hasMore || !before || chat.messages.length >= 500) return;
+    const version = this.chatVersion;
+    const generation = this.generation;
+    const page = await request<ChatPage>(`/v1/rooms/${this.options.roomId}/chat/messages?before=${before}`);
+    if (this.closed || version !== this.chatVersion || generation !== this.generation || this.snapshot?.chat?.messages[0]?.sequence !== before) return;
+    const messages = [...new Map([...page.messages, ...this.snapshot.chat.messages].map(m => [m.id, m])).values()].sort((a, b) => a.sequence - b.sequence);
+    this.applySnapshot({ ...this.snapshot, chat: { messages: messages.slice(-500), hasMore: page.hasMore || messages.length > 500 } });
   }
   report(positionMs: number, playing: boolean) {
     const stream = this.snapshot?.stream;

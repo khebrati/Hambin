@@ -1,7 +1,8 @@
 package top.roomio.data.party
 
 /** Minimal bounded Engine.IO v4 / Socket.IO v5 JSON WebSocket framing. */
-internal const val MAX_SOCKET_FRAME_BYTES = 64 * 1024
+// A room bootstrap can include fifty 500-character Unicode chat messages plus metadata.
+internal const val MAX_SOCKET_FRAME_BYTES = 256 * 1024
 
 internal data class EnginePacket(val type: Int, val data: String)
 

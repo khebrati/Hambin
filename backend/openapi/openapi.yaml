@@ -484,6 +484,70 @@ paths:
           description: VOICE_SESSION_EXPIRED; obtain a fresh join and reconcile peer generations
         '503':
           description: VOICE_DISABLED or AUTH_UNAVAILABLE
+  /v1/rooms/{roomId}/chat/messages:
+    parameters:
+    - in: path
+      name: roomId
+      required: true
+      schema: {type: string, format: uuid}
+    get:
+      tags: [Rooms]
+      operationId: chatHistory
+      summary: Read a page of private room chat history
+      description: Active members only. Latest 50 messages by default, ascending sequence. See docs/chat-contract.md.
+      security: [{bearerAuth: []}]
+      parameters:
+      - in: query
+        name: before
+        schema: {type: integer, minimum: 1, maximum: 9007199254740991}
+        description: Exclusive message sequence cursor for an earlier page.
+      responses:
+        '200':
+          description: Chat history; Cache-Control no-store
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ChatPage'}
+        '400': {description: INVALID_CHAT_CURSOR}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {description: ROOM_ENDED}
+    post:
+      tags: [Rooms]
+      operationId: sendChatMessage
+      summary: Durably send a plain text message to this party
+      description: Stable messageId retries are idempotent for the room lifetime. At most 10 new messages per identity per sliding 10 seconds. Sender and timestamp are server-assigned. See docs/chat-contract.md.
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [messageId, text]
+              properties:
+                messageId: {type: string, format: uuid}
+                text:
+                  type: string
+                  minLength: 1
+                  maxLength: 500
+                  description: Plain text, 1–500 UTF-16 code units after newline normalization and trimming; no unsupported controls or unpaired surrogates.
+      responses:
+        '201':
+          description: Durably accepted message, including an unchanged retry; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message: {$ref: '#/components/schemas/ChatMessage'}
+        '400': {description: INVALID_CHAT_MESSAGE}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {description: CHAT_MESSAGE_CONFLICT or ROOM_ENDED}
+        '429': {description: RATE_LIMITED; wait before explicit retry}
   /v1/rooms/{roomId}/bug-reports:
     post:
       tags: [Rooms]
@@ -826,9 +890,33 @@ components:
         updatedAt:
           type: string
           format: date-time
+    ChatMessage:
+      type: object
+      required: [id, roomId, identityId, membershipId, displayName, avatar, text, createdAt, sequence]
+      properties:
+        id: {type: string, format: uuid}
+        roomId: {type: string, format: uuid}
+        identityId: {type: string, format: uuid}
+        membershipId: {type: string, format: uuid}
+        displayName: {type: string}
+        avatar: {type: string}
+        text: {type: string, maxLength: 500}
+        createdAt: {type: string, format: date-time}
+        sequence: {type: integer, minimum: 1, maximum: 9007199254740991}
+    ChatPage:
+      type: object
+      required: [messages, hasMore]
+      properties:
+        messages:
+          type: array
+          maxItems: 50
+          items: {$ref: '#/components/schemas/ChatMessage'}
+        hasMore: {type: boolean}
     Snapshot:
       type: object
       required:
+      - chat
+      - sequence
       - room
       - members
       - stream
@@ -844,6 +932,8 @@ components:
         sequence:
           type: integer
           description: Last durable event sequence at snapshot capture
+        chat:
+          $ref: '#/components/schemas/ChatPage'
     Error:
       type: object
       required:
@@ -853,6 +943,9 @@ components:
         code:
           type: string
           enum:
+          - INVALID_CHAT_MESSAGE
+          - INVALID_CHAT_CURSOR
+          - CHAT_MESSAGE_CONFLICT
           - INVALID_JSON
           - INVALID_PROFILE
           - INVALID_TOKEN

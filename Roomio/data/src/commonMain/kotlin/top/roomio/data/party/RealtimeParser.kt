@@ -79,6 +79,12 @@ private fun parseEvent(json: Json, element: JsonObject, text: String): RealtimeE
         "stream.aborted" -> streamEvent(json, payload) {
             RealtimeEvent.StreamAborted(it.streamSessionId, it.revision)
         }
+        "chat.message" -> {
+            val message = json.decodeFromJsonElement(top.roomio.data.party.dto.ChatMessageDto.serializer(),
+                requireNotNull(payload?.get("message")))
+            require(message.sequence > 0 && message.sequence == dto.sequence) { "Invalid chat event sequence" }
+            RealtimeEvent.ChatMessageReceived(message.toDomain())
+        }
         "room.closed" -> RealtimeEvent.RoomClosed
         else -> RealtimeEvent.Ignored
     }

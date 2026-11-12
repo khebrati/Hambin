@@ -64,6 +64,7 @@ data class RoomSnapshot(
     val room: Room,
     val members: List<Member>,
     val stream: StreamInfo,
+    val chat: ChatPage = ChatPage(),
 )
 
 /** Short-lived, room-scoped descriptor for one authenticated WebRTC mesh role. */

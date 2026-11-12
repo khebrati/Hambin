@@ -132,6 +132,7 @@ data class StreamDto(
 @Serializable
 data class StreamResponseDto(
     val stream: StreamDto,
+    val chat: ChatPageDto = ChatPageDto(),
 )
 
 @Serializable
@@ -139,6 +140,7 @@ data class SnapshotDto(
     val room: RoomDto,
     val members: List<MemberSummaryDto>,
     val stream: StreamDto,
+    val chat: ChatPageDto = ChatPageDto(),
 )
 
 @Serializable
@@ -195,12 +197,14 @@ data class SnapshotMessageDto(
     val room: RoomDto,
     val members: List<MemberSummaryDto>,
     val stream: StreamDto,
+    val chat: ChatPageDto = ChatPageDto(),
 )
 
 @Serializable
 data class EventMessageDto(
     val type: String,
     val topic: String,
+    val sequence: Long = 0,
     val payload: JsonObject? = null,
 )
 
@@ -242,3 +246,18 @@ data class StreamEventPayload(
     val revision: Long = 0,
     val url: String = "",
 )
+
+@Serializable
+data class ChatMessageDto(
+    val id: String, val roomId: String, val identityId: String, val membershipId: String,
+    val displayName: String, val avatar: String, val text: String, val createdAt: String, val sequence: Long,
+)
+
+@Serializable
+data class ChatPageDto(val messages: List<ChatMessageDto> = emptyList(), val hasMore: Boolean = false)
+
+@Serializable
+internal data class SendChatRequest(val messageId: String, val text: String)
+
+@Serializable
+internal data class ChatResponseDto(val message: ChatMessageDto)

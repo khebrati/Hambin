@@ -106,6 +106,7 @@ components:
         - members
         - stream
         - sequence
+        - chat
         properties:
           room:
             $ref: '#/components/schemas/Room'
@@ -117,10 +118,12 @@ components:
             $ref: '#/components/schemas/Stream'
           sequence:
             type: integer
+          chat:
+            $ref: '../openapi/openapi.yaml#/components/schemas/ChatPage'
     Event:
       name: event
       title: Durable room event
-      description: Delivered at-least-once from the transactional outbox.
+      description: Delivered at-least-once from the transactional outbox. Topic chat.message has payload {message} using ChatMessage in the shared OpenAPI schema; message sequence equals envelope sequence. Chat sends use HTTP, not a new socket command.
       contentType: application/json
       payload:
         type: object
@@ -141,6 +144,7 @@ components:
             - owner.presence
             - stream.started
             - stream.aborted
+            - chat.message
             - room.closed
           eventId:
             type: string

@@ -8,7 +8,7 @@
 | Clear role boundaries | Owner-only actions must be visually and behaviorally distinct from participant actions. | Supported by REQ-015, REQ-016, REQ-032, REQ-035. |
 | Local control by default | Play, pause, seeking, and volume are personal controls and should not imply group control. | Supported by REQ-017, REQ-018, REQ-026, REQ-027, REQ-028. |
 | Explicit synchronization | Sync should be an intentional user action that aligns local playback to the leading participant without exposing playback drift. | Supported by REQ-020, REQ-021, REQ-022, REQ-038. |
-| Voice-only presence | Social communication should be designed around voice chat, participant avatars, and speaking indicators, not text chat. | Supported by REQ-023, REQ-024, REQ-025, REQ-040. |
+| Voice and text presence | Keep voice chat, participant avatars and speaking indicators alongside an independent room text-chat panel. | Supported by REQ-023, REQ-024, REQ-025, REQ-040; DD-052. |
 | Playful identity | Personalization should use simple names and fun illustrated cartoonic avatars. | Supported by REQ-007, REQ-023. |
 | Simple recovery | Join failures can use a simple error model; leave and abort actions should use clear confirmation or impact messaging. | Supported by REQ-033, REQ-034, REQ-035, REQ-036, REQ-037. |
 | Shareable entry | Make inviting easy, but let recipients verify room identity and availability before joining. | Supported by REQ-042, REQ-043. |
@@ -39,7 +39,7 @@
 
 ## Anti-principles
 
-- Do not design text chat unless requirements change. Supported by REQ-024, REQ-040.
+- Keep text chat scoped to the current room and the accepted plain text/emoji contract. Supported by REQ-024, REQ-040; DD-052.
 - Do not expose visible playback drift or participant timelines for sync. Supported by REQ-038.
 - Do not make non-owner URL controls look editable or start-capable. Supported by REQ-015, REQ-032.
 - Do not make owner abort look like a personal pause action. Supported by REQ-016, REQ-017, REQ-018, REQ-035.
