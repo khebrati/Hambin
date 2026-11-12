@@ -10,6 +10,7 @@ import prismAvatar from '../../cartoon-avatars/c0c6eed0-d923-4156-ae44-faa155408
 import echoAvatar from '../../cartoon-avatars/c337b58d-481a-4688-971d-f7e4f644a198.webp';
 import sparkAvatar from '../../cartoon-avatars/de8a2069-a178-43cb-8ed7-535139eed13d.webp';
 import bloomAvatar from '../../cartoon-avatars/f3f027df-e786-4f32-ad33-30ccd51fe7ba.webp';
+import fa from '../fa.json';
 import type { AvatarId } from '../types';
 
 export const avatarOptions = [
@@ -31,4 +32,7 @@ export const avatarImageById = Object.fromEntries(
   avatarOptions.map(({ id, src }) => [id, src]),
 ) as Record<AvatarId, string>;
 
-export const avatarName = (id: AvatarId): string => avatarOptions.find(avatar => avatar.id === id)!.label;
+export const avatarName = (id: AvatarId, language: string = 'en'): string => {
+  const label = avatarOptions.find(avatar => avatar.id === id)!.label;
+  return language === 'fa' || language === 'فارسی' ? fa[label] : label;
+};

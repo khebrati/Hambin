@@ -29,7 +29,7 @@ export function SettingsScreen({
   saving = false,
 }: SettingsScreenProps) {
   const [draft, setDraft] = useState(identity);
-  const name = avatarName(draft.avatarId);
+  const name = avatarName(draft.avatarId, draft.language);
 
   return (
     <div className="screen settings-screen screen-enter">

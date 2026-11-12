@@ -44,7 +44,7 @@ class PersianLanguageTest {
             viewModel.onAction(SettingsAction.SaveClicked)
             language.value = repository.currentProfile().language
         }
-        onNodeWithText("نمایه شما").assertExists()
+        onNodeWithText("آواتار شما").assertExists()
         runOnIdle { assertEquals(LayoutDirection.Rtl, direction) }
         onNodeWithText("English").performScrollTo().performClick()
         runOnIdle {

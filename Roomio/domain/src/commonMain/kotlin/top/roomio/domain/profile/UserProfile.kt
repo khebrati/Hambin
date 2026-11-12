@@ -8,19 +8,22 @@ data class UserProfile(
     val language: AppLanguage = AppLanguage.ENGLISH,
 )
 
-enum class ProfileAvatarId(val displayName: String) {
-    COMET("Ice Queen"),
-    MINT("Frog Wizard"),
-    SUNNY("Skeleton Detective"),
-    BERRY("Captain Octopus"),
-    CLOUD("Gamer TV"),
-    EMBER("Alien Scientist"),
-    NOVA("Robot Poet"),
-    ORBIT("Coffee Wolf"),
-    PRISM("Professor Fox"),
-    ECHO("Bookworm Dragon"),
-    SPARK("Frankie"),
-    BLOOM("Mummy Barista"),
+enum class ProfileAvatarId(val displayName: String, private val persianName: String) {
+    COMET("Ice Queen", "ملکهٔ یخی"),
+    MINT("Frog Wizard", "قورباغهٔ جادوگر"),
+    SUNNY("Skeleton Detective", "کارآگاه اسکلتی"),
+    BERRY("Captain Octopus", "کاپیتان اختاپوس"),
+    CLOUD("Gamer TV", "تلویزیون گیمر"),
+    EMBER("Alien Scientist", "دانشمند فضایی"),
+    NOVA("Robot Poet", "ربات شاعر"),
+    ORBIT("Coffee Wolf", "گرگ قهوه‌دوست"),
+    PRISM("Professor Fox", "پروفسور روباه"),
+    ECHO("Bookworm Dragon", "اژدهای کتاب‌خوان"),
+    SPARK("Frankie", "فرانکی"),
+    BLOOM("Mummy Barista", "مومیایی باریستا");
+
+    fun displayName(language: AppLanguage): String =
+        if (language == AppLanguage.PERSIAN) persianName else displayName
 }
 
 interface ProfileRepository {

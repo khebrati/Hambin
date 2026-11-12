@@ -4,7 +4,7 @@ A watch party mobile app where users can stream from a direct URL.
 The app has several sections:
 
 In home page, users can either:
-1. Enter setting, where they can choose English or Persian (فارسی), an avatar whose character name becomes their display name. Saving the profile applies and remembers the language; Persian uses right-to-left layout in both browser and Android. Video links, room codes, names, and subtitle content retain their original values. Settings also offers the 24 named color seeds listed in docs/theme-palettes.md; selecting one immediately applies its full light/dark Material palette and remembers it on the current device.
+1. Enter setting, where they can choose English or Persian (فارسی), an avatar whose character name becomes their display name. Saving the profile applies and remembers the language; Persian uses right-to-left layout in both browser and Android. Video links, room codes, other users’ saved names, and subtitle content retain their original values. A user’s own avatar-derived name follows their saved app language. Settings also offers the 24 named color seeds listed in docs/theme-palettes.md; selecting one immediately applies its full light/dark Material palette and remembers it on the current device.
 2. A party manager page, where they can either create or join a party (via ID)
 
 after they join or create a party, we have the party screen.
@@ -36,7 +36,7 @@ Confirmed additions:
 Confirmed guest identity requirements (2026-10-23):
 1. Users receive an automatic durable guest identity from our own backend, without registration or login screens. All authentication, credential refresh, verification, and revocation are owned by our backend; neither client requires Firebase or Google authentication services.
 2. A saved guest identity restores the same profile and room ownership after refresh or restart. Temporary connection or service failures retain the saved identity and offer retry; they must not create a replacement guest. Permanently unusable credentials have an explicit, confirmed identity-reset recovery action.
-3. Every avatar has a fixed name based on its picture, as listed in docs/avatar-names.md. Choosing the avatar sets the user’s name; there is no custom name input. Names may repeat, including within one room. Stable internal IDs distinguish users and preserve ownership. Existing profiles adopt their avatar’s name without resetting identity; historical chat messages retain their original snapshots.
+3. Every avatar has a fixed name based on its picture, as listed in docs/avatar-names.md. Choosing the avatar sets the user’s name in their saved app language (Persian for فارسی, English for English); switching language updates that name on Save; there is no custom name input. Names may repeat, including within one room. Stable internal IDs distinguish users and preserve ownership. Existing profiles adopt their avatar’s name without resetting identity; historical chat messages retain their original snapshots.
 4. The Firebase-removal release starts with fresh backend guest identities. Existing identities and room ownership are not migrated; local non-secret preferences remain.
 
 Confirmed last-room shortcut (2026-11-11):

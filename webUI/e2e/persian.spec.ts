@@ -2,20 +2,23 @@ import { expect, test } from '@playwright/test';
 
 test('Persian profile choice sends fa, persists after reload, and switches back to English', async ({ page }) => {
   let language = 'en';
+  const name = () => language === 'fa' ? 'ملکهٔ یخی' : 'Ice Queen';
   await page.route('**/v1/guest-sessions/**', async route => {
     if (route.request().method() === 'PATCH') {
       const body = route.request().postDataJSON();
-      expect(body.name).toBe('Ice Queen');
       language = body.language;
-      await route.fulfill({ json: { identity: { id: 'guest', name: 'Ice Queen', avatar: 'comet', language } } });
-    } else await route.fulfill({ json: { identity: { id: 'guest', name: 'Ice Queen', avatar: 'comet', language }, accessToken: 'test', accessExpiresAt: new Date(Date.now() + 3600000).toISOString(), refreshExpiresAt: new Date(Date.now() + 86400000).toISOString() } });
+      expect(body.name).toBe(name());
+      await route.fulfill({ json: { identity: { id: 'guest', name: name(), avatar: 'comet', language } } });
+    } else await route.fulfill({ json: { identity: { id: 'guest', name: name(), avatar: 'comet', language }, accessToken: 'test', accessExpiresAt: new Date(Date.now() + 3600000).toISOString(), refreshExpiresAt: new Date(Date.now() + 86400000).toISOString() } });
   });
   await page.goto('/');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByLabel('App language', { exact: true }).selectOption('فارسی');
+  await expect(page.locator('.profile-spotlight strong')).toHaveText('ملکهٔ یخی');
   await page.getByRole('button', { name: 'Save profile', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'با هم ببینید' })).toBeVisible();
   expect(language).toBe('fa');
+  await expect(page.getByText(name(), { exact: true })).toBeVisible();
   await expect(page).toHaveTitle('هم‌بین');
   await expect(page.locator('html')).toHaveAttribute('lang', 'fa');
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
@@ -24,7 +27,7 @@ test('Persian profile choice sends fa, persists after reload, and switches back 
   await page.getByRole('button', { name: 'تنظیمات', exact: true }).click();
   await expect(page.getByLabel('زبان برنامه', { exact: true })).toHaveValue('فارسی');
   await page.getByLabel('زبان برنامه', { exact: true }).selectOption('English');
-  await page.getByRole('button', { name: 'ذخیره نمایه', exact: true }).click();
+  await page.getByRole('button', { name: 'ذخیره آواتار', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Stream and chill' })).toBeVisible();
   expect(language).toBe('en');
   await expect(page).toHaveTitle('Watch Party');

@@ -58,6 +58,13 @@ class PresentationViewModelTest {
         viewModel.onAction(SettingsAction.SaveClicked)
         assertEquals("Captain Octopus", repository.currentProfile().name)
         assertEquals(ProfileAvatarId.BERRY, repository.currentProfile().avatar)
+        viewModel.onAction(SettingsAction.LanguageSelected(top.roomio.domain.profile.AppLanguage.PERSIAN))
+        assertEquals("کاپیتان اختاپوس", viewModel.state.value.displayName)
+        assertEquals("Captain Octopus", repository.currentProfile().name)
+        viewModel.onAction(SettingsAction.SaveClicked)
+        assertEquals("کاپیتان اختاپوس", repository.currentProfile().name)
+        viewModel.onAction(SettingsAction.LanguageSelected(top.roomio.domain.profile.AppLanguage.ENGLISH))
+        assertEquals("Captain Octopus", viewModel.state.value.displayName)
     }
 
     @Test

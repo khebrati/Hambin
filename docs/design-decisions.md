@@ -436,7 +436,7 @@ deployment evidence remains historical.
 - **Date:** 2026-11-12
 - **Decision:** Enable English and فارسی in Settings for both clients. Save applies the choice with the profile; Back discards an unsaved language choice. Existing and unsupported preferences use English. This supersedes DD-007's disabled language field and the earlier English-only design scope.
 - **Persistence:** Browser maps the profile choice to the existing backend `en`/`fa` language field and caches the saved language for startup and recovery messages. Native stores the language in its local profile, observes it above navigation, and sends its tag when creating/joining/restoring the guest session. No service contract change is required.
-- **Presentation:** Translate application copy, recovery messages, player/voice actions, labels, and named color/avatar choices. Persian uses RTL layout with mirrored navigation arrows. Keep URLs, room codes, playback timelines, and media content in their appropriate original direction. Do not translate guest names, room titles, track metadata or subtitle cues. Android foreground-service notification strings follow the selected process language.
+- **Presentation:** Translate application copy, recovery messages, player/voice actions, labels, and named color/avatar choices. Persian uses RTL layout with mirrored navigation arrows. Keep URLs, room codes, playback timelines, and media content in their appropriate original direction. Do not translate other users’ saved names, room titles, track metadata or subtitle cues. Fixed avatar-derived names follow their owner’s saved language (DD-061). Android foreground-service notification strings follow the selected process language.
 - **States:** The bundled language choices are available offline with radio/select selection, keyboard/focus and pressed feedback. Native local Save failures retain the preceding applied language and show the existing retry error. Browser profile Save uses its existing loading, failure/draft retention and retry behavior; language applies only after server acceptance. Loading/empty states do not apply to the fixed language catalog.
 - **Platform boundary:** Use Compose resource qualifiers with a small platform locale environment; shared native resources also become available to desktop/iOS. Android and JVM compilation/tests are checked locally; iOS runtime remains unverified on Linux.
 - **Validation:** Browser production build and all 87 unit tests passed. Four Chrome Persian checks passed: saved language/reload/English recovery, draft discard and failed Save, compact dark/large-text and expanded light layouts across Home, Settings, party manager, preview and room. Screenshots reviewed. Android debug assembly and app JVM graph compilation passed; shared Compose language/resource/RTL switching test and all five profile persistence tests passed. All 255 native resource keys and format arguments match the Persian catalog. Android locale setup preserves the Activity context for fullscreen and sharing. Physical Android and iOS runtime checks were not performed. Published with Android 1.2.0/code 10 and the browser release `20261112-persian-code10`; see [release evidence](persian-release-20261112.md).
@@ -480,7 +480,7 @@ deployment evidence remains historical.
 
 - **Date:** 2026-11-12
 - **Decision:** Each of the twelve existing avatar pictures has a fixed character name matching its artwork. Choosing an avatar sets the user's display name; remove custom name entry in browser and native Settings. This supersedes DD-007's display-name field and DD-039's random/editable character names. See [avatar name catalog and contract](avatar-names.md).
-- **Language:** Keep canonical English names identical for everyone; translate picker labels into Persian. Save applies avatar and language, and Back discards drafts.
+- **Language (superseded by DD-061):** Originally kept canonical English names identical for everyone and translated only picker labels into Persian. Save applies avatar and language, and Back discards drafts.
 - **Identity:** Duplicate names are allowed. Stable guest/membership UUIDs control authentication, ownership, chat and voice. Repeated avatars can be visually ambiguous; no unique-name constraint or numeric suffix is introduced.
 - **Continuity:** Normalize existing profile/membership names without resetting identities or ownership. Preserve historical chat snapshots. Backend derives names and ignores the legacy name input.
 
@@ -508,3 +508,12 @@ deployment evidence remains historical.
 
 - **Date:** 2026-11-12
 - **Decision:** Omit the diagnostic storage and Sentry delivery notice from browser and native bug-report dialogs in English and Persian, per stakeholder direction. Keep report submission and delivery behavior unchanged.
+
+
+## DD-061 — Avatar names follow the user’s saved language
+
+- **Date:** 2026-11-12
+- **Decision:** Persian-language users use the Persian avatar character name as their display name; English-language users use the English name. The draft preview follows the draft language, and Save commits avatar, name and language together. Switching back to English restores the English avatar name.
+- **Identity:** Everyone sees the user’s saved name, independent of the viewer’s language. Keep guest and membership IDs, credentials, ownership and historical chat snapshots unchanged. Normalize existing Persian profiles and membership labels through a backend migration.
+- **Terminology:** Use «آواتار» in Persian UI copy wherever «نمایه» was used, including avatar/profile actions and status messages.
+- **Supersedes:** DD-054’s English-only naming rule; DD-050’s prohibition on translating guest names now excludes these fixed avatar-derived names.

@@ -26,6 +26,7 @@ class AvatarNamesUiTest {
     private fun checkSettings(width: Int, height: Int, persian: Boolean) = runComposeUiTest {
         val profile = TestProfileRepository()
         val viewModel = SettingsViewModel(profile, TestThemePreferencesRepository())
+        if (persian) viewModel.onAction(SettingsAction.LanguageSelected(AppLanguage.PERSIAN))
         setContent {
             val density = LocalDensity.current
             CompositionLocalProvider(
@@ -42,9 +43,9 @@ class AvatarNamesUiTest {
         }
         onAllNodes(hasSetTextAction()).assertCountEquals(0)
         onNodeWithText(if (persian) "قورباغهٔ جادوگر" else "Frog Wizard").performScrollTo().performClick()
-        runOnIdle { assertEquals("Frog Wizard", viewModel.state.value.displayName) }
-        onNodeWithText(if (persian) "ذخیره نمایه" else "Save profile").assertIsEnabled().performClick()
-        runOnIdle { assertEquals("Frog Wizard", profile.currentProfile().name) }
+        runOnIdle { assertEquals(if (persian) "قورباغهٔ جادوگر" else "Frog Wizard", viewModel.state.value.displayName) }
+        onNodeWithText(if (persian) "ذخیره آواتار" else "Save profile").assertIsEnabled().performClick()
+        runOnIdle { assertEquals(if (persian) "قورباغهٔ جادوگر" else "Frog Wizard", profile.currentProfile().name) }
         onNodeWithText(if (persian) "مومیایی باریستا" else "Mummy Barista").performScrollTo().assertIsDisplayed()
         File("/tmp/hambin-avatar-native-${if(persian) "compact-fa" else "expanded-en"}.png")
             .writeBytes(Image.makeFromBitmap(onRoot().captureToImage().asSkiaBitmap()).encodeToData()!!.bytes)

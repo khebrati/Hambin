@@ -19,7 +19,7 @@ class PreferencesProfileRepository(
     override fun currentProfile(): UserProfile = mutableProfile.value
 
     override fun saveProfile(profile: UserProfile): Result<Unit> = runCatching {
-        val namedProfile = profile.copy(name = profile.avatar.displayName)
+        val namedProfile = profile.copy(name = profile.avatar.displayName(profile.language))
         settings.putString(NAME_KEY, namedProfile.name)
         settings.putString(AVATAR_KEY, profile.avatar.name)
         settings.putString("profile.language", profile.language.tag)
@@ -32,10 +32,11 @@ class PreferencesProfileRepository(
             .firstOrNull { it.name == storedAvatar }
             ?: ProfileAvatarId.COMET
 
+        val language = top.roomio.domain.profile.AppLanguage.fromTag(settings.getString("profile.language", "en"))
         return UserProfile(
-            name = avatar.displayName,
+            name = avatar.displayName(language),
             avatar = avatar,
-            language = top.roomio.domain.profile.AppLanguage.fromTag(settings.getString("profile.language", "en")),
+            language = language,
         )
     }
 

@@ -20,7 +20,7 @@ internal data class SettingsUiState(
     val draftLanguage: top.roomio.domain.profile.AppLanguage = top.roomio.domain.profile.AppLanguage.ENGLISH,
 ) {
     val displayName: String
-        get() = draftAvatar.toDomainAvatar().displayName
+        get() = draftAvatar.toDomainAvatar().displayName(draftLanguage)
 }
 
 internal sealed interface SettingsAction {

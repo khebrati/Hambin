@@ -49,8 +49,23 @@ class PreferencesProfileRepositoryTest {
         val repository = PreferencesProfileRepository(settings)
         val profile = repository.currentProfile().copy(language = top.roomio.domain.profile.AppLanguage.PERSIAN)
         repository.saveProfile(profile).getOrThrow()
-        assertEquals(profile, PreferencesProfileRepository(settings).currentProfile())
+        assertEquals(profile.copy(name = "ملکهٔ یخی"), PreferencesProfileRepository(settings).currentProfile())
+        assertEquals("ملکهٔ یخی", repository.currentProfile().name)
         settings.putString("profile.language", "unknown")
         assertEquals(top.roomio.domain.profile.AppLanguage.ENGLISH, PreferencesProfileRepository(settings).currentProfile().language)
     }
+    @Test
+    fun existingPersianProfileAndLanguageSwitchUseAvatarNames() {
+        val settings = MapSettings().apply {
+            putString("profile.avatar", "MINT")
+            putString("profile.name", "Frog Wizard")
+            putString("profile.language", "fa")
+        }
+        val repository = PreferencesProfileRepository(settings)
+        assertEquals("قورباغهٔ جادوگر", repository.currentProfile().name)
+        repository.saveProfile(repository.currentProfile().copy(language = top.roomio.domain.profile.AppLanguage.ENGLISH)).getOrThrow()
+        assertEquals("Frog Wizard", repository.currentProfile().name)
+        assertEquals(repository.currentProfile(), PreferencesProfileRepository(settings).currentProfile())
+    }
+
 }

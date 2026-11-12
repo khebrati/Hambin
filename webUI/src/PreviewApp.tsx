@@ -1,3 +1,4 @@
+import { avatarName } from './data/avatarCatalog';
 import { t, setLanguage, useLanguage } from './i18n';
 import { useThemePalette } from './theme';
 import { useEffect, useMemo, useState } from 'react';
@@ -50,7 +51,7 @@ export function PreviewApp() {
   const [screen, setScreen] = useState<Screen>(
     preview?.screen || (inviteCode ? (invitedRoom ? 'room-preview' : 'party-manager') : 'home'),
   );
-  const [identity, setIdentity] = useState<Identity>(initialIdentity);
+  const [identity, setIdentity] = useState<Identity>({ ...initialIdentity, name: avatarName(initialIdentity.avatarId, initialIdentity.language) });
   const [managerMode, setManagerMode] = useState<ManagerMode>(
     preview?.joinStatus || inviteCode ? 'join' : 'create',
   );
