@@ -44,7 +44,9 @@ class KtorRoomRepository(
     private val observability: top.roomio.data.observability.ProductAnalytics,
 ) : RoomRepository {
     @kotlinx.serialization.Serializable
-    private data class BugReportRequest(val reportId: String, val description: String, val clientInfo: Map<String, String>, val sessionStartedAt: String, val log: String)
+    private data class BugReportRequest(val reportId: String, val description: String, val clientInfo: Map<String, String>, val sessionStartedAt: String, val log: String, val screenshots: List<BugScreenshot> = emptyList())
+    @kotlinx.serialization.Serializable
+    private data class BugScreenshot(val contentType: String, val data: String)
     override suspend fun sendChatMessage(roomId: String, messageId: String, text: String): top.roomio.domain.party.ChatMessage =
         kotlinx.coroutines.withTimeoutOrNull(15_000) {
             authed {
@@ -66,11 +68,13 @@ class KtorRoomRepository(
 
     private var pendingReport: Pair<String, BugReportRequest>? = null
 
-    override suspend fun reportBug(roomId: String, description: String) {
+    override suspend fun reportBug(roomId: String, description: String, screenshots: List<top.roomio.domain.party.ReportScreenshot>) {
+        if (screenshots.size > top.roomio.domain.party.REPORT_SCREENSHOT_MAX_COUNT || screenshots.sumOf { it.byteSize } > top.roomio.domain.party.REPORT_SCREENSHOT_MAX_BYTES) throw PartyException("REPORT_TOO_LARGE", "Screenshots too large")
+        val images = screenshots.map { BugScreenshot(it.contentType, it.data) }
         val text = description.trim()
-        val previous = pendingReport?.takeIf { it.first == roomId && it.second.description == text }?.second
+        val previous = pendingReport?.takeIf { it.first == roomId && it.second.description == text && it.second.screenshots == images }?.second
         log.i("report.send retry=${previous != null}")
-        val payload = previous ?: BugReportRequest(newReportId(), text, reportDeviceInfo(), AppSessionLog.startedAt, AppSessionLog.snapshot())
+        val payload = previous ?: BugReportRequest(newReportId(), text, reportDeviceInfo(), AppSessionLog.startedAt, AppSessionLog.snapshot(), images)
         pendingReport = roomId to payload
         val sent = kotlinx.coroutines.withTimeoutOrNull(30_000) {
             authed {

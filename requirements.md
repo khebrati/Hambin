@@ -57,6 +57,7 @@ Confirmed room bug reports (2026-11-11):
 1. Both clients show a bug icon button beside Share/Invite in the room top app bar. It opens a simple dialog with one large description input and Send.
 2. Sending includes the description, available device/browser information, and the saved application log from this app session's startup through submission. Reports go to our backend; show success only after durable acceptance and retain the draft on failure for retry.
 3. As confirmed on 2026-11-12, omit the diagnostic storage and Sentry delivery notice from both clients' report dialogs in English and Persian.
+4. Android and web bug reports support optional screenshot selection and clipboard paste, preview and removal. Keep selected screenshots with the draft on failure and send them with the report to private storage and Sentry. Never capture screenshots automatically.
 
 Confirmed speaking-indicator semantics (2026-11-11):
 1. Browser and Android self-profile highlights show local microphone activity while voice is joined and the microphone is authorized and unmuted, including when alone in voice. They do not certify remote delivery or audibility.

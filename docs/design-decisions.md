@@ -628,3 +628,9 @@ deployment evidence remains historical.
 - **Decision:** Remove the decorative brand icon beside the native party title. Retain the title and existing invitation, report, video-link and leave actions.
 - **Profile:** Match the compact browser Settings layout in native presentation: compact header margins, 76dp preview avatar, two-column avatar choices with 8dp gaps and compact tile padding, a full-row selected character, and denser named color cards. Let profile and section text wrap within its available width, including Persian and large text. Keep expanded layouts adaptive.
 - **Behavior:** Preserve avatar/language drafts, Save and Back behavior, immediate color persistence, and existing recovery states. These are shared Compose presentation changes, including Android; backend contracts are unchanged.
+
+## DD-070 — Optional bug-report screenshots (2026-11-12)
+
+- **Decision:** Per stakeholder request, Android and web allow selecting or pasting from the clipboard up to three PNG/JPEG/WebP screenshots (5 MiB total), previewing and removing them before Send. Screenshots persist with a failed or dismissed draft, are frozen during upload, and clear after durable success.
+- **Delivery:** Extend the shared [report contract](bug-report-contract.md) and private PostgreSQL storage; deliver images as Sentry attachments with the existing feedback and log. Content changes use a new report ID; unchanged retries reuse the payload.
+- **Scope:** This supersedes the earlier exclusion of manual screenshot attachments. Automatic screenshots, replay, and usage-analytics image capture remain disabled. Android uses the system document picker without storage permissions; other native platforms retain text reports.

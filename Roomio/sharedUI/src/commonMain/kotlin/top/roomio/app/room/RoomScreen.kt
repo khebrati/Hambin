@@ -2324,8 +2324,25 @@ private fun OwnerAwayDesktopPreview() = AppTheme(onThemeChanged = {}) {
 
 @Composable
 private fun BugReportDialog(state: RoomUiState, onAction: (RoomAction) -> Unit) {
+    var readingScreenshot by remember { mutableStateOf(false) }
+    val screenshotActions = rememberReportScreenshotPicker(
+        onPicked = { onAction(RoomAction.BugScreenshotsAdded(listOf(it))) },
+        onError = { onAction(RoomAction.BugScreenshotFailed(it)) },
+        onBusy = { readingScreenshot = it },
+    )
+    BugReportDialogContent(state, onAction, screenshotActions, readingScreenshot)
+}
+
+@Composable
+internal fun BugReportDialogContent(
+    state: RoomUiState,
+    onAction: (RoomAction) -> Unit,
+    screenshotActions: ReportScreenshotActions?,
+    readingScreenshot: Boolean = false,
+) {
+    val busy = state.bugSending || readingScreenshot
     AlertDialog(
-        onDismissRequest = { onAction(RoomAction.BugReportDismissed) },
+        onDismissRequest = { if (!busy) onAction(RoomAction.BugReportDismissed) },
         icon = { Icon(Icons.Filled.BugReport, contentDescription = null) },
         title = { Text(stringResource(Res.string.report_bug)) },
         text = {
@@ -2338,8 +2355,33 @@ private fun BugReportDialog(state: RoomUiState, onAction: (RoomAction) -> Unit) 
                         onValueChange = { onAction(RoomAction.BugDescriptionChanged(it)) },
                         label = { Text(stringResource(Res.string.bug_report_description)) },
                         modifier = Modifier.fillMaxWidth(),
-                        minLines = 6, maxLines = 10, enabled = !state.bugSending,
+                        minLines = 4, maxLines = 8, enabled = !busy,
                     )
+                    if (screenshotActions != null) {
+                        Text(stringResource(Res.string.bug_screenshot_hint), style = MaterialTheme.typography.bodySmall)
+                        OutlinedButton(onClick = screenshotActions.pick, enabled = !busy && state.bugScreenshots.size < 3) { Text(stringResource(Res.string.bug_screenshot_attach)) }
+                        OutlinedButton(onClick = screenshotActions.paste, enabled = !busy && state.bugScreenshots.size < 3) { Text(stringResource(Res.string.bug_screenshot_paste)) }
+                    }
+                    if (readingScreenshot) Text(stringResource(Res.string.bug_screenshot_reading))
+                    state.bugScreenshots.forEachIndexed { index, image ->
+                        val bytes = remember(image) { kotlin.io.encoding.Base64.decode(image.data) }
+                        coil3.compose.AsyncImage(
+                            model = bytes,
+                            contentDescription = stringResource(Res.string.bug_screenshot_number, index + 1),
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.fillMaxWidth().heightIn(max = 160.dp),
+                        )
+                        TextButton(onClick = { onAction(RoomAction.BugScreenshotRemoved(index)) }, enabled = !busy) {
+                            Text(stringResource(Res.string.bug_screenshot_remove, index + 1))
+                        }
+                    }
+                    state.bugScreenshotError?.let { code ->
+                        Text(stringResource(when (code) {
+                            "SCREENSHOTS_TOO_LARGE" -> Res.string.bug_screenshot_limit
+                            "SCREENSHOT_CLIPBOARD_EMPTY" -> Res.string.bug_screenshot_clipboard_empty
+                            else -> Res.string.bug_screenshot_unreadable
+                        }), color = MaterialTheme.colorScheme.error)
+                    }
                     if (state.bugError != null) {
                         Text(stringResource(when (state.bugError) {
                             "REPORT_TOO_LARGE" -> Res.string.bug_report_too_large
@@ -2352,12 +2394,12 @@ private fun BugReportDialog(state: RoomUiState, onAction: (RoomAction) -> Unit) 
         },
         confirmButton = {
             if (state.bugSent) TextButton(onClick = { onAction(RoomAction.BugReportDismissed) }) { Text(stringResource(Res.string.done)) }
-            else Button(onClick = { onAction(RoomAction.BugReportSend) }, enabled = !state.bugSending && state.bugDescription.isNotBlank()) {
+            else Button(onClick = { onAction(RoomAction.BugReportSend) }, enabled = !busy && state.bugDescription.isNotBlank()) {
                 Text(stringResource(if (state.bugSending) Res.string.bug_report_sending else Res.string.bug_report_send))
             }
         },
         dismissButton = {
-            if (!state.bugSent) TextButton(onClick = { onAction(RoomAction.BugReportDismissed) }, enabled = !state.bugSending) { Text(stringResource(Res.string.cancel)) }
+            if (!state.bugSent) TextButton(onClick = { onAction(RoomAction.BugReportDismissed) }, enabled = !busy) { Text(stringResource(Res.string.cancel)) }
         },
     )
 }

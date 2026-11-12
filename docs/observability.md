@@ -32,7 +32,7 @@ Run `node scripts/check-exception-logging.cjs` from the repository root after in
 
 ## Manual reports
 
-The existing report endpoint and acknowledgement semantics remain unchanged. New report insertion also initializes delivery state within the same transaction. Earlier reports remain unqueued. Every five seconds the single-runtime worker selects up to five due reports, forwards feedback plus `session.log`, and marks delivery only after Sentry's HTTP acceptance. The report UUID, without hyphens, is the stable Sentry event ID across retries.
+The existing report endpoint and acknowledgement semantics remain unchanged. New report insertion also initializes delivery state within the same transaction. Earlier reports remain unqueued. Every five seconds the single-runtime worker selects up to five due reports, forwards feedback plus `session.log` and any explicitly selected or pasted screenshots, and marks delivery only after Sentry's HTTP acceptance. The report UUID, without hyphens, is the stable Sentry event ID across retries.
 
 Delivery retries after transient failures with exponential backoff, respecting Sentry's retry headers. Expired reports are never delivered. The original 30-day retention and durable retry/conflict rules still apply. Sentry has its own attachment/feedback retention and quotas; deleting a PostgreSQL row does not delete its Sentry copy. Per stakeholder direction on 2026-11-12, English/Persian report dialogs omit the diagnostic storage and Sentry delivery notice.
 

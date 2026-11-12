@@ -83,6 +83,8 @@ internal data class RoomUiState(
     val leaveOpen: Boolean = false,
     val abortOpen: Boolean = false,
     val bugReportOpen: Boolean = false,
+    val bugScreenshots: List<top.roomio.domain.party.ReportScreenshot> = emptyList(),
+    val bugScreenshotError: String? = null,
     val bugDescription: String = "",
     val bugSending: Boolean = false,
     val bugError: String? = null,
@@ -112,6 +114,9 @@ internal sealed interface RoomAction {
     data object BugReportClicked : RoomAction
     data object BugReportDismissed : RoomAction
     data class BugDescriptionChanged(val description: String) : RoomAction
+    data class BugScreenshotsAdded(val screenshots: List<top.roomio.domain.party.ReportScreenshot>) : RoomAction
+    data class BugScreenshotRemoved(val index: Int) : RoomAction
+    data class BugScreenshotFailed(val code: String) : RoomAction
     data object BugReportSend : RoomAction
     data class VideoUrlChanged(val url: String) : RoomAction
     data class VideoUrlPasted(val url: String) : RoomAction
@@ -252,6 +257,13 @@ internal class RoomViewModel(
             RoomAction.BugReportClicked -> mutableState.update { it.copy(bugReportOpen = true, bugSent = false) }
             RoomAction.BugReportDismissed -> if (!state.value.bugSending) mutableState.update { it.copy(bugReportOpen = false) }
             is RoomAction.BugDescriptionChanged -> if (!state.value.bugSending) mutableState.update { it.copy(bugDescription = action.description.take(8000), bugError = null, bugSent = false) }
+            is RoomAction.BugScreenshotsAdded -> if (!state.value.bugSending) mutableState.update {
+                val images = it.bugScreenshots + action.screenshots
+                if (images.size > top.roomio.domain.party.REPORT_SCREENSHOT_MAX_COUNT || images.sumOf { image -> image.byteSize } > top.roomio.domain.party.REPORT_SCREENSHOT_MAX_BYTES) it.copy(bugScreenshotError = "SCREENSHOTS_TOO_LARGE")
+                else it.copy(bugScreenshots = images, bugScreenshotError = null, bugSent = false)
+            }
+            is RoomAction.BugScreenshotRemoved -> if (!state.value.bugSending) mutableState.update { it.copy(bugScreenshots = it.bugScreenshots.filterIndexed { index, _ -> index != action.index }, bugScreenshotError = null) }
+            is RoomAction.BugScreenshotFailed -> if (!state.value.bugSending) mutableState.update { it.copy(bugScreenshotError = action.code) }
             RoomAction.BugReportSend -> sendBugReport()
             is RoomAction.VideoUrlChanged -> mutableState.update { it.copy(videoUrl = action.url) }
             is RoomAction.VideoUrlPasted -> mutableState.update { it.copy(videoUrl = action.url) }
@@ -391,8 +403,8 @@ internal class RoomViewModel(
         mutableState.update { it.copy(bugSending = true, bugError = null) }
         viewModelScope.launch {
             try {
-                roomRepository.reportBug(roomId, current.bugDescription)
-                mutableState.update { it.copy(bugSending = false, bugDescription = "", bugSent = true) }
+                roomRepository.reportBug(roomId, current.bugDescription, current.bugScreenshots)
+                mutableState.update { it.copy(bugSending = false, bugDescription = "", bugScreenshots = emptyList(), bugScreenshotError = null, bugSent = true) }
             } catch (cancelled: CancellationException) { logHandledException("RoomViewModel.catch5", cancelled);  throw cancelled
             } catch (error: Throwable) {
                 logHandledException("RoomViewModel.catch6", error)

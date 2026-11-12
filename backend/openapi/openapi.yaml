@@ -578,6 +578,17 @@ paths:
                   additionalProperties: {type: string, maxLength: 2048}
                 sessionStartedAt: {type: string, format: date-time}
                 log: {type: string, description: Complete captured application log; maximum 8 MiB UTF-8}
+                screenshots:
+                  type: array
+                  maxItems: 3
+                  description: Optional selected screenshots; maximum 5 MiB decoded bytes total
+                  items:
+                    type: object
+                    required: [contentType, data]
+                    additionalProperties: false
+                    properties:
+                      contentType: {type: string, enum: [image/png, image/jpeg, image/webp]}
+                      data: {type: string, format: byte, description: Canonical padded base64 image bytes}
       responses:
         '201':
           description: Durably stored, or identical report previously stored by this identity

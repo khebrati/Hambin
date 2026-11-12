@@ -316,4 +316,13 @@
     <string name="group_sync_owner_recovery">با اونایی که آماده بودن شروع کردیم. بقیه میتونن بعدا هماهنگ بشن.</string>
     <string name="group_sync_unavailable">هماهنگی ممکن نشد. دوباره امتحان کن.</string>
     <string name="group_sync_desktop_player">برای پخش فیلم روی کامپیوتر VLC رو نصب کن و برنامه رو دوباره باز کن.</string>
+    <string name="bug_screenshot_attach">پیوست تصویر</string>
+    <string name="bug_screenshot_paste">چسباندن تصویر</string>
+    <string name="bug_screenshot_hint">اختیاری · PNG، JPEG یا WebP · حداکثر ۳ تصویر، مجموعاً ۵ مگابایت</string>
+    <string name="bug_screenshot_reading">در حال خواندن تصویر…</string>
+    <string name="bug_screenshot_number">تصویر %1$d</string>
+    <string name="bug_screenshot_remove">حذف تصویر %1$d</string>
+    <string name="bug_screenshot_limit">حداکثر ۳ تصویر با مجموع حجم ۵ مگابایت انتخاب کنید.</string>
+    <string name="bug_screenshot_clipboard_empty">تصویری در کلیپ‌بورد نیست. یک تصویر کپی کنید و دوباره امتحان کنید.</string>
+    <string name="bug_screenshot_unreadable">خواندن تصویر ممکن نشد. یک تصویر PNG، JPEG یا WebP انتخاب کنید و دوباره امتحان کنید.</string>
 </resources>

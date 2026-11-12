@@ -29,5 +29,16 @@
   "Withdraw & keep watching": "Change my mind & keep watching",
   "Getting everyone ready": "Getting everyone set…",
   "Return to playback": "Back to the movie",
-  "English language": "English"
+  "English language": "English",
+  "Attach screenshots": "Attach screenshots",
+  "Optional · PNG, JPEG, or WebP · Up to 3 images, 5 MiB total": "Optional · PNG, JPEG, or WebP · Up to 3 images, 5 MiB total",
+  "Reading screenshots…": "Reading screenshots…",
+  "Screenshot {number}": "Screenshot {number}",
+  "Remove screenshot {number}": "Remove screenshot {number}",
+  "Choose up to 3 screenshots, 5 MiB total.": "Choose up to 3 screenshots, 5 MiB total.",
+  "Choose a PNG, JPEG, or WebP image.": "Choose a PNG, JPEG, or WebP image.",
+  "Couldn’t read the screenshot. Try selecting it again.": "Couldn’t read the screenshot. Try selecting it again.",
+  "Paste screenshot": "Paste screenshot",
+  "No image on the clipboard. Copy an image, then try again.": "No image on the clipboard. Copy an image, then try again.",
+  "Clipboard access failed. Use Ctrl/Cmd+V or attach an image file.": "Clipboard access failed. Use Ctrl/Cmd+V or attach an image file."
 }

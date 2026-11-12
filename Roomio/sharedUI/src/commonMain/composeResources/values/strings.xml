@@ -316,4 +316,13 @@
     <string name="group_sync_owner_recovery">Started with ready viewers. Others can catch up.</string>
     <string name="group_sync_unavailable">Sync unavailable. Try again.</string>
     <string name="group_sync_desktop_player">Desktop playback needs VLC. Install VLC and reopen the app.</string>
+    <string name="bug_screenshot_attach">Attach screenshot</string>
+    <string name="bug_screenshot_paste">Paste screenshot</string>
+    <string name="bug_screenshot_hint">Optional · PNG, JPEG, or WebP · Up to 3 images, 5 MiB total</string>
+    <string name="bug_screenshot_reading">Reading screenshot…</string>
+    <string name="bug_screenshot_number">Screenshot %1$d</string>
+    <string name="bug_screenshot_remove">Remove screenshot %1$d</string>
+    <string name="bug_screenshot_limit">Choose up to 3 screenshots, 5 MiB total.</string>
+    <string name="bug_screenshot_clipboard_empty">No image on the clipboard. Copy an image, then try again.</string>
+    <string name="bug_screenshot_unreadable">Couldn’t read the image. Choose a PNG, JPEG, or WebP screenshot and try again.</string>
 </resources>

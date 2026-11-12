@@ -505,5 +505,16 @@
   "Action": "حرکت",
   "Cancel request": "بیخیال",
   "Sync cancelled": "میزبان بیخیال شد، هرکس فیلم خودشو ادامه میده.",
-  "Background voice party · v1.3.1": "گپ صوتی در پس‌زمینه · v1.3.1"
+  "Background voice party · v1.3.1": "گپ صوتی در پس‌زمینه · v1.3.1",
+  "Attach screenshots": "پیوست تصویر",
+  "Optional · PNG, JPEG, or WebP · Up to 3 images, 5 MiB total": "اختیاری · PNG، JPEG یا WebP · حداکثر ۳ تصویر، مجموعاً ۵ مگابایت",
+  "Reading screenshots…": "در حال خواندن تصاویر…",
+  "Screenshot {number}": "تصویر {number}",
+  "Remove screenshot {number}": "حذف تصویر {number}",
+  "Choose up to 3 screenshots, 5 MiB total.": "حداکثر ۳ تصویر با مجموع حجم ۵ مگابایت انتخاب کنید.",
+  "Choose a PNG, JPEG, or WebP image.": "یک تصویر PNG، JPEG یا WebP انتخاب کنید.",
+  "Couldn’t read the screenshot. Try selecting it again.": "خواندن تصویر ممکن نشد. دوباره انتخابش کنید.",
+  "Paste screenshot": "چسباندن تصویر",
+  "No image on the clipboard. Copy an image, then try again.": "تصویری در کلیپ‌بورد نیست. یک تصویر کپی کنید و دوباره امتحان کنید.",
+  "Clipboard access failed. Use Ctrl/Cmd+V or attach an image file.": "دسترسی به کلیپ‌بورد ممکن نشد. از Ctrl/Cmd+V استفاده کنید یا فایل تصویر پیوست کنید."
 }
