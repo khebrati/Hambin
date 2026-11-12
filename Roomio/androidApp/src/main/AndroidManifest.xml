@@ -23,7 +23,6 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="watchparty.top" />
                 <data android:path="/" />
-                <data android:path="" />
             </intent-filter>
         </activity>
 
