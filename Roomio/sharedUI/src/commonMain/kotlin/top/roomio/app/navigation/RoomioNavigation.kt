@@ -140,6 +140,7 @@ internal fun RoomioNavigation(
                     state = state,
                     onAction = { action ->
                         when (action) {
+                            is HomeAction.Report -> viewModel.onReportAction(action.action)
                             HomeAction.SettingsClicked -> navigate(ProfileRoute)
                             HomeAction.CreatePartyClicked -> navigate(
                                 PartyManagerRoute(PartyManagerMode.CREATE),

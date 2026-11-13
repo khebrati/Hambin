@@ -1,5 +1,8 @@
+import { useState } from 'react';
+import { BugReportDialog } from '../components/BugReportDialog';
+import { Snackbar } from '../components/Material';
 import { t } from '../i18n';
-import { ArrowRight, Moon, Plus, Settings, Sun, Ticket } from 'lucide-react';
+import { ArrowRight, Bug, Moon, Plus, Settings, Sun, Ticket } from 'lucide-react';
 import type { Identity, Party } from '../types';
 import { Avatar } from '../components/Avatar';
 import { Button, IconButton } from '../components/Material';
@@ -30,10 +33,13 @@ export function HomeScreen({
   returnableParty,
   onReturnToParty,
 }: HomeScreenProps) {
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportSent, setReportSent] = useState(false);
   return (
     <div className="screen home-screen screen-enter">
       <main className="home-main">
         <div className="home-tools" role="group" aria-label={t("Page settings")}>
+          <IconButton icon={Bug} label={t("Report a bug")} onClick={() => setReportOpen(true)} />
           <IconButton
             icon={theme === 'dark' ? Sun : Moon}
             label={theme === 'dark' ? t("Use light theme") : t("Use dark theme")}
@@ -105,6 +111,8 @@ export function HomeScreen({
           />
         </section>}
       </main>
+      <BugReportDialog open={reportOpen} enabled={live} onClose={() => setReportOpen(false)} onSent={() => setReportSent(true)} />
+      <Snackbar message={reportSent ? t("Bug report sent. Thank you.") : ""} onDismiss={() => setReportSent(false)} />
     </div>
   );
 }

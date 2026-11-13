@@ -66,9 +66,9 @@ class KtorRoomRepository(
             }
         } ?: throw PartyException(PARTY_CODE_NETWORK, "Chat history request timed out")
 
-    private var pendingReport: Pair<String, BugReportRequest>? = null
+    private var pendingReport: Pair<String?, BugReportRequest>? = null
 
-    override suspend fun reportBug(roomId: String, description: String, screenshots: List<top.roomio.domain.party.ReportScreenshot>) {
+    override suspend fun reportBug(roomId: String?, description: String, screenshots: List<top.roomio.domain.party.ReportScreenshot>) {
         if (screenshots.size > top.roomio.domain.party.REPORT_SCREENSHOT_MAX_COUNT || screenshots.sumOf { it.byteSize } > top.roomio.domain.party.REPORT_SCREENSHOT_MAX_BYTES) throw PartyException("REPORT_TOO_LARGE", "Screenshots too large")
         val images = screenshots.map { BugScreenshot(it.contentType, it.data) }
         val text = description.trim()
@@ -78,7 +78,7 @@ class KtorRoomRepository(
         pendingReport = roomId to payload
         val sent = kotlinx.coroutines.withTimeoutOrNull(30_000) {
             authed {
-                http.post("${config.baseUrl}/v1/rooms/$roomId/bug-reports") {
+                http.post(if (roomId == null) "${config.baseUrl}/v1/bug-reports" else "${config.baseUrl}/v1/rooms/$roomId/bug-reports") {
                     contentType(ContentType.Application.Json)
                     setBody(payload)
                 }.bodyOrThrow<kotlinx.serialization.json.JsonObject>()

@@ -2379,7 +2379,7 @@ private fun OwnerAwayDesktopPreview() = AppTheme(onThemeChanged = {}) {
 }
 
 @Composable
-private fun BugReportDialog(state: RoomUiState, onAction: (RoomAction) -> Unit) {
+internal fun BugReportDialog(state: BugReportState, onAction: (RoomAction) -> Unit) {
     var readingScreenshot by remember { mutableStateOf(false) }
     val screenshotActions = rememberReportScreenshotPicker(
         onPicked = { onAction(RoomAction.BugScreenshotsAdded(listOf(it))) },
@@ -2391,7 +2391,7 @@ private fun BugReportDialog(state: RoomUiState, onAction: (RoomAction) -> Unit) 
 
 @Composable
 internal fun BugReportDialogContent(
-    state: RoomUiState,
+    state: BugReportState,
     onAction: (RoomAction) -> Unit,
     screenshotActions: ReportScreenshotActions?,
     readingScreenshot: Boolean = false,

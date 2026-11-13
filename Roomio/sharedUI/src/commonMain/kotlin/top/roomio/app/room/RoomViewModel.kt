@@ -91,14 +91,14 @@ internal data class RoomUiState(
     val linkOpen: Boolean = false,
     val leaveOpen: Boolean = false,
     val abortOpen: Boolean = false,
-    val bugReportOpen: Boolean = false,
-    val bugScreenshots: List<top.roomio.domain.party.ReportScreenshot> = emptyList(),
-    val bugScreenshotError: String? = null,
-    val bugDescription: String = "",
-    val bugSending: Boolean = false,
-    val bugError: String? = null,
-    val bugSent: Boolean = false,
-) {
+    override val bugReportOpen: Boolean = false,
+    override val bugScreenshots: List<top.roomio.domain.party.ReportScreenshot> = emptyList(),
+    override val bugScreenshotError: String? = null,
+    override val bugDescription: String = "",
+    override val bugSending: Boolean = false,
+    override val bugError: String? = null,
+    override val bugSent: Boolean = false,
+) : BugReportState {
     val isOwner: Boolean
         get() = model.role == RoomRole.OWNER && model.ownerPresent
 

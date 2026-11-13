@@ -556,6 +556,58 @@ paths:
         '404': {$ref: '#/components/responses/NotFound'}
         '409': {description: CHAT_MESSAGE_CONFLICT or ROOM_ENDED}
         '429': {description: RATE_LIMITED; wait before explicit retry}
+  /v1/bug-reports:
+    post:
+      tags: [Reports]
+      operationId: submitHomeBugReport
+      summary: Save a private application bug report without a room association
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reportId, description, clientInfo, sessionStartedAt, log]
+              properties:
+                reportId: {type: string, format: uuid, description: Stable across retries of this payload}
+                description: {type: string, minLength: 1, maxLength: 8000}
+                clientInfo:
+                  type: object
+                  minProperties: 1
+                  maxProperties: 32
+                  propertyNames: {maxLength: 64}
+                  additionalProperties: {type: string, maxLength: 2048}
+                sessionStartedAt: {type: string, format: date-time}
+                log: {type: string, description: Complete captured application log; maximum 8 MiB UTF-8}
+                screenshots:
+                  type: array
+                  maxItems: 3
+                  description: Optional selected screenshots; maximum 5 MiB decoded bytes total
+                  items:
+                    type: object
+                    required: [contentType, data]
+                    additionalProperties: false
+                    properties:
+                      contentType: {type: string, enum: [image/png, image/jpeg, image/webp]}
+                      data: {type: string, format: byte, description: Canonical padded base64 image bytes}
+      responses:
+        '201':
+          description: Durably stored, or identical report previously stored by this identity
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [reportId]
+                properties:
+                  reportId: {type: string, format: uuid}
+        '400': {description: INVALID_REPORT}
+        '401': {description: Authentication required}
+        '409': {description: REPORT_CONFLICT}
+        '413': {description: REPORT_TOO_LARGE}
+        '429': {description: RATE_LIMITED}
+        '503': {description: Service unavailable; retry with the same report ID}
   /v1/rooms/{roomId}/bug-reports:
     post:
       tags: [Rooms]

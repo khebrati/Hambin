@@ -51,7 +51,7 @@ interface RoomRepository {
         throw PartyException("UNAVAILABLE", "Chat unavailable")
 
     /** Submit diagnostics captured through this action; retry unchanged descriptions idempotently. */
-    suspend fun reportBug(roomId: String, description: String, screenshots: List<ReportScreenshot> = emptyList()) { throw PartyException("UNAVAILABLE", "Reports unavailable") }
+    suspend fun reportBug(roomId: String?, description: String, screenshots: List<ReportScreenshot> = emptyList()) { throw PartyException("UNAVAILABLE", "Reports unavailable") }
 
     /** Last successful admission for the current identity on this device. */
     suspend fun lastRoom(): Room? = null

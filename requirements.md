@@ -56,7 +56,7 @@ Confirmed Android voice routing (2026-11-11):
 2. Starting or pausing a movie preserves the voice output choice. Voice and movie play concurrently with separate call and media volume controls. Release voice routing settings when the voice session ends.
 
 Confirmed room bug reports (2026-11-11):
-1. Both clients show a bug icon button beside Share/Invite in the room top app bar. It opens a simple dialog with one large description input and Send.
+1. Both clients show a bug icon button beside Share/Invite in the room top app bar. It opens a simple dialog with one large description input and Send. As confirmed on 2026-11-13, also show the bug icon in the home page controls when outside a party; home reports have no room association.
 2. Sending includes the description, available device/browser information, and the saved application log from this app session's startup through submission. Reports go to our backend; show success only after durable acceptance and retain the draft on failure for retry.
 3. As confirmed on 2026-11-12, omit the diagnostic storage and Sentry delivery notice from both clients' report dialogs in English and Persian.
 4. Android and web bug reports support optional screenshot selection and clipboard paste, preview and removal. Keep selected screenshots with the draft on failure and send them with the report to private storage and Sentry. Never capture screenshots automatically.

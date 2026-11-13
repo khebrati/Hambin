@@ -13,6 +13,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import top.roomio.app.room.RoomAction
 import top.roomio.app.home.HomeViewModel
 import top.roomio.domain.party.PartyException
 import top.roomio.domain.party.Room
@@ -21,6 +22,41 @@ import top.roomio.domain.party.RoomRepository
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class LastRoomHomeTest {
+    @Test
+    fun homeReportHasNoRoomAndRetainsDraftUntilAccepted() = runTest {
+        val dispatcher = UnconfinedTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        try {
+            var fails = true
+            val roomIds = mutableListOf<String?>()
+            val descriptions = mutableListOf<String>()
+            val rooms = object : RoomRepository by testRoomRepository {
+                override suspend fun reportBug(roomId: String?, description: String, screenshots: List<top.roomio.domain.party.ReportScreenshot>) {
+                    roomIds.add(roomId)
+                    descriptions.add(description)
+                    if (fails) throw PartyException("NETWORK", "Offline")
+                }
+            }
+            val vm = HomeViewModel(TestProfileRepository(), testSessionRepository, rooms)
+            backgroundScope.launch(dispatcher) { vm.state.collect() }
+            vm.onReportAction(RoomAction.BugReportClicked)
+            vm.onReportAction(RoomAction.BugDescriptionChanged("Home lost my language"))
+            vm.onReportAction(RoomAction.BugReportDismissed)
+            vm.onReportAction(RoomAction.BugReportClicked)
+            assertEquals("Home lost my language", vm.state.value.report.bugDescription)
+            vm.onReportAction(RoomAction.BugReportSend)
+            assertEquals("NETWORK", vm.state.value.report.bugError)
+            assertEquals("Home lost my language", vm.state.value.report.bugDescription)
+            fails = false
+            vm.onReportAction(RoomAction.BugReportSend)
+            assertEquals(listOf<String?>(null, null), roomIds)
+            assertEquals(listOf("Home lost my language", "Home lost my language"), descriptions)
+            assertEquals(true, vm.state.value.report.bugSent)
+            assertEquals("", vm.state.value.report.bugDescription)
+            vm.viewModelScope.cancel()
+        } finally { Dispatchers.resetMain() }
+    }
+
     @Test
     fun cachedRoomSurvivesOfflineRefreshAndUpdatesWhenReturningHome() = runTest {
         val dispatcher = UnconfinedTestDispatcher(testScheduler)

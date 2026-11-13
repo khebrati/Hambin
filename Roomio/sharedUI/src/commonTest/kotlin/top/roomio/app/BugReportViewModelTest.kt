@@ -25,7 +25,7 @@ class BugReportViewModelTest {
         var calls = 0
         var response = CompletableDeferred<Unit>()
         val repository = object : RoomRepository by testRoomRepository {
-            override suspend fun reportBug(roomId: String, description: String, screenshots: List<top.roomio.domain.party.ReportScreenshot>) { calls++; sent.add(screenshots); response.await() }
+            override suspend fun reportBug(roomId: String?, description: String, screenshots: List<top.roomio.domain.party.ReportScreenshot>) { calls++; sent.add(screenshots); response.await() }
         }
         val vm = testRoomViewModel("room", true, testSessionRepository, repository, testRealtimeClient, testVoiceClient, testSessionKeeper)
         try {

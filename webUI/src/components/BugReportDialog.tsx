@@ -7,7 +7,7 @@ import { readScreenshots, type ReportScreenshot } from '../data/reportScreenshot
 import { errorMessage, request } from '../data/api';
 import { diagnosticEvent, diagnosticError, browserInfo, sessionLog, sessionStartedAt } from '../data/sessionLog';
 
-export function BugReportDialog({ open, roomId, onClose, onSent, enabled }: {open: boolean; roomId: string; onClose: () => void; onSent: () => void; enabled: boolean}) {
+export function BugReportDialog({ open, roomId, onClose, onSent, enabled }: {open: boolean; roomId?: string; onClose: () => void; onSent: () => void; enabled: boolean}) {
   const [screenshots, setScreenshots] = useState<ReportScreenshot[]>([]);
   const [reading, setReading] = useState(false);
   const [attachmentError, setAttachmentError] = useState('');
@@ -53,7 +53,7 @@ export function BugReportDialog({ open, roomId, onClose, onSent, enabled }: {ope
     inFlight.current = true; setSending(true); setError('');
     try {
       if (pending.current?.description !== text) pending.current = {description: text, payload: {reportId: crypto.randomUUID(), description: text, clientInfo: browserInfo(), sessionStartedAt, log: sessionLog(), ...(screenshots.length ? {screenshots} : {})}};
-      await request(`/v1/rooms/${encodeURIComponent(roomId)}/bug-reports`, pending.current.payload);
+      await request(roomId ? `/v1/rooms/${encodeURIComponent(roomId)}/bug-reports` : "/v1/bug-reports", pending.current.payload);
       diagnosticEvent('report.accepted');
       pending.current = null; setDescription(''); setScreenshots([]); setAttachmentError(''); onClose(); onSent();
     } catch (failure) { logHandledException("BugReportDialog.BugReportDialog.send.1", failure);  diagnosticEvent('report.failure', { code: diagnosticError(failure) }); setError(errorMessage(failure)); }

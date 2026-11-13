@@ -71,6 +71,9 @@ import roomio.sharedui.generated.resources.open_party_manager
 import roomio.sharedui.generated.resources.rejoin_as_owner
 import roomio.sharedui.generated.resources.stream_and_chill
 import roomio.sharedui.generated.resources.settings
+import roomio.sharedui.generated.resources.report_bug
+import top.roomio.app.room.BugReportDialog
+import top.roomio.app.room.RoomAction
 import roomio.sharedui.generated.resources.theme
 import roomio.sharedui.generated.resources.watching_as
 import roomio.sharedui.generated.resources.your_room_is_waiting
@@ -106,6 +109,7 @@ internal fun HomeScreen(
     onAction: (HomeAction) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
+    if (state.report.bugReportOpen) BugReportDialog(state.report) { onAction(HomeAction.Report(it)) }
     var isDark by LocalThemeIsDark.current
 
     Scaffold(
@@ -133,6 +137,7 @@ internal fun HomeScreen(
             ) {
                 HomeControls(
                     isDark = isDark,
+                    onReport = { onAction(HomeAction.Report(RoomAction.BugReportClicked)) },
                     onSettings = { onAction(HomeAction.SettingsClicked) },
                     onToggleTheme = { isDark = !isDark },
                     modifier = Modifier.padding(horizontal = horizontalPadding, vertical = RoomioDesignSystem.spacing.extraSmall),
@@ -200,6 +205,7 @@ internal fun HomeScreen(
 @Composable
 private fun HomeControls(
     isDark: Boolean,
+    onReport: () -> Unit,
     onSettings: () -> Unit,
     onToggleTheme: () -> Unit,
     modifier: Modifier = Modifier,
@@ -209,6 +215,11 @@ private fun HomeControls(
         horizontalArrangement = Arrangement.spacedBy(RoomioDesignSystem.spacing.extraSmall, Alignment.End),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        HomeIconButton(
+            icon = RoomioIcons.BugReport,
+            label = stringResource(Res.string.report_bug),
+            onClick = onReport,
+        )
         HomeIconButton(
             icon = if (isDark) RoomioIcons.LightMode else RoomioIcons.DarkMode,
             label = stringResource(Res.string.theme),

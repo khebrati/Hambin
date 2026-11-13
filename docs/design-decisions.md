@@ -694,3 +694,10 @@ deployment evidence remains historical.
 - **Deadline:** Use a 30-second total deadline per deliberate send or manual Retry, including connection wait and HTTP work. Retry transport failures at least one second apart; fail terminal responses immediately. Expired messages offer Retry/Discard and never resume automatically. Preserve message UUID/text for backend idempotency and reconcile authoritative events/snapshots; preserve new drafts.
 - **Lifetime:** Keep the existing 20-pending-message bound and room-screen-only in-memory lifetime. No background persistence or backend schema change.
 - **Validation:** Six deterministic browser delivery unit tests, three browser delivery/grouping acceptance tests, and ten native ViewModel/UI tests pass; web production build and Android debug assembly pass. Compact Persian RTL/large-text and expanded layouts reviewed. iOS runtime validation requires macOS/Xcode.
+
+
+## DD-078: Bug Reporting from Home
+
+- **Date:** 2026-11-13
+- **Decision:** Add the existing bug icon beside the home theme/settings controls in browser and native clients. Open the same reporting dialog with existing diagnostics, attachments, offline handling and recoverable drafts.
+- **Contract:** Home submissions use authenticated `POST /v1/bug-reports` and store no room association. Cached last-room information is not used. Room reports retain membership checks; both routes share limits, durable storage and Sentry delivery.

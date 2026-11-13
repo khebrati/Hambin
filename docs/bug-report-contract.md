@@ -2,9 +2,11 @@
 
 Accepted 2026-11-11: both clients expose a bug icon beside Invite/Share in the room app bar. The dialog has one required large description field (1–8,000 characters), Cancel and Send. Sending disables editing/repeated submission; success acknowledges receipt and clears the draft. Closing or a failed send retains the draft within that room visit; errors offer retry. Browser offline state disables Send. Native offline sends fail recoverably. Optional screenshots are supported on Android and web (2026-11-12); no category, email, or report-history UI.
 
+Home reporting (2026-11-13): both clients also expose the same bug icon in the home page controls. Reports submitted there are application reports with no room association, even when a last room is cached. The same diagnostics, screenshots, draft/retry behavior and durable acknowledgement apply.
+
 ## HTTP contract
 
-Authenticated `POST /v1/rooms/{roomId}/bug-reports`, JSON:
+Authenticated `POST /v1/bug-reports` for home reports (stored with null room), or `POST /v1/rooms/{roomId}/bug-reports` for room reports, with the same JSON:
 
 - `reportId`: client-generated UUID, retained for retries of an unchanged description and screenshots.
 - `description`: trimmed nonempty string, at most 8,000 Unicode characters.
@@ -13,7 +15,7 @@ Authenticated `POST /v1/rooms/{roomId}/bug-reports`, JSON:
 - `screenshots`: optional array (default empty), at most three objects `{contentType, data}`. `contentType` is `image/png`, `image/jpeg`, or `image/webp`; `data` is canonical padded base64 without a data-URL prefix. Maximum 5 MiB decoded bytes in total. Reject malformed base64, empty data, and mismatched image signatures with `INVALID_REPORT`; excessive count/bytes with `REPORT_TOO_LARGE`. Store with the report and deliver as numbered Sentry attachments, using generated names rather than local filenames. Support clipboard image paste on Android and web (including Ctrl/Cmd+V on web). Selection is explicit; preview/remove before Send. Retain images on failure/dismiss, freeze while reading/sending, clear after success. Changing images creates a new retry payload/ID. No automatic screenshot capture.
 - `log`: complete captured application log through Send, at most 8 MiB UTF-8. No silent truncation: larger reports fail with `REPORT_TOO_LARGE` and retain the draft.
 
-Response `201 {"reportId":"…"}` only after PostgreSQL commit. Identical report ID/identity retries return the original acknowledgement; changed content returns `409 REPORT_CONFLICT`. Active room membership is required on first insert; retries remain acknowledgeable after departure. Limits: five submissions/minute per IP plus ten new reports/day per identity. Standard auth refresh, 400 INVALID_REPORT, 403 NOT_A_MEMBER, 413 REPORT_TOO_LARGE, 429 RATE_LIMITED and recoverable service/network failures apply.
+Response `201 {"reportId":"…"}` only after PostgreSQL commit. Identical report ID/identity retries return the original acknowledgement; changed content returns `409 REPORT_CONFLICT`. Active room membership is required on first insert for room reports; home reports require authentication without room membership. Both endpoints share IP and identity limits; retries remain acknowledgeable after departure. Limits: five submissions/minute per IP plus ten new reports/day per identity. Standard auth refresh, 400 INVALID_REPORT, 403 NOT_A_MEMBER, 413 REPORT_TOO_LARGE, 429 RATE_LIMITED and recoverable service/network failures apply.
 
 Application logs begin at web module initialization/native application graph startup and reset with page reload/process restart. Keep the full session in process memory until exit; do not collect system-wide Android logcat, cookies, credentials, microphone audio, screenshots, or local files automatically. Only explicitly selected screenshot files are uploaded. Capture Kermit messages in native, browser console/errors and HTTP outcomes plus room/voice/player state transitions. Redact URLs, authorization values, JWTs, and known credential fields before retaining log messages; structured HTTP diagnostics omit request/response bodies. Device metadata does not include serial numbers or persistent hardware identifiers.
 

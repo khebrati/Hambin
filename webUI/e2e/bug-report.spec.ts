@@ -1,7 +1,8 @@
 import { test, expect, type Page } from '@playwright/test';
 
-async function roomFixture(page: Page) {
+async function roomFixture(page: Page, home = false) {
   const sent: Record<string, unknown>[] = [];
+  const paths: string[] = [];
   let fail = true;
   const room = { id:'12345678-1234-1234-1234-123456789012',code:'ABCD2345',title:'Friday night screening',ownerIdentityId:'owner' };
   await page.addInitScript(() => localStorage.setItem('roomio-auth-format','backend-v1'));
@@ -12,15 +13,16 @@ async function roomFixture(page: Page) {
     if (path.endsWith('/join')) return route.fulfill({json:{room,membership:{id:'member',identityId:'owner',isOwner:true}}});
     if (path.endsWith('/snapshot')) return route.fulfill({json:{room,members:[{membershipId:'member',identityId:'owner',displayName:'Mira',avatar:'comet',isOwner:true,present:true}],stream:{sessionId:'',revision:0,state:'EMPTY',url:''},sequence:1}});
     if (path.endsWith('/bug-reports')) {
+      paths.push(path);
       sent.push(route.request().postDataJSON());
       return route.fulfill(fail ? {status:503,json:{code:'UNAVAILABLE'}} : {status:201,json:{reportId:sent.at(-1)!.reportId}});
     }
     return route.fulfill({status:503,json:{code:'UNAVAILABLE'}});
   });
-  await page.goto('/?invite='+room.code);
-  await page.getByRole('button',{name:'Join party',exact:true}).click();
+  await page.goto(home ? '/' : '/?invite='+room.code);
+  if (!home) await page.getByRole('button',{name:'Join party',exact:true}).click();
   await expect(page.getByRole('button',{name:'Report a bug',exact:true})).toBeVisible();
-  return {sent, succeed: () => {fail=false;}};
+  return {sent, paths, succeed: () => {fail=false;}};
 }
 for (const variant of [
   {name:'desktop light',width:1280,height:800,dark:false,rtl:false},
@@ -151,4 +153,37 @@ test('editing screenshots after a failed report creates a new report ID', async 
  await expect(dialog).toHaveCount(0);
  expect(fixture.sent[1].reportId).not.toEqual(fixture.sent[0].reportId);
  expect(fixture.sent[1].screenshots).toEqual([{contentType:'image/png',data}]);
+});
+
+for (const variant of [
+  {name:'desktop light',width:1280,height:800,rtl:false},
+  {name:'compact dark large RTL',width:360,height:800,rtl:true},
+]) test(`home reports without joining a room: ${variant.name}`, async ({page,context},info) => {
+  await page.setViewportSize(variant);
+  const fixture = await roomFixture(page, true);
+  await page.evaluate(rtl => { document.documentElement.dir=rtl?'rtl':'ltr'; document.documentElement.style.fontSize=rtl?'22px':'16px'; document.documentElement.dataset.theme=rtl?'dark':'light'; }, variant.rtl);
+  const bug = page.getByRole('button',{name:'Report a bug',exact:true});
+  await bug.click();
+  const dialog = page.getByRole('dialog');
+  const editor = dialog.getByRole('textbox',{name:'What went wrong?'});
+  await editor.fill('Home language changes when returning to the app.');
+  await page.keyboard.press('Escape');
+  await bug.click();
+  await expect(editor).toHaveValue('Home language changes when returning to the app.');
+  await context.setOffline(true);
+  await expect(dialog.getByRole('button',{name:'Send',exact:true})).toBeDisabled();
+  await context.setOffline(false);
+  await dialog.getByRole('button',{name:'Send',exact:true}).click();
+  await expect(dialog).toContainText('Report wasn’t sent');
+  expect(fixture.paths).toEqual(['/v1/bug-reports']);
+  expect(fixture.sent[0].log).toContain('Application started');
+  expect(fixture.sent[0]).not.toHaveProperty('roomId');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({path:info.outputPath('home-report.png'),fullPage:true});
+  fixture.succeed();
+  await dialog.getByRole('button',{name:'Send',exact:true}).click();
+  await expect(dialog).toHaveCount(0);
+  expect(fixture.sent[1]).toEqual(fixture.sent[0]);
+  await bug.click();
+  await expect(editor).toHaveValue('');
 });

@@ -24,10 +24,12 @@ import top.roomio.domain.party.*
 
 class BugScreenshotRepositoryTest {
     @Test fun retryFreezesImagesAndLogWhileImageChangesCreateNewPayload() = runTest { withContext(Dispatchers.Default) {
+        val paths = mutableListOf<String>()
         val payloads = mutableListOf<String>()
         var success = false
         val json = Json { ignoreUnknownKeys = true }
         val client = HttpClient(MockEngine { request ->
+            paths.add(request.url.encodedPath)
             payloads.add((request.body as TextContent).text)
             respond(if (success) "{}" else """{"code":"UNAVAILABLE"}""", if (success) HttpStatusCode.Created else HttpStatusCode.ServiceUnavailable, headersOf(HttpHeaders.ContentType, "application/json"))
         }) { install(ContentNegotiation) { json(json) } }
@@ -51,6 +53,9 @@ class BugScreenshotRepositoryTest {
             assertNotEquals(id(payloads[0]), id(payloads[2]))
             repository.reportBug("room", "Broken playback", listOf(image))
             assertNotEquals(id(payloads[0]), id(payloads[3]))
+            repository.reportBug(null, "Home screen bug", emptyList())
+            assertEquals("/v1/bug-reports", paths.last())
+            assertEquals("/v1/rooms/room/bug-reports", paths.first())
         } finally { client.close() }
     } }
 }
