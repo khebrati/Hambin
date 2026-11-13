@@ -163,7 +163,8 @@ export class AvMedia implements PlayerMedia {
     this.manifest = /\.(m3u8|mpd)(?:$|[?#])/i.test(url);
     const streams = player.getStreams();
     const choices = (items: Stream[]) => items.map(stream => ({ id: `av:${stream.id}`, name: [stream.metadata.title, stream.metadata.language === 'und' ? '' : stream.metadata.language].filter(Boolean).join(' · ') || `${stream.mediaType} ${stream.id + 1}` }));
-    const subtitles = streams.filter(stream => stream.mediaType === t("Subtitle"));
+    // Engine media types are protocol identifiers, independent of the UI language.
+    const subtitles = streams.filter(stream => stream.mediaType === 'Subtitle');
     const supported = subtitles.filter(stream => textCodecs.has(stream.codecparProxy.codecId));
     const automatic = player.getSelectedAudioStreamId();
     if (this.manifest) {
@@ -174,7 +175,7 @@ export class AvMedia implements PlayerMedia {
       if (audio.list.length > 1 || subtitles.list.length > 0) throw new Error('This manifest needs browser playback for track selection.');
       const tracks = (list: { lang: string }[], kind: string) => list.map((track, index) => ({ id: `avh:${index}`, name: track.lang || `${kind} ${index + 1}` }));
       this.callbacks.tracks(tracks(audio.list, t("Audio")), tracks(subtitles.list, t("Subtitles")), audio.selectedIndex >= 0 ? `avh:${audio.selectedIndex}` : null, 0);
-    } else this.callbacks.tracks(choices(streams.filter(stream => stream.mediaType === t("Audio"))), choices(supported), automatic >= 0 ? `av:${automatic}` : null, subtitles.length - supported.length);
+    } else this.callbacks.tracks(choices(streams.filter(stream => stream.mediaType === 'Audio')), choices(supported), automatic >= 0 ? `av:${automatic}` : null, subtitles.length - supported.length);
     this.callbacks.update();
   }
   private enqueue<T>(action: (player: RuntimePlayer) => Promise<T>): Promise<T | undefined> {
