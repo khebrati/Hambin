@@ -4,12 +4,15 @@ import top.roomio.data.diagnostics.loggedRunCatching
 
 import com.russhwolf.settings.Settings
 import dev.zacsweers.metro.Inject
+import dev.zacsweers.metro.AppScope
+import dev.zacsweers.metro.SingleIn
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import top.roomio.domain.profile.ProfileAvatarId
 import top.roomio.domain.profile.ProfileRepository
 import top.roomio.domain.profile.UserProfile
 
+@SingleIn(AppScope::class)
 @Inject
 class PreferencesProfileRepository(
     private val settings: Settings,

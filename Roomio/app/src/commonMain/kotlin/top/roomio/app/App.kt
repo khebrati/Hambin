@@ -2,7 +2,7 @@ package top.roomio.app
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.DisposableEffect
+import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.DependencyGraph
 import dev.zacsweers.metro.createGraph
@@ -22,6 +22,7 @@ import top.roomio.domain.profile.ProfileRepository
     bindingContainers = [ProfileDataBindings::class, PartyDataBindings::class, top.roomio.data.launcher.LauncherIconDataBindings::class],
 )
 internal interface RoomioAppGraph {
+    val retainedGraphFactory: RetainedAppGraph.Factory
     val observability: top.roomio.data.observability.AppObservability
     val launcherIconController: top.roomio.domain.launcher.LauncherIconController
     val themePreferencesRepository: top.roomio.domain.profile.ThemePreferencesRepository
@@ -39,9 +40,14 @@ fun App(
     onThemeChanged: @Composable (isDark: Boolean) -> Unit = {},
     onAppNameChanged: (String) -> Unit = {},
 ) {
-    val graph = remember { top.roomio.data.party.initializeAppLogging(); createGraph<RoomioAppGraph>() }
-    val monitoring = remember(graph) { graph.observability }
-    DisposableEffect(monitoring) { onDispose { monitoring.close() } }
+    // Navigation ViewModels survive Activity recreation and must keep using this graph.
+    val retainedGraph = viewModel<RetainedAppGraph> {
+        top.roomio.data.party.initializeAppLogging()
+        val graph = createGraph<RoomioAppGraph>()
+        graph.retainedGraphFactory.create(graph)
+    }
+    val graph = retainedGraph.graph
+    retainedGraph.startMonitoring()
     val themePreferences = remember(graph) { graph.themePreferencesRepository }
     val launcherIconController = remember(graph) { graph.launcherIconController }
     RoomioUi(

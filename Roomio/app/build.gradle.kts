@@ -30,6 +30,13 @@ kotlin {
             implementation(project(":data"))
             implementation(project(":domain"))
             implementation(libs.compose.runtime)
+            implementation(libs.androidx.lifecycle.viewmodel)
+        }
+        commonTest.dependencies {
+            implementation(kotlin("test"))
+            implementation(libs.kotlinx.coroutines.test)
+            implementation(libs.multiplatformSettings)
+            implementation(libs.multiplatformSettings.test)
         }
     }
 
