@@ -1,65 +1,12 @@
-/* Bundled Pofak fonts: no system installation or external font service required. */
-
+/*! Pofak is proprietary font software by FontIran.
+ * Terms: https://fontiran.com/about-licenses
+ * This set of fonts is used in this project under the license: 94QXL3U1
+ * See /fonts/pofak/FontLicense.txt.
+ */
 @font-face {
   font-family: "Pofak";
   font-style: normal;
-  font-weight: 100;
+  font-weight: 100 900;
   font-display: swap;
-  src: url("./assets/fonts/pofak/pofak_thin.ttf") format("truetype");
-}
-
-@font-face {
-  font-family: "Pofak";
-  font-style: normal;
-  font-weight: 200;
-  font-display: swap;
-  src: url("./assets/fonts/pofak/pofak_ultralight.ttf") format("truetype");
-}
-
-@font-face {
-  font-family: "Pofak";
-  font-style: normal;
-  font-weight: 300;
-  font-display: swap;
-  src: url("./assets/fonts/pofak/pofak_light.ttf") format("truetype");
-}
-
-@font-face {
-  font-family: "Pofak";
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url("./assets/fonts/pofak/pofak_regular.ttf") format("truetype");
-}
-
-@font-face {
-  font-family: "Pofak";
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url("./assets/fonts/pofak/pofak_medium.ttf") format("truetype");
-}
-
-@font-face {
-  font-family: "Pofak";
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: url("./assets/fonts/pofak/pofak_demibold.ttf") format("truetype");
-}
-
-@font-face {
-  font-family: "Pofak";
-  font-style: normal;
-  font-weight: 800;
-  font-display: swap;
-  src: url("./assets/fonts/pofak/pofak_extrabold.ttf") format("truetype");
-}
-
-@font-face {
-  font-family: "Pofak";
-  font-style: normal;
-  font-weight: 900;
-  font-display: swap;
-  src: url("./assets/fonts/pofak/pofak_black.ttf") format("truetype");
+  src: url("/fonts/pofak/PofakVF.woff2") format("woff2");
 }

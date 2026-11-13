@@ -10,6 +10,7 @@ import roomio.sharedui.generated.resources.pofak_ultralight
 import roomio.sharedui.generated.resources.pofak_light
 import roomio.sharedui.generated.resources.pofak_regular
 import roomio.sharedui.generated.resources.pofak_medium
+import roomio.sharedui.generated.resources.pofak_bold
 import roomio.sharedui.generated.resources.pofak_demibold
 import roomio.sharedui.generated.resources.pofak_extrabold
 import roomio.sharedui.generated.resources.pofak_black
@@ -39,6 +40,7 @@ internal fun RoomioTypography(): Typography {
         Font(Res.font.pofak_regular, weight = FontWeight(400)),
         Font(Res.font.pofak_medium, weight = FontWeight(500)),
         Font(Res.font.pofak_demibold, weight = FontWeight(600)),
+        Font(Res.font.pofak_bold, weight = FontWeight(700)),
         Font(Res.font.pofak_extrabold, weight = FontWeight(800)),
         Font(Res.font.pofak_black, weight = FontWeight(900)),
     )
