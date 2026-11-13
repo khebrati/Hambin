@@ -285,7 +285,10 @@ export class AvMedia implements PlayerMedia {
   pause() { return this.enqueue(player => player.pause()).catch((handledError) => { logHandledException("avPlayer.pause.7", handledError); return this.fail(t("Unable to pause this video. Retry the video.")); }); }
   /** Keep the packet pump active while the native media element stays paused. */
   async prepareForSync(positionMs: number) {
-    await this.seekTo(positionMs / 1000);
+    const target = positionMs / 1000;
+    // A freshly decoded beginning already has the requested frame. Seeking the
+    // MSE demuxer back to zero here can flush its first packets during startup.
+    if (!(target === 0 && (this.currentTime < 0.5 || this.buffered.length > 0 && this.buffered.start(0) <= 0.25))) await this.seekTo(target);
     await this.enqueue(async player => {
       this.previewing = true;
       player.setVolume(0);
@@ -294,10 +297,12 @@ export class AvMedia implements PlayerMedia {
         const video = this.video();
         if (!video) throw new Error('PLAYER_UNAVAILABLE');
         video.pause();
-        const target = positionMs / 1000;
         const end = Math.min(target + 2, this.durationValue);
-        await this.waitForMedia(() => Array.from({length:video.buffered.length}, (_,i)=>i).some(i=>video.buffered.start(i)<=target+.1 && video.buffered.end(i)>=end));
-        video.currentTime = target;
+        const range = () => Array.from({length:video.buffered.length}, (_,i)=>i).find(i=>video.buffered.start(i)<=target+.25 && video.buffered.end(i)>=end);
+        await this.waitForMedia(() => range() !== undefined);
+        // Containers may start just after zero; stay inside the playable range.
+        const playableTarget = Math.max(target, video.buffered.start(range()!));
+        if (Math.abs(video.currentTime - playableTarget) > 0.05) video.currentTime = playableTarget;
         await this.waitForMedia(() => !video.seeking && video.readyState >= 3);
         await player.pause();
         this.pausedValue = true;

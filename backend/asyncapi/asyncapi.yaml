@@ -179,7 +179,7 @@ components:
             type: integer
     SyncState:
       name: sync.state
-      description: Full ephemeral attempt state, separate from durable room event sequencing. See docs/synchronization-contract.md for phase and recovery rules.
+      description: Full ephemeral attempt state, separate from durable room event sequencing. New shared streams automatically enter PREPARING at zero with connected members ACCEPTED; manual invitations begin at INVITING. See docs/synchronization-contract.md for phase and recovery rules.
       payload:
         type: object
         required: [serverTimeMs, state]

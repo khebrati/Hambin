@@ -22,3 +22,13 @@ Default-player regression variants use the same synthetic source, with no person
 ffmpeg -i movie.mkv -map 0:v:0 -map 0:a:0 -c copy -movflags +faststart movie.mp4
 ffmpeg -i movie.mkv -map 0:v:0 -map 0:a:0 -c:v libvpx-vp9 -b:v 80k -c:a libopus movie.webm
 ```
+
+
+`sync-long.mp4` is an additional authored 120-second solid-color H.264/AAC fixture. It keeps the owner playing while a joining player's decoder and bounded admission retry settle, without reaching the end of the shorter track-selection fixture. Generated with FFmpeg 6.1.1:
+
+```sh
+ffmpeg -f lavfi -i 'color=c=0x354f52:size=160x90:rate=6:duration=120' \
+  -f lavfi -i 'sine=frequency=440:sample_rate=16000:duration=120' \
+  -c:v libx264 -preset ultrafast -crf 35 -g 12 -c:a aac -b:a 16k \
+  -movflags +faststart sync-long.mp4
+```

@@ -85,6 +85,7 @@ internal class NativeGroupSync(
         if(value==null){if(saved!=null)restore();return}
         val mine=value.participants.find { it.membershipId==self() }
         val included=mine?.response==GroupSyncResponse.ACCEPTED
+        if(value.phase==GroupSyncPhase.PREPARING&&included&&old?.requestId!=value.requestId)open()
         if(value.phase==GroupSyncPhase.INVITING){if(old?.requestId!=value.requestId)open();if(included&&saved==null)capture()}
         if(mine?.response==GroupSyncResponse.EXCLUDED&&saved!=null){restore();dismiss();effect(RoomEffect.GroupSyncNotice(GroupSyncNotice.EXCLUDED))}
         when(value.phase){
