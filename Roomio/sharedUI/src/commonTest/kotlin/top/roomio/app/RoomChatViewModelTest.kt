@@ -22,7 +22,7 @@ class RoomChatViewModelTest {
             override suspend fun snapshot(roomId: String) = RoomSnapshot(room,emptyList(),StreamInfo("",0,StreamState.EMPTY,""))
             override suspend fun sendChatMessage(roomId: String, messageId: String, text: String): ChatMessage {
                 sends += messageId to text
-                if (fail) { fail = false; throw PartyException("NETWORK","Offline") }
+                if (fail) { fail = false; throw PartyException("RATE_LIMITED","Wait") }
                 return message.copy(id=messageId,identityId="test",text=text,sequence=6)
             }
         }
@@ -55,10 +55,67 @@ class RoomChatViewModelTest {
             events.emit(RealtimeEvent.Failure("NETWORK","offline"))
             vm.onAction(RoomAction.ChatSend)
             assertEquals(2,sends.size)
+            assertEquals(ChatSendState.SENDING,vm.state.value.chat.pending.single().state)
+            assertEquals("",vm.state.value.chat.draft)
             events.emit(RealtimeEvent.Snapshot(repository.snapshot("room").copy(chat=ChatPage(listOf(message),true))))
             assertTrue(vm.state.value.chat.connected)
-            assertEquals(listOf(message),vm.state.value.chat.messages)
-            assertEquals("Keep this new draft",vm.state.value.chat.draft)
+            advanceTimeBy(1000); runCurrent()
+            assertEquals(3,sends.size)
+            assertTrue(vm.state.value.chat.pending.isEmpty())
+        } finally { vm.viewModelScope.cancel();Dispatchers.resetMain() }
+    }
+
+    @Test fun offlineSendExpiresAndManualRetryWaitsForReconnect() = runTest {
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+        val events = MutableSharedFlow<RealtimeEvent>(extraBufferCapacity = 16)
+        val sends = mutableListOf<Pair<String,String>>()
+        var failTransport = true
+        val snapshot = RoomSnapshot(room,emptyList(),StreamInfo("",0,StreamState.EMPTY,""))
+        val repository = object : RoomRepository by testRoomRepository {
+            override suspend fun snapshot(roomId: String) = snapshot
+            override suspend fun sendChatMessage(roomId: String, messageId: String, text: String): ChatMessage {
+                sends += messageId to text
+                if (failTransport) { failTransport = false; throw PartyException("NETWORK", "Offline") }
+                return message.copy(id=messageId,identityId="test",text=text,sequence=6)
+            }
+        }
+        val realtime = object : RealtimeClient {
+            override suspend fun connect(roomId: String) = object : RealtimeSession {
+                override val events = events
+                override suspend fun reportPlayback(streamSessionId: String, positionMs: Long, playing: Boolean) = Unit
+                override suspend fun requestSync(streamSessionId: String, positionMs: Long, requestId: String) = Unit
+                override suspend fun close() = Unit
+            }
+        }
+        val vm = testRoomViewModel("room",true,testSessionRepository,repository,realtime,testVoiceClient,testSessionKeeper)
+        try {
+            events.emit(RealtimeEvent.Failure("NETWORK","offline"))
+            vm.onAction(RoomAction.ChatDraftChanged("Queued")); vm.onAction(RoomAction.ChatSend)
+            val id = vm.state.value.chat.pending.single().id
+            vm.onAction(RoomAction.ChatDraftChanged("New draft"))
+            advanceTimeBy(29_999); runCurrent()
+            assertEquals(ChatSendState.SENDING,vm.state.value.chat.pending.single().state)
+            assertTrue(sends.isEmpty())
+            advanceTimeBy(1); runCurrent()
+            assertEquals("CHAT_SEND_TIMEOUT",vm.state.value.chat.pending.single().error)
+            events.emit(RealtimeEvent.Snapshot(snapshot))
+            assertTrue(sends.isEmpty()) // Expired messages never send automatically.
+            events.emit(RealtimeEvent.Failure("NETWORK","offline"))
+            vm.onAction(RoomAction.ChatRetry(id))
+            assertEquals(ChatSendState.SENDING,vm.state.value.chat.pending.single().state)
+            events.emit(RealtimeEvent.Snapshot(snapshot)); runCurrent()
+            assertEquals(ChatSendState.SENDING,vm.state.value.chat.pending.single().state)
+            advanceTimeBy(1_000); runCurrent()
+            assertEquals(listOf(id to "Queued", id to "Queued"),sends)
+            assertTrue(vm.state.value.chat.pending.isEmpty())
+            assertEquals("New draft",vm.state.value.chat.draft)
+            events.emit(RealtimeEvent.Failure("NETWORK","offline"))
+            vm.onAction(RoomAction.ChatSend)
+            val reconciledId = vm.state.value.chat.pending.single().id
+            events.emit(RealtimeEvent.Snapshot(snapshot.copy(chat=ChatPage(listOf(message.copy(id=reconciledId, identityId="test"))))))
+            advanceTimeBy(30_000); runCurrent()
+            assertEquals(2,sends.size)
+            assertTrue(vm.state.value.chat.pending.isEmpty())
         } finally { vm.viewModelScope.cancel();Dispatchers.resetMain() }
     }
 

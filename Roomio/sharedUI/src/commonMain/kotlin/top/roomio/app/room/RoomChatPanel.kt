@@ -52,7 +52,7 @@ import top.roomio.domain.party.validChatText
 internal fun RoomChatPanel(state: RoomChatState, onAction: (RoomAction) -> Unit, modifier: Modifier = Modifier, desktopInput: Boolean = desktopChatInput) {
     val list = rememberLazyListState()
     val feedHeight = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.height.toDp() * .38f }.coerceIn(260.dp, 420.dp)
-    val canSend = state.connected && !state.loading && state.pending.size < 20 && validChatText(normalizeChatText(state.draft))
+    val canSend = state.pending.size < 20 && validChatText(normalizeChatText(state.draft))
     var composerFocused by remember { mutableStateOf(false) }
     val headerFocus = remember { FocusRequester() }
     val focus = LocalFocusManager.current
@@ -143,10 +143,10 @@ internal fun RoomChatPanel(state: RoomChatState, onAction: (RoomAction) -> Unit,
                                 if (first) Text(stringResource(Res.string.chat_you), style = MaterialTheme.typography.labelMedium)
                                 ChatBubble(message.text, true)
                                 if (message.state == ChatSendState.FAILED) {
-                                    Text(chatError(message.error), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+                                    Text(chatError(message.error, sending = true), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(stringResource(Res.string.chat_not_sent), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
-                                        TextButton(enabled = state.connected, onClick = { onAction(RoomAction.ChatRetry(message.id)) }) { Text(stringResource(Res.string.chat_retry)) }
+                                        TextButton(onClick = { onAction(RoomAction.ChatRetry(message.id)) }) { Text(stringResource(Res.string.chat_retry)) }
                                         TextButton(onClick = { onAction(RoomAction.ChatDiscard(message.id)) }) { Text(stringResource(Res.string.chat_discard)) }
                                     }
                                 } else Text(stringResource(Res.string.chat_sending), style = MaterialTheme.typography.labelSmall)
@@ -163,12 +163,6 @@ internal fun RoomChatPanel(state: RoomChatState, onAction: (RoomAction) -> Unit,
                     Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.errorContainer).padding(12.dp)) {
                         Text(chatError(state.error), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
                         TextButton(onClick = { onAction(RoomAction.ChatRefresh) }, enabled = !state.loadingMore) { Text(stringResource(Res.string.chat_retry)) }
-                    }
-                }
-                if (!state.connected && !state.loading) {
-                    Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.tertiaryContainer).padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Icon(RoomioIcons.WifiOff, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onTertiaryContainer)
-                        Text(stringResource(Res.string.chat_offline), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onTertiaryContainer)
                     }
                 }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -285,10 +279,10 @@ private fun ChatBubble(text: String, self: Boolean) {
 }
 
 @Composable
-private fun chatError(code: String?): String = stringResource(when (code) {
+private fun chatError(code: String?, sending: Boolean = false): String = stringResource(when (code) {
     "INVALID_CHAT_MESSAGE" -> Res.string.chat_invalid
     "CHAT_MESSAGE_CONFLICT" -> Res.string.chat_conflict
     "RATE_LIMITED" -> Res.string.chat_rate_limited
-    "NETWORK" -> Res.string.chat_offline
+    "NETWORK", "CHAT_SEND_TIMEOUT" -> if (sending) Res.string.chat_send_timeout else Res.string.chat_failed
     else -> Res.string.chat_failed
 })

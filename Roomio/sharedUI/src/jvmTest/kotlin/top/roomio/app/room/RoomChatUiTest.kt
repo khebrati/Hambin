@@ -74,7 +74,8 @@ class RoomChatUiTest {
         onNodeWithContentDescription("Open chat").assertIsDisplayed().performClick()
         onNodeWithContentDescription("Message the party").performScrollTo().assertTextContains("Hello 🍿", substring = true)
         runOnIdle { state.value=state.value.copy(connected=false) }
-        onNodeWithContentDescription("Send message").performScrollTo().assertIsNotEnabled()
+        onNodeWithContentDescription("Send message").performScrollTo().assertIsEnabled()
+        onNodeWithText("Chat is offline. Your draft stays here.").assertDoesNotExist()
     }
 
     @Test fun sharedRoomRendersSelectedSidePanelInCompactPersianAndExpandedEnglish() = runComposeUiTest {

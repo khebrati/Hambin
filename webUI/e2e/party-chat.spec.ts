@@ -44,7 +44,7 @@ test('real two-browser chat, native HTTP payload, failure retry, offline recover
     await expect(guest.locator('.chat-unread')).toHaveText('1');
     await guest.getByRole('button', { name: 'Open chat', exact: true }).click();
     await expect(guest.locator('.chat-message__bubble', { hasText: 'سلام از کلاینت دیگر' })).toBeVisible();
-    // Lose a successful HTTP response after commit; explicit retry must reuse the UUID.
+    // Lose a successful HTTP response after commit; automatic recovery must reuse the UUID.
     let failedId = '';
     let intercept = true;
     await guest.route('**/chat/messages', async route => {
@@ -67,11 +67,11 @@ test('real two-browser chat, native HTTP payload, failure retry, offline recover
     await guest.unroute('**/chat/messages');
     await guestContext.setOffline(true);
     await guestDraft.fill('An offline draft stays here');
-    await expect(guestSend).toBeDisabled({ timeout: 30000 });
-    await guestContext.setOffline(false);
-    await expect(guestSend).toBeEnabled({ timeout: 30000 });
-    await expect(guestDraft).toHaveValue('An offline draft stays here');
+    await expect(guestSend).toBeEnabled();
     await guestSend.click();
+    await expect(guest.getByText('Sending…', {exact:true})).toBeVisible();
+    await expect(guest.locator('.chat-offline')).toHaveCount(0);
+    await guestContext.setOffline(false);
     await expect(owner.locator('.chat-message__bubble', { hasText: 'An offline draft stays here' })).toBeVisible();
     await guest.reload();
     await guest.getByRole('button', { name: 'Join party', exact: true }).click();

@@ -272,6 +272,7 @@
     <string name="chat_earlier">Load earlier messages</string>
     <string name="chat_latest">Latest messages</string>
     <string name="chat_refresh">Return to latest messages</string>
+    <string name="chat_send_timeout">Message could not be sent. Retry or discard it.</string>
     <string name="chat_offline">Chat is offline. Your draft stays here.</string>
     <string name="chat_hint">Ctrl + Enter to send</string>
     <string name="chat_pending_limit">Retry or discard pending messages to send more.</string>

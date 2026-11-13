@@ -686,3 +686,11 @@ deployment evidence remains historical.
 - **Decision:** When the owner is the only connected room member, choosing a local file does not show “Who’s ready to watch?” and selecting a URL does not begin group preparation or the countdown. Keep normal player controls available.
 - **Boundary:** The service creates no source synchronization attempt in this case, shared by browser, Android, iOS and desktop. Source selection/replacement and normal media loading still run. With other connected viewers, preserve local-file consent and explicit Start, and URL automatic coordination.
 - **Later joins:** Preserve private newcomer catch-up to the owner; joining must not restart or interrupt the owner's playback. A local newcomer still chooses their own copy.
+
+## DD-077: Bounded Automatic Chat Delivery Recovery
+
+- **Date:** 2026-11-13
+- **Decision:** Per stakeholder request, remove the repeated offline/draft banner in browser and shared native chat. Allow sends while disconnected, show Sending per message, and retry automatically after connectivity returns. This supersedes DD-052/chat-contract's explicit-retry-only behavior.
+- **Deadline:** Use a 30-second total deadline per deliberate send or manual Retry, including connection wait and HTTP work. Retry transport failures at least one second apart; fail terminal responses immediately. Expired messages offer Retry/Discard and never resume automatically. Preserve message UUID/text for backend idempotency and reconcile authoritative events/snapshots; preserve new drafts.
+- **Lifetime:** Keep the existing 20-pending-message bound and room-screen-only in-memory lifetime. No background persistence or backend schema change.
+- **Validation:** Six deterministic browser delivery unit tests, three browser delivery/grouping acceptance tests, and ten native ViewModel/UI tests pass; web production build and Android debug assembly pass. Compact Persian RTL/large-text and expanded layouts reviewed. iOS runtime validation requires macOS/Xcode.

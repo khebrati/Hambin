@@ -438,6 +438,7 @@
   "Message the party…": "پیامی برای دورهمی…",
   "Send message": "ارسال پیام",
   "Sent": "ارسال شد",
+  "Message could not be sent. Retry or discard it.": "پیام ارسال نشد. دوباره تلاش کن یا حذفش کن.",
   "Not sent": "ارسال نشد",
   "Collapse chat": "جمع کردن گپ",
   "Open chat": "باز کردن گپ",

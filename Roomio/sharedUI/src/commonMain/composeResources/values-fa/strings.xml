@@ -272,6 +272,7 @@
     <string name="chat_earlier">نمایش پیام‌های قبلی</string>
     <string name="chat_latest">تازه‌ترین پیام‌ها</string>
     <string name="chat_refresh">بازگشت به تازه‌ترین پیام‌ها</string>
+    <string name="chat_send_timeout">پیام ارسال نشد. دوباره تلاش کن یا حذفش کن.</string>
     <string name="chat_offline">گپ آفلاین است. پیش‌نویس اینجا می‌ماند.</string>
     <string name="chat_hint">ارسال با Ctrl + Enter</string>
     <string name="chat_pending_limit">برای ارسال پیام بیشتر، پیام‌های ناموفق را دوباره بفرست یا حذف کن.</string>

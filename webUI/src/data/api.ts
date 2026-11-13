@@ -50,6 +50,7 @@ export async function request<T>(path: string, body?: unknown, method = body ===
   }
 }
 const messages: Record<string, string> = {
+  CHAT_SEND_TIMEOUT: 'Message could not be sent. Retry or discard it.',
   INVALID_CHAT_MESSAGE: 'Use a message of 1–500 characters.', CHAT_MESSAGE_CONFLICT: 'This message could not be retried. Discard it and send a new message.', INVALID_CHAT_CURSOR: 'Could not load earlier messages. Refresh the conversation and try again.',
   REPORT_TOO_LARGE: 'The session log is too large to send. Copy your description, then reload the page to begin a new log.', INVALID_REPORT: 'Check your description (up to 8,000 characters).', REPORT_CONFLICT: 'This report changed. Edit your description and send again.',
   INVALID_STREAM_URL: 'Enter a valid HTTPS video URL.', FORBIDDEN: 'Only the room owner can change the stream.', OWNER_ABSENT: 'The owner must be present to change the stream.', ALREADY_IN_ROOM: 'You already have an active party. Return to it and leave before opening another.', STREAM_ACTIVE: 'End the current stream before starting another.', STALE_STREAM_REVISION: 'The stream changed. Refresh the room and try again.',

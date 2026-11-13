@@ -17,6 +17,8 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -395,7 +397,7 @@ internal class RoomViewModel(
         val previous = retryId?.let { id -> current.pending.firstOrNull { it.id == id && it.state == ChatSendState.FAILED } }
         if (retryId != null && previous == null) return
         val text = previous?.text ?: top.roomio.domain.party.normalizeChatText(current.draft)
-        if (!current.connected || current.loading || !top.roomio.domain.party.validChatText(text) || (previous == null && current.pending.size >= 20)) return
+        if (!top.roomio.domain.party.validChatText(text) || (previous == null && current.pending.size >= 20)) return
         val pending = previous?.copy(state = ChatSendState.SENDING, error = null)
             ?: PendingChatMessage(kotlin.uuid.Uuid.random().toString(), text)
         mutableState.update { it.copy(chat = it.chat.copy(
@@ -405,10 +407,30 @@ internal class RoomViewModel(
         )) }
         viewModelScope.launch {
             try {
-                val accepted = roomRepository.sendChatMessage(roomId, pending.id, text)
-                if (accepted.roomId == roomId) mutableState.update { it.copy(chat = it.chat.receive(accepted)) }
-                else throw PartyException("UNAVAILABLE", "Unexpected chat room")
-            } catch (cancelled: CancellationException) { logHandledException("RoomViewModel.catch1", cancelled);  throw cancelled
+                val completed = withTimeoutOrNull(CHAT_SEND_DEADLINE_MS) {
+                    while (true) {
+                        val ready = state.first { value ->
+                            value.chat.pending.none { it.id == pending.id } ||
+                                (value.chat.connected && !value.chat.loading)
+                        }
+                        if (ready.chat.pending.none { it.id == pending.id }) break
+                        try {
+                            val accepted = roomRepository.sendChatMessage(roomId, pending.id, text)
+                            if (accepted.roomId != roomId) throw PartyException("UNAVAILABLE", "Unexpected chat room")
+                            mutableState.update { it.copy(chat = it.chat.receive(accepted)) }
+                            break
+                        } catch (cancelled: CancellationException) { throw cancelled
+                        } catch (error: Throwable) {
+                            if (error !is PartyException || !error.isConnectivity()) throw error
+                            // HTTP may fail before the realtime transport notices an outage.
+                            // Retry with the same ID, bounded by the original send deadline.
+                            delay(1_000)
+                        }
+                    }
+                    true
+                }
+                if (completed == null) throw PartyException("CHAT_SEND_TIMEOUT", "Chat send deadline expired")
+            } catch (cancelled: CancellationException) { throw cancelled
             } catch (error: Throwable) {
                 logHandledException("RoomViewModel.catch2", error)
                 val code = (error as? PartyException)?.code ?: "NETWORK"
@@ -926,6 +948,7 @@ internal class RoomViewModel(
         const val SKIP_STEP_MS = 15_000f
         const val REPORT_INTERVAL_MS = 3_000L
         const val SYNC_TIMEOUT_MS = 6_000L
+        const val CHAT_SEND_DEADLINE_MS = 30_000L
         const val RECONNECT_DELAY_MS = 3_000L
         const val VOICE_RECONNECT_DELAY_MS = 2_000L
     }

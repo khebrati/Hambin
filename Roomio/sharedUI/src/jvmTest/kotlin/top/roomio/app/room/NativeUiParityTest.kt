@@ -52,7 +52,7 @@ class NativeUiParityTest {
         onNodeWithContentDescription("Add emoji").performClick()
         onNodeWithText("🍿").performClick()
         runOnIdle { assertTrue(state.value.draft.contains("🍿")); state.value = state.value.copy(connected = false) }
-        onNodeWithContentDescription("Send message").performScrollTo().assertIsNotEnabled()
+        onNodeWithContentDescription("Send message").performScrollTo().assertIsEnabled()
         runOnIdle { persian.value = true; state.value = state.value.copy(connected = true) }
         onNodeWithText("ارسال با Ctrl + Enter").assertDoesNotExist()
         onNodeWithContentDescription("ارسال پیام").performScrollTo().assertIsEnabled()
