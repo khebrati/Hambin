@@ -441,6 +441,13 @@ function MediaPlayer({ url, sessionId, syncBridge, syncLocked, syncOverlay, onRe
     } catch (handledError) { logHandledException("VideoPlayer.MediaPlayer.toggleFullscreen.9", handledError);  setFallbackFullscreen(true); }
     revealControls();
   };
+  const tryEnhancedPlayer = () => {
+    fallbackUsed.current = false;
+    handoff.current = null;
+    setBrowserPlayback(false);
+    setRetry(value => value + 1);
+    setTrackDialog(null);
+  };
   const seekable = ready && Number.isFinite(duration) && duration > 0 && !live;
   return <div ref={containerRef} className={`cinema-player media-player ${fallbackFullscreen ? 'is-fullscreen' : ''} ${expanded && !controlsVisible ? 'controls-hidden' : ''}`} aria-label={t("Video player")} tabIndex={0} onPointerDown={() => { keyboardInteraction.current = false; revealControls(); }} onPointerUp={() => { pointerActive.current = false; revealControls(); }} onPointerMove={revealControls} onKeyDown={revealControls} onFocus={revealControls}>
     <div className="cinema-player__visual" onClick={() => { if (expanded) setControlsVisible(value => !value); }}>
@@ -466,7 +473,7 @@ function MediaPlayer({ url, sessionId, syncBridge, syncLocked, syncOverlay, onRe
         <div className="volume-control">
           <IconButton icon={RefreshCw} label={t("Sync to room")} disabled={!onSync || syncDisabled} onClick={onSync} />
           <IconButton icon={Subtitles} label={t("Subtitles")} variant={subtitleId !== 'off' ? 'tonal' : 'standard'} aria-pressed={subtitleId !== 'off'} onClick={() => { setSubtitleError(''); setTrackDialog('subtitles'); }} />
-          {audio.length > 0 && <IconButton icon={AudioLines} label={t("Audio tracks")} variant={audioId !== 'automatic' ? 'tonal' : 'standard'} aria-pressed={audioId !== 'automatic'} onClick={() => setTrackDialog('audio')} />}
+          {(audio.length > 0 || browserPlayback) && <IconButton icon={AudioLines} label={t("Audio tracks")} variant={audioId !== 'automatic' ? 'tonal' : 'standard'} aria-pressed={audioId !== 'automatic'} onClick={() => setTrackDialog('audio')} />}
           <IconButton icon={micMuted ? MicOff : Mic} label={micLabel || (micMuted ? t("Unmute microphone") : t("Mute microphone"))} disabled={!onToggleMic || micDisabled} aria-pressed={!micMuted} onClick={onToggleMic} />
           <IconButton icon={muted || volume === 0 ? VolumeX : Volume2} label={muted || volume === 0 ? t("Unmute video") : t("Mute video")} onClick={() => { const video = media()!; if (video.muted || !video.volume) { video.muted = false; if (!video.volume) video.volume = 1; } else video.muted = true; }} />
           <label><span className="sr-only">{t("Volume")}</span><input type="range" min={0} max={100} value={muted ? 0 : volume * 100} onChange={event => { const video = media()!; video.volume = Number(event.target.value) / 100; video.muted = false; }} style={{ '--range-progress': `${muted ? 0 : volume * 100}%` } as CSSProperties} /></label>
@@ -476,16 +483,17 @@ function MediaPlayer({ url, sessionId, syncBridge, syncLocked, syncOverlay, onRe
     </div>
     <input ref={fileRef} type="file" accept=".vtt,.srt,.ssa,.ass,.ttml,.dfxp,.xml" aria-label={t("Local subtitle file")} hidden onChange={event => { const file = event.target.files?.[0]; event.target.value = ''; if (file) void importSubtitle(file); }} />
     <Dialog open={trackDialog === 'subtitles'} title={t("Subtitles")} onClose={() => setTrackDialog(null)} actions={<><Button variant="text" disabled={importing || integrated && !ready} icon={<Subtitles size={18} aria-hidden="true" />} onClick={() => fileRef.current?.click()}>{importing ? t("Reading subtitles…") : t("Choose subtitle file")}</Button><Button variant="text" onClick={() => setTrackDialog(null)}>{t("Done")}</Button></>}>
-      {subtitles.length === 0 && !localSubtitle && <p>{integrated && status === 'loading' ? t("Subtitle tracks will appear when the video is ready.") : t("No supported subtitle tracks are available from this source in your browser. You can choose a local subtitle file.")}</p>}
+      {subtitles.length === 0 && !localSubtitle && !browserPlayback && <p>{integrated && status === 'loading' ? t("Subtitle tracks will appear when the video is ready.") : t("No supported subtitle tracks are available from this source in your browser. You can choose a local subtitle file.")}</p>}
       <div className="player-track-choices" role="radiogroup" aria-label={t("Subtitle track")}>
         {[{ id: 'off', name: t("Off") }, ...subtitles, ...(localSubtitle ? [{ id: 'local', name: localSubtitle.name }] : [])].map(track => <label key={track.id} className="player-track-choice"><input type="radio" name="subtitle-track" value={track.id} checked={subtitleId === track.id} onChange={() => { selectSubtitle(track.id); setTrackDialog(null); }} /><span>{track.name}</span></label>)}
       </div>
       <p className="player-subtitle-help">{t('SRT, VTT, SSA/ASS or TTML files · Up to 5 MB. Advanced subtitle styling may look different.')}</p>
       {unsupportedSubtitles > 0 && <p>{t("Some embedded subtitle formats are not supported. You can choose a local subtitle file.")}</p>}
-      {browserPlayback && <p>{t("Some embedded tracks may be unavailable in browser playback.")}<Button variant="text" onClick={() => { fallbackUsed.current = false; handoff.current = null; setBrowserPlayback(false); setRetry(value => value + 1); setTrackDialog(null); }}>{t("Try enhanced player")}</Button></p>}
+      {browserPlayback && <p>{t("Some embedded tracks may be unavailable in browser playback.")}<Button variant="text" onClick={tryEnhancedPlayer}>{t("Try enhanced player")}</Button></p>}
       {subtitleError && <StatusCard title={t("Unable to load subtitles")} tone="error">{subtitleError}</StatusCard>}
     </Dialog>
     <Dialog open={trackDialog === 'audio'} title={t("Audio tracks")} onClose={() => setTrackDialog(null)} actions={<Button variant="text" onClick={() => setTrackDialog(null)}>{t("Done")}</Button>}>
+      {browserPlayback && <p>{t("Some embedded tracks may be unavailable in browser playback.")}<Button variant="text" onClick={tryEnhancedPlayer}>{t("Try enhanced player")}</Button></p>}
       {audio.length === 0 ? <p>{t("No selectable audio tracks are available in this browser.")}</p> : <div className="player-track-choices" role="radiogroup" aria-label={t("Audio track")}>
         {[{ id: 'automatic', name: t("Automatic") }, ...(audio.length > 1 ? audio : [])].map(track => <label key={track.id} className="player-track-choice"><input type="radio" name="audio-track" value={track.id} checked={audioId === track.id} onChange={() => selectAudio(track.id)} /><span>{track.name}</span></label>)}
       </div>}
