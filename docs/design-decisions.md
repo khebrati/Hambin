@@ -667,7 +667,7 @@ deployment evidence remains historical.
 
 ## DD-074 — Automatic stream start and joining catch-up (2026-11-13)
 
-- **Decision:** Starting a new shared stream automatically commits the owner and all connected room viewers to synchronization at 0:00. Skip invitation, acceptance and explicit Start; retain actual player preparation, the shared 3/2/1/Action countdown, deadlines and failure recovery. An owner alone also starts through this flow.
+- **Decision:** Starting a new shared stream automatically commits the owner and all connected room viewers to synchronization at 0:00. Skip invitation, acceptance and explicit Start; retain actual player preparation, the shared 3/2/1/Action countdown, deadlines and failure recovery. Superseded for solo rooms by DD-076: an owner alone uses normal playback without a group start.
 - **Joining:** Automatically catch up a joining viewer to fresh owner telemetry, including backward seeks and the owner’s playing/paused state. Wait for a usable player and retry unavailable telemetry for a bounded period. A group start that includes the viewer takes precedence; late arrivals catch up privately after an active committed start. Never restart or pause the existing party for a new arrival.
 - **Scope:** Supersedes DD-059’s explicit acceptance/Start requirement only for newly started streams. Manual group invitations retain consent and withdrawal. Existing local-file selection studies remain previews; this change covers the production shared stream boundary. Browser and shared native clients use the same service behavior.
 
@@ -679,3 +679,10 @@ deployment evidence remains historical.
 - **Recovery:** Any committed local-file preparation/disconnection/seek failure ends that attempt for everyone; restore each included player's prior position and play/pause state and show a brief snackbar, with no dedicated failure card. Unsupported private catch-up targets leave the requesting player's previous state intact.
 - **Replacement:** The selected equal icon tiles offer Local file or Stream URL. Replacements are atomic, owner-only and revision-checked. Cancelling an initial file request aborts that source; cancelling a later manual sync preserves the selected file. Failed replacements retain the previous source.
 - **Contract:** [Local media contract](local-file-contract.md), OpenAPI/AsyncAPI and the synchronization contract define the shared boundary. Android release is 1.4.0 (16). iOS integration requires macOS/Xcode validation; Linux validation covers Android/shared and desktop compilation/tests.
+
+
+## DD-076 — Skip source coordination for a solo owner (2026-11-13)
+
+- **Decision:** When the owner is the only connected room member, choosing a local file does not show “Who’s ready to watch?” and selecting a URL does not begin group preparation or the countdown. Keep normal player controls available.
+- **Boundary:** The service creates no source synchronization attempt in this case, shared by browser, Android, iOS and desktop. Source selection/replacement and normal media loading still run. With other connected viewers, preserve local-file consent and explicit Start, and URL automatic coordination.
+- **Later joins:** Preserve private newcomer catch-up to the owner; joining must not restart or interrupt the owner's playback. A local newcomer still chooses their own copy.
