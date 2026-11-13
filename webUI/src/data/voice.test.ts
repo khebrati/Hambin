@@ -452,16 +452,16 @@ it('replaces an apparently connected addressed peer when a newer remote epoch pr
 })
 
 
-it('publishes recovery after successful auth and clears an old auth pause only on a fresh authenticated socket roster', async () => {
+it('keeps recovery paused until a fresh authenticated socket roster even if old-socket auth succeeds', async () => {
   vi.useFakeTimers()
   const { client, states } = await joinedPeer()
   FakePeer.peers[0].connect()
   sockets[0].acknowledger = (event, _, ack) => ack(null, event === 'auth.refresh' ? { code: 'AUTH_UNAVAILABLE' } : { ok: true })
   await expect(client.refreshAuth('first')).rejects.toThrow('AUTH_UNAVAILABLE')
-  expect(states.at(-1)?.status).toBe('degraded')
+  expect(states.at(-1)?.status).toBe('reconnecting')
   sockets[0].acknowledger = (event, _, ack) => ack(null, event === 'auth.refresh' ? { expiresAt: new Date(Date.now() + 600000).toISOString() } : { ok: true })
   await client.refreshAuth('second')
-  expect(states.at(-1)?.status).toBe('connected')
+  expect(states.at(-1)?.status).toBe('reconnecting')
   sockets[0].acknowledger = (event, _, ack) => ack(null, event === 'auth.refresh' ? { code: 'AUTH_UNAVAILABLE' } : { ok: true })
   await expect(client.refreshAuth('third')).rejects.toThrow('AUTH_UNAVAILABLE')
   sockets[0].connected = false; sockets[0].deliver('disconnect', 'transport close')
@@ -607,5 +607,234 @@ describe('local microphone speaking indicator', () => {
     await client.setMuted(false)
     expect(track.enabled).toBe(true)
     expect(states.at(-1)?.status).toBe('connected')
+  })
+})
+
+
+describe('expired signaling authorization recovery (H + G)', () => {
+  const roster = (generation = 'g2') => ({ members: [
+    { membershipId: 'a', voiceSessionId: 'g1', muted: true },
+    { membershipId: 'b', voiceSessionId: generation, muted: true },
+  ] })
+  const ok = (event: string, ack: (...args: any[]) => void) => ack(null, event === 'auth.refresh' ? { expiresAt: new Date(Date.now() + 600000).toISOString() } : { ok: true })
+  async function expire(context: Awaited<ReturnType<typeof joinedPeer>>) {
+    await vi.advanceTimersByTimeAsync(200)
+    sockets[0].acknowledger = (event, _, ack) => event === 'signal' ? ack(null, { code: 'SESSION_EXPIRED' }) : ok(event, ack)
+    FakePeer.peers[0].onicecandidate?.({ candidate: { toJSON: () => ({ candidate: 'expired' }) } })
+    await vi.advanceTimersByTimeAsync(100)
+    expect(sockets[0].connected).toBe(true)
+    expect(context.states.at(-1)?.status).toBe('reconnecting')
+  }
+
+  it('recovers a connected but expired socket, negotiates again, and publishes accurate member states', async () => {
+    vi.useFakeTimers()
+    const context = await joinedPeer()
+    const token = vi.fn().mockResolvedValue('fresh-token'); (context.client as any).options.token = token
+    await expire(context)
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(token).toHaveBeenCalledExactlyOnceWith(true)
+    expect(context.request).toHaveBeenLastCalledWith('/v1/rooms/room/voice/config', { operation: 'resume', voiceSessionId: 'g1' })
+    sockets[1].deliver('voice.roster', roster()); await vi.advanceTimersByTimeAsync(200)
+    expect(sockets[0].connected).toBe(false)
+    expect(sockets[1].sent.some(item => item.event === 'signal' && JSON.parse(item.payload.msg).sdp?.type === 'offer')).toBe(true)
+    expect(context.states.at(-1)?.members.b.connection).toBe('reconnecting')
+    FakePeer.peers.at(-1)!.connect()
+    expect(context.states.at(-1)).toMatchObject({ status: 'connected', error: undefined, members: { b: { connection: 'connected' } } })
+  })
+
+  it('serializes simultaneous expiry failures and manual Retry, and suppresses peer timers while paused', async () => {
+    vi.useFakeTimers()
+    const context = await joinedPeer()
+    let resolve!: (value: string) => void
+    const token = vi.fn(() => new Promise<string>(done => { resolve = done })); (context.client as any).options.token = token
+    await expire(context)
+    sockets[0].acknowledger = (_, __, ack) => ack(null, { code: 'SESSION_EXPIRED' })
+    await expect(context.client.setMuted(false)).rejects.toThrow('SESSION_EXPIRED')
+    context.client.retryConnections(); context.client.retryConnections()
+    const count = FakePeer.peers.length
+    await vi.advanceTimersByTimeAsync(12000)
+    expect(token).toHaveBeenCalledTimes(1)
+    expect(FakePeer.peers).toHaveLength(count)
+    expect(sockets).toHaveLength(1)
+    resolve('fresh-token'); await flush()
+    sockets[1].deliver('voice.roster', roster()); await vi.advanceTimersByTimeAsync(200)
+    expect(context.track.enabled).toBe(true) // Latest explicit intent replayed with fresh authorization.
+    expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalledTimes(1)
+  })
+
+  it('makes Retry recover a paused connected socket even without a disconnect event', async () => {
+    vi.useFakeTimers()
+    const context = await joinedPeer()
+    ;(context.client as any).authPaused = true
+    const token = vi.fn().mockResolvedValue('fresh'); (context.client as any).options.token = token
+    context.client.retryConnections()
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(token).toHaveBeenCalledExactlyOnceWith(true)
+    sockets[1].deliver('voice.roster', roster()); await vi.advanceTimersByTimeAsync(200)
+    expect(sockets[1].sent.some(item => item.event === 'signal')).toBe(true)
+  })
+
+  it('fences a departed participant generation and restores only the latest roster after rejoin', async () => {
+    vi.useFakeTimers()
+    const context = await joinedPeer()
+    await expire(context)
+    const departed = FakePeer.peers[0]
+    sockets[0].deliver('voice.roster', { members: roster().members.slice(0, 1) }); await flush()
+    expect(context.states.at(-1)?.members.b).toBeUndefined()
+    sockets[0].deliver('voice.roster', roster('g3')); await flush()
+    expect(departed.close).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(1000)
+    sockets[1].deliver('voice.roster', roster('g3')); await vi.advanceTimersByTimeAsync(200)
+    const current = FakePeer.peers.at(-1)!
+    sockets[1].deliver('signal', { from: 'b', msg: JSON.stringify({ negotiationId: 'departed', generation: 'g2', targetGeneration: 'g1', peerGeneration: 1, targetPeerGeneration: 0, sdp: { type: 'answer', sdp: 'm=audio 9 RTP/AVP 111' } }) }); await flush()
+    expect(current.setRemoteDescription).not.toHaveBeenCalled()
+    const sent = sockets[1].sent.filter(item => item.event === 'signal')
+    expect(sent.length).toBeGreaterThan(0)
+    expect(sent.every(item => JSON.parse(item.payload.msg).targetGeneration === 'g3')).toBe(true)
+  })
+
+  it('retains healthy established audio while recovering another failed link', async () => {
+    vi.useFakeTimers()
+    const context = await joinedPeer()
+    FakePeer.peers[0].connect()
+    sockets[0].deliver('voice.roster', { members: [...roster().members, { membershipId: 'c', voiceSessionId: 'g3', muted: true }] })
+    await vi.advanceTimersByTimeAsync(200)
+    await expire(context)
+    const healthy = FakePeer.peers[0]
+    await vi.advanceTimersByTimeAsync(1000)
+    sockets[1].deliver('voice.roster', { members: [...roster().members, { membershipId: 'c', voiceSessionId: 'g3', muted: true }] }); await vi.advanceTimersByTimeAsync(200)
+    expect(healthy.close).not.toHaveBeenCalled()
+    expect(context.states.at(-1)?.members.b.connection).toBe('connected')
+    expect(sockets[1].sent.filter(item => item.event === 'signal').every(item => item.payload.to === 'c')).toBe(true)
+  })
+
+  it('ends failed recovery with actionable state and lets manual Retry start a fresh bounded operation', async () => {
+    vi.useFakeTimers()
+    const context = await joinedPeer()
+    await expire(context)
+    context.request.mockRejectedValue(Object.assign(new Error('Unavailable'), { code: 'AUTH_UNAVAILABLE' }))
+    await vi.advanceTimersByTimeAsync(60000)
+    expect(context.request).toHaveBeenCalledTimes(7) // Initial join + six bounded resumes.
+    expect(context.states.at(-1)).toMatchObject({ status: 'degraded', error: 'Voice signaling is unavailable. Retry voice connections.', members: { b: { connection: 'unavailable' } } })
+    await vi.advanceTimersByTimeAsync(300000)
+    expect(context.request).toHaveBeenCalledTimes(7)
+    context.request.mockResolvedValue(descriptor)
+    context.client.retryConnections(); await vi.advanceTimersByTimeAsync(1000)
+    sockets[1].deliver('voice.roster', roster()); await vi.advanceTimersByTimeAsync(200)
+    FakePeer.peers.at(-1)!.connect()
+    expect(context.states.at(-1)?.status).toBe('connected')
+  })
+
+  it.each(['token', 'configuration'])('does not resurrect a departed call when pending %s recovery resolves after rejoin', async stage => {
+    vi.useFakeTimers()
+    const context = await joinedPeer()
+    let resolve!: (value: any) => void
+    if (stage === 'token') (context.client as any).options.token = () => new Promise(done => { resolve = done })
+    else context.request.mockImplementationOnce(() => new Promise(done => { resolve = done }))
+    await expire(context); await vi.advanceTimersByTimeAsync(1000)
+    context.client.disconnect()
+    const joining = context.client.join(); await flush()
+    sockets[1].deliver('voice.roster', { members: roster().members.slice(0, 1) }); await joining
+    resolve(stage === 'token' ? 'stale' : descriptor); await flush()
+    expect(sockets).toHaveLength(2)
+    expect(context.states.at(-1)).toMatchObject({ status: 'connected', muted: true, members: { a: { connection: 'connected' } } })
+    expect(context.states.at(-1)?.members.b).toBeUndefined()
+    expect(context.track.enabled).toBe(false)
+  })
+
+  it('bounds hung admission and ignores its late response within the same call', async () => {
+    vi.useFakeTimers()
+    const context = await joinedPeer()
+    let resolve!: (value: any) => void
+    context.request.mockImplementationOnce(() => new Promise(done => { resolve = done }))
+    await expire(context); await vi.advanceTimersByTimeAsync(33000)
+    expect(context.request).toHaveBeenCalledTimes(3) // Timed-out first attempt, then retry.
+    sockets[1].deliver('voice.roster', roster()); await vi.advanceTimersByTimeAsync(200)
+    FakePeer.peers.at(-1)!.connect()
+    resolve({ ...descriptor, voiceSessionId: 'stale' }); await flush()
+    expect(sockets).toHaveLength(2)
+    expect(context.states.at(-1)?.status).toBe('connected')
+  })
+
+
+  it('bounds repeated authorization rejections even when fresh admission keeps succeeding', async () => {
+    vi.useFakeTimers()
+    const context = await joinedPeer()
+    await expire(context)
+    await vi.advanceTimersByTimeAsync(1000)
+    for (let index = 1; index <= 6; index++) {
+      expect(sockets).toHaveLength(index + 1)
+      sockets[index].acknowledger = (event, _, ack) => event === 'voice.mute' ? ack(null, { code: 'SESSION_EXPIRED' }) : ok(event, ack)
+      sockets[index].deliver('voice.roster', roster())
+      await vi.advanceTimersByTimeAsync(Math.min(1000 * 2 ** index, 15000))
+    }
+    await vi.advanceTimersByTimeAsync(60000)
+    expect(sockets).toHaveLength(7)
+    expect(context.states.at(-1)).toMatchObject({ status: 'degraded', error: 'Voice signaling is unavailable. Retry voice connections.' })
+    expect(context.track.enabled).toBe(false)
+  })
+
+  it('does not accept a successful mute replay as recovery when a signal already rejected the new authorization', async () => {
+    vi.useFakeTimers()
+    const context = await joinedPeer()
+    await expire(context); await vi.advanceTimersByTimeAsync(1000)
+    let muteAck!: () => void
+    sockets[1].acknowledger = (event, _, ack) => {
+      if (event === 'voice.mute') muteAck = () => ack(null, { ok: true })
+      else if (event === 'signal') ack(null, { code: 'SESSION_EXPIRED' })
+      else ok(event, ack)
+    }
+    sockets[1].deliver('voice.roster', roster()); await vi.advanceTimersByTimeAsync(200)
+    FakePeer.peers[0].onicecandidate?.({ candidate: { toJSON: () => ({ candidate: 'still-expired' }) } })
+    await vi.advanceTimersByTimeAsync(100)
+    muteAck(); await flush()
+    expect(context.states.at(-1)?.status).toBe('reconnecting')
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(sockets).toHaveLength(3)
+    sockets[2].deliver('voice.roster', roster()); await vi.advanceTimersByTimeAsync(200)
+    FakePeer.peers.at(-1)!.connect()
+    expect(context.states.at(-1)?.status).toBe('connected')
+  })
+
+  it('bounds a token provider that never settles and ignores late renewal after exhaustion', async () => {
+    vi.useFakeTimers()
+    const context = await joinedPeer()
+    const pending: ((value: string) => void)[] = []
+    const token = vi.fn(() => new Promise<string>(resolve => pending.push(resolve))); (context.client as any).options.token = token
+    await expire(context); await vi.advanceTimersByTimeAsync(250000)
+    expect(token).toHaveBeenCalledTimes(6)
+    expect(context.states.at(-1)).toMatchObject({ status: 'degraded', error: 'Voice signaling is unavailable. Retry voice connections.' })
+    pending.forEach(resolve => resolve('late-token')); await flush()
+    expect(context.request).toHaveBeenCalledTimes(1)
+    expect(sockets).toHaveLength(1)
+  })
+
+  it('cannot enable capture from a recovered socket whose mute replay timed out', async () => {
+    vi.useFakeTimers()
+    const context = await joinedPeer()
+    await expire(context); await vi.advanceTimersByTimeAsync(1000)
+    ;(context.client as any).muteIntent = false
+    let acknowledge!: () => void
+    sockets[1].acknowledger = (event, _, ack) => { if (event === 'voice.mute') acknowledge = () => ack(null, { ok: true }); else ok(event, ack) }
+    sockets[1].deliver('voice.roster', roster()); await flush()
+    await vi.advanceTimersByTimeAsync(30000)
+    acknowledge(); await flush()
+    expect(context.track.enabled).toBe(false)
+    expect(context.states.at(-1)?.status).toBe('reconnecting')
+  })
+  it('does not enable capture while a recovered socket is waiting for mute authorization', async () => {
+    vi.useFakeTimers()
+    const context = await joinedPeer()
+    await expire(context)
+    await vi.advanceTimersByTimeAsync(1000)
+    let acknowledge!: () => void
+    sockets[1].acknowledger = (event, _, ack) => { if (event === 'voice.mute') acknowledge = () => ack(null, { ok: true }); else ok(event, ack) }
+    const unmute = context.client.setMuted(false); await flush()
+    expect(context.track.enabled).toBe(false)
+    acknowledge(); await expect(unmute).rejects.toThrow('authorization changed')
+    sockets[1].deliver('voice.roster', roster()); await flush()
+    expect(context.track.enabled).toBe(false)
+    acknowledge(); await vi.advanceTimersByTimeAsync(200)
+    expect(context.track.enabled).toBe(true)
   })
 })

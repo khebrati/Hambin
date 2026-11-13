@@ -11,7 +11,7 @@ export interface VoiceState {
 interface Options {
   roomId: string
   request: <T>(path: string, body?: unknown) => Promise<T>
-  token: () => Promise<string>
+  token: (force?: boolean) => Promise<string>
   onState: (state: VoiceState) => void
 }
 interface Descriptor {
@@ -82,6 +82,8 @@ export class MeshVoice {
   private reconnecting = false
   private blockedAudio = false
   private authPaused = false
+  private authRecoveryAttempts = 0
+  private recoveryExhausted = false
   private pollBusy = false
   private cancelOpen?: () => void
   private cancelCapture?: () => void
@@ -164,7 +166,12 @@ export class MeshVoice {
 
   /** Retry only unavailable links; established audio remains untouched. */
   retryConnections() {
-    if (!this.socket?.connected) { this.reconnect(this.run); return }
+    if (!this.active) return
+    if (!this.reconnecting) { this.authRecoveryAttempts = 0; this.recoveryExhausted = false }
+    if (this.authPaused || !this.socket?.connected || !this.rosterReady) { this.reconnect(this.run); return }
+    this.retryFailedLinks()
+  }
+  private retryFailedLinks() {
     for (const peer of this.peers.values()) if (peer.pc.connectionState !== 'connected') {
       this.enqueue(() => this.manualRetry(peer))
     }
@@ -176,7 +183,7 @@ export class MeshVoice {
     try {
       await this.ack('auth.refresh', { accessToken })
       if (!this.current(run) || socket !== this.socket) return
-      this.authPaused = false
+      if (!this.reconnecting) this.authPaused = false
       this.updateStatus()
     } catch (error) {
       logHandledException("voice.refreshAuth.6", error);
@@ -229,6 +236,7 @@ export class MeshVoice {
     this.serial = Promise.resolve(); this.signalQueue = Promise.resolve(); this.muteSerial = Promise.resolve()
     this.descriptor = undefined; this.muteIntent = true; this.received.clear(); this.offerRequestEpochs.clear(); this.epochs.clear(); this.activity.clear(); this.energies.clear()
     this.rosterReady = false; this.reconnecting = false; this.blockedAudio = false; this.authPaused = false
+    this.authRecoveryAttempts = 0; this.recoveryExhausted = false
     this.state = { status: 'off', muted: true, members: {} }; this.publish()
   }
 
@@ -272,19 +280,19 @@ export class MeshVoice {
     if (result.mode !== 'MESH' || result.roomId !== this.options.roomId || result.namespace !== `/hambin/voice/${this.options.roomId}`) throw new Error('Unexpected voice configuration')
     return result
   }
-  private async open(run: number, reconnect: boolean) {
-    if (!this.current(run)) return
+  private async open(run: number, reconnect: boolean, owns = () => this.current(run)) {
+    if (!owns()) return
     let descriptor: Descriptor
     if (reconnect && this.descriptor) {
       try { descriptor = await this.configuration(this.descriptor.voiceSessionId) }
       catch (error) {
         logHandledException("voice.open.8", error);
         if (code(error) !== 'VOICE_SESSION_EXPIRED') throw error
-        if (!this.current(run)) return
+        if (!owns()) return
         descriptor = await this.configuration()
       }
     } else descriptor = await this.configuration()
-    if (!this.current(run)) return
+    if (!owns()) return
     if (this.descriptor && descriptor.voiceSessionId !== this.descriptor.voiceSessionId) {
       this.peers.forEach(p => this.closePeer(p)); this.peers.clear(); this.epochs.clear(); this.offerRequestEpochs.clear()
     }
@@ -307,7 +315,7 @@ export class MeshVoice {
       }
       this.cancelOpen = () => finish(new Error('Voice connection cancelled'))
       socket.on('voice.roster', (payload: { members: Member[] }) => this.enqueue(async () => {
-        if (this.socket !== socket) return
+        if (!owns() || this.socket !== socket) return
         try { await this.applyRoster(payload.members) }
         catch (error) {
           // Settle startup now so join releases capture and preserves the cause.
@@ -322,44 +330,81 @@ export class MeshVoice {
           this.updateStatus()
           // Server installs its authorized handlers before publishing the roster.
           // The transport connect event can arrive while that setup is still pending.
-          void this.setMuted(this.muteIntent).catch((handledError) => { logHandledException("voice.open.9", handledError); })
+          const replay = this.setMuted(this.muteIntent)
+          if (reconnect) {
+            void replay.then(() => finish(), error => finish(error))
+          } else void replay.catch((handledError) => { logHandledException("voice.open.9", handledError); })
         }
-        finish()
+        if (!reconnect) finish()
       }))
       socket.on('signal', (payload: { from: string; msg: string }) => this.enqueue(async () => {
-        if (this.socket === socket) await this.receive(payload)
+        if (owns() && this.socket === socket) await this.receive(payload)
       }))
       socket.on('connect_error', (error: Error & { data?: unknown }) => {
+        if (!owns() || this.socket !== socket) return
         logHandledException('voice.socket.connect', error)
         finish(error.data || error)
         if (settled && this.current(run)) this.reconnect(run)
       })
-      socket.on('disconnect', () => { finish(new Error('Voice signaling disconnected')); this.reconnect(run) })
-      socket.on('error', (error: unknown) => this.fail(error, permanent.has(code(error))))
+      socket.on('disconnect', () => { if (!owns() || this.socket !== socket) return; finish(new Error('Voice signaling disconnected')); this.reconnect(run) })
+      socket.on('error', (error: unknown) => { if (owns() && this.socket === socket) this.fail(error, permanent.has(code(error))) })
       socket.connect()
     })
   }
   private reconnect(run: number) {
-    if (!this.current(run) || this.reconnecting) return
+    if (!this.current(run) || this.reconnecting || this.recoveryExhausted) return
     this.reconnecting = true; this.rosterReady = false; this.updateStatus()
     let attempt = 0
     const retry = async () => {
       if (!this.current(run)) return
+      if (this.authPaused && ++this.authRecoveryAttempts > 6) { this.recoveryUnavailable(); return }
+      let valid = true
+      const owns = () => valid && this.current(run)
+      let deadline: ReturnType<typeof setTimeout> | undefined
       try {
-        await this.options.token()
-        if (!this.current(run)) return
-        await this.open(run, true)
-        if (!this.current(run)) return
+        // Renew the guest token after an authorization rejection even if the
+        // transport is connected. Re-admission supplies an authoritative roster.
+        const opening = async () => {
+          await this.options.token(this.authPaused)
+          if (!owns()) return
+          await this.open(run, true, owns)
+        }
+        await Promise.race([opening(), new Promise<never>((_, reject) => {
+          deadline = this.later(() => {
+            valid = false
+            this.cancelOpen?.()
+            reject(new Error('Voice authorization recovery timed out'))
+          }, 30_000)
+        })])
+        if (!owns()) return
+        if (this.authPaused || !this.rosterReady || !this.socket?.connected) throw new Error('Voice authorization changed during recovery')
         this.reconnecting = false; this.updateStatus()
+        this.retryFailedLinks()
       } catch (error) {
         logHandledException("voice.reconnect.retry.10", error);
+        valid = false
         if (!this.current(run)) return
+        this.rosterReady = false
         if (permanent.has(code(error))) { this.reconnecting = false; this.fail(error, true); return }
-        if (++attempt >= 6) { this.reconnecting = false; this.state = { ...this.state, status: 'degraded', error: 'Voice signaling is unavailable. Retry voice connections.' }; this.publish(); return }
+        if (++attempt >= 6) {
+          this.recoveryUnavailable()
+          return
+        }
         this.later(() => void retry(), Math.min(1000 * 2 ** attempt, 15_000))
+      } finally {
+        if (deadline) { clearTimeout(deadline); this.timers.delete(deadline) }
       }
     }
     this.later(() => void retry(), 1000)
+  }
+  private recoveryUnavailable() {
+    this.reconnecting = false; this.recoveryExhausted = true
+    this.state.error = 'Voice signaling is unavailable. Retry voice connections.'
+    this.updateStatus()
+  }
+  private pauseAuthorization() {
+    this.authPaused = true
+    this.reconnect(this.run)
   }
   private ack(event: string, payload: unknown): Promise<unknown> {
     const socket = this.socket
@@ -368,9 +413,15 @@ export class MeshVoice {
       socket.timeout(8000).emit(event, payload, (error: Error | null, response: { code?: string; ok?: boolean; expiresAt?: string } | undefined) => {
         if (socket !== this.socket || !socket.connected) reject(new Error('Voice signaling was replaced'))
         else if (error) reject(error)
-        else if (response?.code) reject(Object.assign(new Error(response.code), response))
+        else if (response?.code) {
+          if (response.code === 'SESSION_EXPIRED' || response.code === 'AUTH_UNAVAILABLE') this.pauseAuthorization()
+          reject(Object.assign(new Error(response.code), response))
+        }
         else if (!response || (event === 'auth.refresh' ? typeof response.expiresAt !== 'string' : response.ok !== true)) reject(new Error('Invalid voice acknowledgement'))
-        else resolve(response)
+        else {
+          if (event === 'signal') this.authRecoveryAttempts = 0
+          resolve(response)
+        }
       })
     })
   }
@@ -446,14 +497,15 @@ export class MeshVoice {
     }
     if (content.sdp && !audioOnlySdp(content.sdp.sdp)) { this.fail(new Error('Only microphone audio is supported')); return }
     // Per-peer FIFO preserves SDP/candidate order. Server remains authoritative.
+    const socket = this.socket
     peer.outgoing = peer.outgoing.then(async () => {
-      if (!this.live(peer)) return
+      if (!this.live(peer) || socket !== this.socket) return
       // The server budget is per member, shared by all seven peer links.
       // A per-peer FIFO alone bursts past that budget as a full mesh joins.
       this.signalQueue = this.signalQueue.catch((handledError) => { logHandledException("voice.send.13", handledError); }).then(async () => {
         const delay = Math.max(0, 60 - (Date.now() - this.lastSignalAt))
         if (delay) await new Promise(resolve => setTimeout(resolve, delay))
-        if (!this.live(peer)) return
+        if (!this.live(peer) || socket !== this.socket || this.authPaused || !this.rosterReady) return
         this.lastSignalAt = Date.now()
         for (let attempt = 0; ; attempt++) {
           try { await this.ack('signal', { to: peer.member.membershipId, msg: JSON.stringify(message) }); return }
@@ -461,7 +513,7 @@ export class MeshVoice {
             logHandledException("voice.send.14", error);
             if ((code(error) && code(error) !== 'RATE_LIMITED') || attempt >= 2) throw error
             await new Promise(resolve => setTimeout(resolve, 250 * (attempt + 1)))
-            if (!this.live(peer)) return
+            if (!this.live(peer) || socket !== this.socket || this.authPaused || !this.rosterReady) return
             this.lastSignalAt = Date.now()
           }
         }
@@ -469,8 +521,7 @@ export class MeshVoice {
       await this.signalQueue
     }).catch(error => {
       logHandledException("voice.send.12", error);
-      if (!this.live(peer) || code(error) === 'STALE_NEGOTIATION') return
-      if (code(error) === 'SESSION_EXPIRED' || code(error) === 'AUTH_UNAVAILABLE') this.authPaused = true
+      if (!this.live(peer) || socket !== this.socket || code(error) === 'STALE_NEGOTIATION') return
       this.fail(error, permanent.has(code(error)))
     })
   }
@@ -544,15 +595,17 @@ export class MeshVoice {
   }
 
   private async retry(peer: Peer, notify: boolean) {
-    if (!this.live(peer) || !this.rosterReady || !this.socket?.connected) return
+    if (!this.live(peer) || !this.rosterReady || !this.socket?.connected || this.authPaused) return
     if (peer.retrying || peer.exhausted) return
     if (peer.retries >= 3) { peer.exhausted = true; this.closePeer(peer); this.updateStatus(); return }
     peer.retrying = true
     await new Promise<void>(resolve => this.later(resolve, 200 + Math.random() * 300))
     if (!this.live(peer)) return
+    if (this.authPaused || !this.rosterReady || !this.socket?.connected) { peer.retrying = false; return }
     if (notify && peer.fence.remote !== undefined) {
       this.send(peer, { restart: true }); await peer.outgoing
       if (!this.live(peer)) return
+      if (this.authPaused || !this.rosterReady || !this.socket?.connected) { peer.retrying = false; return }
     }
     this.closePeer(peer); this.peers.delete(peer.member.membershipId)
     this.createPeer(peer.member, peer.retries + 1)
@@ -566,19 +619,28 @@ export class MeshVoice {
     this.activity.delete(peer.member.membershipId)
   }
   private updateStatus() {
-    if (!this.active || this.blockedAudio || this.authPaused) return
+    if (!this.active) return
     for (const peer of this.peers.values()) {
       const member = this.state.members[peer.member.membershipId]
-      if (member) member.connection = peer.pc.connectionState === 'connected' ? 'connected' : peer.exhausted ? 'unavailable' : 'reconnecting'
+      if (member) member.connection = peer.pc.connectionState === 'connected' ? 'connected' : peer.exhausted || this.recoveryExhausted ? 'unavailable' : 'reconnecting'
     }
-    const degraded = [...this.peers.values()].some(peer => peer.pc.connectionState !== 'connected')
-    this.state = { ...this.state, status: this.reconnecting ? 'reconnecting' : !this.rosterReady ? 'connecting' : degraded ? 'degraded' : 'connected', error: undefined }; this.publish()
+    if (this.blockedAudio && !this.authPaused && !this.reconnecting && !this.recoveryExhausted) { this.publish(); return }
+    const degraded = this.authPaused || this.recoveryExhausted || [...this.peers.values()].some(peer => peer.pc.connectionState !== 'connected')
+    const status = this.reconnecting ? 'reconnecting'
+      : !this.rosterReady ? this.state.error ? 'degraded' : 'connecting'
+      : degraded ? 'degraded' : 'connected'
+    this.state = { ...this.state, status, error: this.authPaused || this.recoveryExhausted || !this.rosterReady ? this.state.error : undefined }
+    this.publish()
   }
 
   private async refreshCredentials(run: number) {
     if (!this.current(run) || !this.descriptor) return
+    if (this.reconnecting || this.authPaused || this.recoveryExhausted) {
+      this.later(() => void this.refreshCredentials(run), 30_000)
+      return
+    }
     const snapshot = this.descriptor; const socket = this.socket
-    const ownsSnapshot = () => this.current(run) && this.descriptor === snapshot && this.socket === socket
+    const ownsSnapshot = () => this.current(run) && !this.reconnecting && this.descriptor === snapshot && this.socket === socket
     let delay = 5 * 60_000
     try {
       const accessToken = await this.options.token()
