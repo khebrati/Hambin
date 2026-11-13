@@ -181,3 +181,10 @@ Resolved questions are preserved with their answers for traceability.
 ## Accepted viewer waiting indicator (2026-11-12)
 
 - [Resolved, DD-071] Inline is selected: small spinner plus “Waiting for the owner…” alongside withdrawal in browser and shared native sync dialogs. See [integrated preview](sync-waiting-designs.md).
+
+## Local video files (2026-11-13)
+
+- [Resolved, DD-075] Apply the approved preview subset rule: Start requires at least one ready non-owner and does not wait for unanswered or declined members.
+- [Resolved, DD-075] Selected copies are device-only; refresh requires reselection, reconnect preserves the same session's copy. New selectors privately catch up after commitment. Source replacement is atomic and owner/revision checked.
+- [Resolved, DD-075] Side-by-side source tiles, direct system pickers and snackbar-only failure restoration are approved. No content/filename equality validation is requested; a successful seek into different content is permitted.
+- iOS system file access and AVPlayer integration require macOS/Xcode/device acceptance; Android and desktop platform playback retain their codec capabilities.

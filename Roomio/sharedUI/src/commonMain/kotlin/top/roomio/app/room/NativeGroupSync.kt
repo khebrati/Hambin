@@ -67,14 +67,16 @@ internal class NativeGroupSync(
     fun respond(response: GroupSyncResponse) {
         if(state().syncBusy)return
         if(response==GroupSyncResponse.ACCEPTED)capture()
-        send("respond",response=response.name,after={if(response==GroupSyncResponse.WITHDRAWN){restore(true);dismiss()}else if(response==GroupSyncResponse.DECLINED)dismiss()})
+        send("respond",response=response.name,after={if(response==GroupSyncResponse.WITHDRAWN){restore(if(state().localSource) false else true);dismiss()}
+            if(state().localSource && response in setOf(GroupSyncResponse.WITHDRAWN,GroupSyncResponse.DECLINED)) {update { it.copy(videoUrl="",selectedFileName="",playback=RoomPlaybackState.WAITING_FOR_OWNER,syncLocked=false) };effect(RoomEffect.StopPlayer);dismiss()}
+            else if(response==GroupSyncResponse.DECLINED)dismiss()})
     }
     fun commit()=send("commit")
-    fun cancel()=send("cancel")
+    fun cancel(after: (() -> Unit)? = null)=send("cancel",after=after)
     private fun reportFailure(reason: String) { val id=state().groupSync?.requestId ?: return; if(failedRequest==id)return;failedRequest=id;send("failed",reason=reason) }
     fun playerUnavailable() { if(state().syncLocked)reportFailure("PLAYER_UNAVAILABLE") }
     fun reset() { startJob?.cancel();watchdog?.cancel();saved=null;prepared="";readySent=null;failedRequest="";update { it.copy(groupSync=null,syncLocked=false,syncDialogOpen=false,syncCountdown=null) } }
-    fun disconnected() { if(state().syncLocked){restore();dismiss();effect(RoomEffect.GroupSyncNotice(GroupSyncNotice.STOPPED))} }
+    fun disconnected() { if(state().syncLocked){restore();dismiss();effect(RoomEffect.GroupSyncNotice(if(state().localSource)GroupSyncNotice.FILE_SYNC_FAILED else GroupSyncNotice.STOPPED))} }
     private fun unavailable() { restore(); effect(RoomEffect.GroupSyncNotice(GroupSyncNotice.UNAVAILABLE)) }
     fun apply(value: GroupSyncAttempt?, serverTimeMs: Long) {
         if(serverBase==0L){serverBase=serverTimeMs;serverMark=TimeSource.Monotonic.markNow()}
@@ -86,7 +88,7 @@ internal class NativeGroupSync(
         val mine=value.participants.find { it.membershipId==self() }
         val included=mine?.response==GroupSyncResponse.ACCEPTED
         if(value.phase==GroupSyncPhase.PREPARING&&included&&old?.requestId!=value.requestId)open()
-        if(value.phase==GroupSyncPhase.INVITING){if(old?.requestId!=value.requestId)open();if(included&&saved==null)capture()}
+        if(value.phase==GroupSyncPhase.INVITING){if(old?.requestId!=value.requestId)open();if(included&&saved==null&&(!value.localFile||state().videoUrl.isNotBlank()))capture()}
         if(mine?.response==GroupSyncResponse.EXCLUDED&&saved!=null){restore();dismiss();effect(RoomEffect.GroupSyncNotice(GroupSyncNotice.EXCLUDED))}
         when(value.phase){
             GroupSyncPhase.PREPARING -> if(included&&prepared!=value.requestId){capture();prepared=value.requestId;readySent=null;failedRequest="";update { it.copy(positionMs=value.targetPositionMs) };effect(RoomEffect.SeekTo(value.targetPositionMs))}
@@ -95,12 +97,12 @@ internal class NativeGroupSync(
                     val at=value.startAtMs ?: return@launch
                     if(at-now()<0){send("failed",reason="LATE_START");unavailable();return@launch}
                     while(at-now()>0){update { it.copy(syncCountdown=((at-now()+999)/1000).coerceAtMost(3).toString()) };delay(minOf(50L,(at-now()).coerceAtLeast(1)))}
-                    saved=null;update { it.copy(syncLocked=false,syncCountdown="Action",playback=RoomPlaybackState.PLAYING) };effect(RoomEffect.PlayerPlaying(true));delay(500);update { it.copy(syncCountdown=null) }
+                    if(!value.localFile)saved=null;update { it.copy(syncLocked=false,syncCountdown="Action",playback=RoomPlaybackState.PLAYING) };effect(RoomEffect.PlayerPlaying(true));delay(500);update { it.copy(syncCountdown=null) }
                 }
             }
             GroupSyncPhase.CANCELLED -> {restore();dismiss();effect(RoomEffect.GroupSyncNotice(GroupSyncNotice.CANCELLED))}
-            GroupSyncPhase.FAILED -> {restore();dismiss();effect(RoomEffect.GroupSyncNotice(GroupSyncNotice.STOPPED))}
-            GroupSyncPhase.COMPLETED -> {watchdog?.cancel();update { it.copy(syncLocked=false) };if(state().isOwner&&value.participants.any{it.response==GroupSyncResponse.EXCLUDED})effect(RoomEffect.GroupSyncNotice(GroupSyncNotice.OWNER_RECOVERY))}
+            GroupSyncPhase.FAILED -> {if(value.localFile&&value.reason=="STREAM_CHANGED"){reset();return};restore();dismiss();effect(RoomEffect.GroupSyncNotice(if(value.localFile)GroupSyncNotice.FILE_SYNC_FAILED else GroupSyncNotice.STOPPED))}
+            GroupSyncPhase.COMPLETED -> {saved=null;watchdog?.cancel();update { it.copy(syncLocked=false) };if(!value.localFile&&state().isOwner&&value.participants.any{it.response==GroupSyncResponse.EXCLUDED})effect(RoomEffect.GroupSyncNotice(GroupSyncNotice.OWNER_RECOVERY))}
             else -> Unit
         }
         watchdog?.cancel()
@@ -108,8 +110,9 @@ internal class NativeGroupSync(
     }
     fun player(value: VideoPlayerState) {
         val attempt=state().groupSync?:return
-        if(!state().syncLocked||attempt.phase !in setOf(GroupSyncPhase.PREPARING,GroupSyncPhase.SCHEDULED))return
-        if(value.status==VideoPlayerStatus.ERROR||value.isLive){reportFailure("UNSUPPORTED_PLAYER");return}
+        if(attempt.phase !in setOf(GroupSyncPhase.PREPARING,GroupSyncPhase.SCHEDULED))return
+        if(!state().syncLocked && !(attempt.localFile && attempt.phase==GroupSyncPhase.SCHEDULED && value.status==VideoPlayerStatus.ERROR))return
+        if(value.status==VideoPlayerStatus.ERROR||(value.isLive&&value.status in setOf(VideoPlayerStatus.READY,VideoPlayerStatus.PAUSED,VideoPlayerStatus.PLAYING))){reportFailure("UNSUPPORTED_PLAYER");return}
         val needed=minOf(2000L,(value.durationMs-attempt.targetPositionMs).coerceAtLeast(0))
         val ready=value.durationMs>0&&value.status in setOf(VideoPlayerStatus.PAUSED,VideoPlayerStatus.READY)&&abs(value.positionMs-attempt.targetPositionMs)<500&&(value.bufferedMs>=attempt.targetPositionMs+needed || value.immediatelyPlayable)
         if(value.status==VideoPlayerStatus.PLAYING)effect(RoomEffect.PlayerPlaying(false))
@@ -117,4 +120,4 @@ internal class NativeGroupSync(
         else if(attempt.phase==GroupSyncPhase.SCHEDULED&&!ready)reportFailure("READINESS_LOST")
     }
 }
-internal enum class GroupSyncNotice { CANCELLED, STOPPED, EXCLUDED, OWNER_RECOVERY, UNAVAILABLE }
+internal enum class GroupSyncNotice { FILE_FAILED, FILE_SYNC_FAILED, CANCELLED, STOPPED, EXCLUDED, OWNER_RECOVERY, UNAVAILABLE }

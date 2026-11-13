@@ -26,6 +26,8 @@ sealed interface RealtimeEvent {
         val sessionId: String,
         val revision: Long,
         val url: String,
+        val sourceKind: MediaSourceKind = MediaSourceKind.URL,
+        val fileName: String = "",
     ) : RealtimeEvent
 
     data class StreamAborted(

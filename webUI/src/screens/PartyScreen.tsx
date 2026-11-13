@@ -1,9 +1,11 @@
 import { logHandledException } from '../data/sessionLog';
 import type { GroupSyncUi } from '../components/useGroupSync';
 import { t } from '../i18n';
+import { ChooseVideoDialog } from '../components/ChooseVideoDialog';
 import { Bug } from 'lucide-react';
 import { BugReportDialog } from '../components/BugReportDialog';
 import {
+  FolderOpen,
   Clipboard,
   ClipboardCheck,
   FastForward,
@@ -81,7 +83,10 @@ export interface LivePartyControls {
   syncTarget?: { requestId: string; positionMs: number };
   onReport: (positionMs: number, playing: boolean) => void;
 }
+export interface MediaSourceControls { local:boolean; active:boolean; url:string; file?:File; fileName:string; name:string; busy:boolean; choose():void; replaceFile():void; replace(url:string):Promise<void>; state(status:StreamStatus):void }
 interface PartyScreenProps {
+  mediaSource?: MediaSourceControls;
+  localFilePreview?: { media?: ReactNode; source: ReactNode; actions?: ReactNode; entryAction?: ReactNode; entryTitle?: string };
   syncPreview?: { band: ReactNode; aside?: ReactNode; overlay?: ReactNode; locked: boolean; position: number; onPositionChange: (position: number) => void };
   chatPreview?: { placement: 'side' | 'dock' | 'floating'; content: ReactNode };
   live?: LivePartyControls;
@@ -111,7 +116,11 @@ export function PartyScreen({
   live,
   chatPreview,
   syncPreview,
+  localFilePreview,
+  mediaSource,
 }: PartyScreenProps) {
+  const [chooseSourceOpen,setChooseSourceOpen]=useState(false);
+  useEffect(()=>setChooseSourceOpen(false),[party.streamSessionId]);
   const [bugReportOpen, setBugReportOpen] = useState(false);
   const [urlDraft, setUrlDraft] = useState(
     streamStatus === 'error' ? 'not-a-complete-link' : '',
@@ -132,7 +141,7 @@ export function PartyScreen({
   >('idle');
 
   const activeUrl = party.streamUrl || sampleVideoUrl;
-  const hasPlayer = live ? !!party.streamUrl : ['playing', 'paused', 'buffering'].includes(streamStatus);
+  const hasPlayer = live ? !!(mediaSource?.local ? mediaSource.url : party.streamUrl) : ['playing', 'paused', 'buffering'].includes(streamStatus);
   const partyCode = party.code || party.id;
   const voiceMuted = live ? live.voice.muted : micMuted;
   const voiceStatus = live?.voice.status ?? (voiceJoined ? 'connected' : 'off');
@@ -258,7 +267,7 @@ export function PartyScreen({
               }}
             />
             <IconButton icon={Bug} label={t("Report a bug")} onClick={() => setBugReportOpen(true)} />
-            {hasPlayer ? (
+            {hasPlayer && !localFilePreview && !mediaSource?.local ? (
               <IconButton icon={Link2} label={t("View video link")} onClick={() => setUrlOpen(true)} />
             ) : null}
             <IconButton icon={LogOut} label={t("Leave party")} onClick={() => setLeaveOpen(true)} />
@@ -280,9 +289,11 @@ export function PartyScreen({
               </div>
             </div>
           ) : null}
-          {!hasPlayer ? (
+          {mediaSource?.active && mediaSource.local && !hasPlayer ? <section className="local-source-waiting"><FolderOpen size={48} aria-hidden="true"/><h2>{t('Choose your copy')}</h2><bdi>{mediaSource.fileName}</bdi><p>{t('No file, no video. You can still hang out in voice.')}</p><Button disabled={mediaSource.busy||!live?.connected} onClick={mediaSource.choose}>{t('Choose file')}</Button></section> : localFilePreview?.media ?? (!hasPlayer ? (
             <StreamEntry
               status={streamStatus}
+              fileAction={mediaSource && isOwner ? <Button fullWidth icon={<FolderOpen size={19}/>} disabled={mediaSource.busy||!live?.connected} onClick={mediaSource.choose}>{t("Choose file")}</Button> : localFilePreview?.entryAction}
+              title={mediaSource ? t("Bring in a video") : localFilePreview?.entryTitle}
               url={urlDraft}
               onUrlChange={(value) => {
                 setUrlDraft(value);
@@ -295,7 +306,7 @@ export function PartyScreen({
               ownerName={party.ownerName}
             />
           ) : live ? (
-            <VideoPlayer syncBridge={live.groupSync?.bridge} syncLocked={live.groupSync?.locked} syncOverlay={live.groupSync?.overlay} url={party.streamUrl} sessionId={party.streamSessionId || ''} onReport={live.onReport} onNotify={onNotify} onState={onSetStreamStatus} syncTarget={live.syncTarget} onSync={() => void live.onSync()} syncDisabled={!live.connected || live.syncing} onToggleMic={toggleMic} micMuted={voiceMuted} micLabel={voiceLabel} />
+            <VideoPlayer syncBridge={live.groupSync?.bridge} syncLocked={live.groupSync?.locked} syncOverlay={live.groupSync?.overlay} localFile={mediaSource?.file} url={mediaSource?.local ? mediaSource.url : party.streamUrl} sessionId={party.streamSessionId || ''} onReport={live.onReport} onNotify={onNotify} onState={status=>{onSetStreamStatus(status);mediaSource?.state(status);}} syncTarget={live.syncTarget} onSync={() => void live.onSync()} syncDisabled={!live.connected || live.syncing} onToggleMic={toggleMic} micMuted={voiceMuted} micLabel={voiceLabel} />
           ) : (
             <CinemaPlayer
               locked={syncPreview?.locked}
@@ -314,7 +325,7 @@ export function PartyScreen({
                 { const next = Math.min(TOTAL_SECONDS, position + 15); setPosition(next); syncPreview?.onPositionChange(next); }
               }
             />
-          )}
+          ))}
 
           {hasPlayer ? syncPreview ? syncPreview.band : (
             <div className="sync-band">
@@ -365,7 +376,7 @@ export function PartyScreen({
           {live?.voice.error?.includes('playback was blocked') && <Button variant="outlined" fullWidth onClick={live.onResumeVoice}>{t("Resume voice audio")}</Button>}
 
 
-          {hasPlayer ? (
+          {mediaSource?.active ? <section className="source-row"><div><span>{t(mediaSource.local?'Your local file':'Video source')}</span><strong><bdi>{mediaSource.local?mediaSource.name||t('None selected'):new URL(activeUrl).pathname.split('/').pop()}</bdi></strong></div>{(isOwner||mediaSource.local)&&<Button variant="text" disabled={mediaSource.busy||!live?.connected||live.groupSync?.committed} onClick={()=>isOwner?setChooseSourceOpen(true):mediaSource.choose()}>{t('Change')}</Button>}</section> : localFilePreview ? localFilePreview.source : hasPlayer ? (
             <section className="source-row" aria-label={t("Current video source")}>
               <div>
                 <span>{t("Video source")}</span>
@@ -379,7 +390,7 @@ export function PartyScreen({
             </section>
           ) : null}
 
-          {isOwner && hasPlayer ? (
+          {localFilePreview ? localFilePreview.actions : isOwner && (hasPlayer || mediaSource?.active) ? (
             <Button
               variant="danger"
               icon={<Square size={18} aria-hidden="true" />}
@@ -392,6 +403,7 @@ export function PartyScreen({
       </main>
       {chatPreview?.placement === 'floating' && chatPreview.content}
 
+      {mediaSource&&<ChooseVideoDialog open={chooseSourceOpen} busy={mediaSource.busy||!live?.connected} close={()=>setChooseSourceOpen(false)} file={mediaSource.replaceFile} stream={mediaSource.replace}/>}
       {live?.groupSync?.dialog}
       <BugReportDialog open={bugReportOpen} roomId={party.id} enabled={!!live} onClose={() => setBugReportOpen(false)} onSent={() => onNotify(t("Bug report sent. Thank you."))} />
       <Dialog
@@ -528,6 +540,8 @@ export function PartyScreen({
 }
 
 function StreamEntry({
+  fileAction,
+  title,
   status,
   url,
   onUrlChange,
@@ -537,6 +551,8 @@ function StreamEntry({
   ownerPresent,
   ownerName,
 }: {
+  fileAction?: ReactNode;
+  title?: string;
   status: StreamStatus;
   url: string;
   onUrlChange: (value: string) => void;
@@ -579,7 +595,7 @@ function StreamEntry({
       <CinemaScene quiet />
       <div className="empty-cinema__content">
         <span className="eyebrow">{t("Your cinema is empty")}</span>
-        <h2>{t("Bring in a direct video link")}</h2>
+        <h2>{title ?? t("Bring in a direct video link")}</h2>
         <TextField
           label={t("Direct video URL")}
           value={url}
@@ -591,6 +607,7 @@ function StreamEntry({
             <IconButton icon={Clipboard} label={t("Paste video link")} onClick={onPaste} />
           }
         />
+        <div className={fileAction ? "cinema-source-actions" : undefined}>
         <Button
           icon={<Play size={19} fill="currentColor" aria-hidden="true" />}
           disabled={!url.trim()}
@@ -598,6 +615,8 @@ function StreamEntry({
           fullWidth
         >
           {t("Start stream")}</Button>
+        {fileAction}
+        </div>
       </div>
     </div>
   );

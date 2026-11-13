@@ -178,6 +178,8 @@ private object PreviewRoomRepository : RoomRepository {
         stream = StreamInfo("preview", 0, StreamState.EMPTY, ""),
     )
     override suspend fun leave(roomId: String) = false
+    override suspend fun startSource(roomId: String, url: String, fileName: String, replaceRevision: Long?): top.roomio.domain.party.StreamInfo =
+        if(fileName.isEmpty()) startStream(roomId,url) else top.roomio.domain.party.StreamInfo("local-session", (replaceRevision ?: 0)+1, top.roomio.domain.party.StreamState.ACTIVE, "", top.roomio.domain.party.MediaSourceKind.LOCAL_FILE, fileName)
     override suspend fun startStream(roomId: String, url: String) = StreamInfo("preview", 1, StreamState.ACTIVE, url)
     override suspend fun abortStream(roomId: String) = StreamInfo("preview", 2, StreamState.ABORTED, "")
     override suspend fun voiceConfiguration(roomId: String, voiceSessionId: String?) = VoiceConfiguration(

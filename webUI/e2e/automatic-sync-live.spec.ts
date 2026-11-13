@@ -32,7 +32,7 @@ test('new source starts everyone; late joiners catch up without disturbing exist
   await expect.poll(()=>owner.locator('video:not([hidden])').evaluate((v:HTMLVideoElement)=>v.paused)).toBe(true);
   const frozen=await owner.locator('video:not([hidden])').evaluate((v:HTMLVideoElement)=>v.currentTime);
   await join(late);
-  await expect.poll(()=>late.locator('video:not([hidden])').evaluate((v:HTMLVideoElement)=>Math.abs(v.currentTime-12)),{timeout:15000}).toBeLessThan(.5);
+  await expect.poll(()=>late.locator('video:not([hidden])').evaluate((v:HTMLVideoElement,frozen:number)=>Math.abs(v.currentTime-frozen),frozen),{timeout:15000}).toBeLessThan(.5);
   await expect.poll(()=>late.locator('video:not([hidden])').evaluate((v:HTMLVideoElement)=>v.paused),{timeout:10000}).toBe(true);
   expect(await owner.locator('video:not([hidden])').evaluate((v:HTMLVideoElement,frozen:number)=>v.paused&&Math.abs(v.currentTime-frozen)<.05,frozen)).toBe(true);
   await playingLate.goto(`/?invite=${code}`);

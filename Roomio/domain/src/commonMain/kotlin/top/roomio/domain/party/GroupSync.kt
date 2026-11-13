@@ -16,6 +16,7 @@ data class GroupSyncAttempt(
     val deadlineMs: Long? = null,
     val startAtMs: Long? = null,
     val reason: String? = null,
+    val localFile: Boolean = false,
 ) {
     val active: Boolean get() = phase == GroupSyncPhase.INVITING || phase == GroupSyncPhase.PREPARING || phase == GroupSyncPhase.SCHEDULED
 }

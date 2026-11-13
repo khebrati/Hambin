@@ -18,6 +18,7 @@ internal fun parseGroupSync(element: JsonElement?): GroupSyncAttempt? {
         },
         deadlineMs = o["deadlineMs"]?.jsonPrimitive?.longOrNull,
         startAtMs = o["startAtMs"]?.jsonPrimitive?.longOrNull,
+        localFile = o["localFile"]?.jsonPrimitive?.booleanOrNull ?: false,
         reason = o["reason"]?.jsonPrimitive?.contentOrNull,
     )
 }

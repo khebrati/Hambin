@@ -14,6 +14,9 @@ import androidx.compose.ui.unit.dp
  * Directional navigation/send icons retain native RTL mirroring.
  */
 internal object RoomioIcons {
+    val FolderOpen: ImageVector by lazy { outline("folder-open", false,
+        "m6 14 1.5-3a2 2 0 0 1 1.8-1H20a2 2 0 0 1 1.9 2.6l-2.3 7a2 2 0 0 1-1.9 1.4H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v2"
+    ) }
     val Block: ImageVector by lazy { outline("ban", false,
         "M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0",
         "M4.929 4.929 19.07 19.071"

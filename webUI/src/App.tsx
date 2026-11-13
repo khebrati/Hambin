@@ -4,6 +4,7 @@ import { lazy, Suspense } from 'react';
 import { previewStates } from './previewStates';
 import { LoadingIndicator } from './components/Material';
 import { PreviewApp } from './PreviewApp';
+const LocalFileDesigns = lazy(() => import('./designs/LocalFileDesigns'));
 const LiveApp = lazy(() => import('./LiveApp'));
 const AndroidDownloadDesigns = lazy(() => import('./designs/AndroidDownloadDesigns'));
 const BugReportDesigns = lazy(() => import('./designs/BugReportDesigns'));
@@ -19,6 +20,7 @@ export function App() {
     document.documentElement.dir = language === 'fa' || new URLSearchParams(location.search).get('dir') === 'rtl' ? 'rtl' : 'ltr';
   }, [language]);
   const preview = new URLSearchParams(location.search).get('preview');
+  if (preview === 'local-file') return <Suspense fallback={<LoadingIndicator label={t('Loading')} />}><LocalFileDesigns /></Suspense>;
   if (preview === 'sync-waiting') return <Suspense fallback={<div className="preview-loading"><LoadingIndicator expressive label={t("Opening designs")} /></div>}><SyncWaitingDesigns /></Suspense>;
   if (preview === 'sync') return <Suspense fallback={<div className="preview-loading"><LoadingIndicator expressive label={t("Opening designs")} /></div>}><SyncDesigns /></Suspense>;
   if (preview === 'chat') return <Suspense fallback={<div className="preview-loading"><LoadingIndicator expressive label={t("Opening designs")} /></div>}><ChatDesigns /></Suspense>;

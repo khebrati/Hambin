@@ -439,6 +439,8 @@ class RoomViewModelPresenceTest {
         override suspend fun join(code: String) = room
         override suspend fun snapshot(roomId: String) = snapshot
         override suspend fun leave(roomId: String) = false
+        override suspend fun startSource(roomId: String, url: String, fileName: String, replaceRevision: Long?): top.roomio.domain.party.StreamInfo =
+            if(fileName.isEmpty()) startStream(roomId,url) else top.roomio.domain.party.StreamInfo("local-session", (replaceRevision ?: 0)+1, top.roomio.domain.party.StreamState.ACTIVE, "", top.roomio.domain.party.MediaSourceKind.LOCAL_FILE, fileName)
         override suspend fun startStream(roomId: String, url: String) = StreamInfo("s", 1, StreamState.ACTIVE, url)
         override suspend fun abortStream(roomId: String) = StreamInfo("s", 2, StreamState.ABORTED, "")
         override suspend fun voiceConfiguration(roomId: String, voiceSessionId: String?) = VoiceConfiguration(

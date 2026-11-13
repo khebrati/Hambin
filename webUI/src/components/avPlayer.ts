@@ -7,7 +7,7 @@ export interface SourceTrack { id: string; name: string }
 interface Stream { id: number; mediaType: string; metadata: Record<string, string>; codecparProxy: { codecId: number } }
 interface RuntimePlayer {
   currentTime: bigint;
-  load(url: string, options?: unknown): Promise<void>;
+  load(url: string | File, options?: unknown): Promise<void>;
   play(options?: unknown): Promise<void>;
   pause(): Promise<void>;
   seek(time: bigint): Promise<void>;
@@ -93,7 +93,7 @@ export class AvMedia implements PlayerMedia {
   private container: HTMLDivElement;
   private lifetime = new AbortController();
 
-  constructor(host: HTMLDivElement, url: string, private callbacks: Callbacks) {
+  constructor(host: HTMLDivElement, url: string, private callbacks: Callbacks, private localFile?: File) {
     const container = this.container = document.createElement('div');
     container.className = 'integrated-player__engine';
     host.append(container);
@@ -156,7 +156,7 @@ export class AvMedia implements PlayerMedia {
     listen('seeked', () => { if (this.pendingSeeks) return; this.seekingValue = false; this.callbacks.state(this.pausedValue ? 'paused' : 'playing'); this.callbacks.update(); });
     player.on('error', () => this.fail(t("Unable to play this video. Check browser codec support and the source connection, then retry.")));
     player.on('timeout', () => this.fail(t("The video source timed out. Check your connection, then retry.")));
-    await player.load(url, { http: { credentials: 'omit' } });
+    await player.load(this.localFile ?? url, { http: { credentials: 'omit' } });
     if (this.closed) return;
     this.loaded = true;
     this.durationValue = player.isLive() ? Infinity : Number(player.getDuration()) / 1000;

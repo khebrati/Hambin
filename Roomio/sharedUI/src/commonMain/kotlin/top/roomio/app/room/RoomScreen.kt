@@ -111,6 +111,7 @@ import top.roomio.app.room.player.AudioTrack
 import top.roomio.app.room.player.VideoPlayerHandle
 import top.roomio.app.room.player.VideoPlayerSurface
 import top.roomio.app.room.player.SubtitleTrack
+import top.roomio.app.room.player.rememberPlatformVideoPicker
 import top.roomio.app.room.player.rememberPlatformSubtitlePicker
 import top.roomio.app.room.player.rememberPlatformVideoPlayer
 import top.roomio.app.theme.AppTheme
@@ -263,7 +264,7 @@ private fun RoomScreenContent(
     val videoLinkCopied = stringResource(Res.string.video_link_copied)
     val offlineMessage = stringResource(Res.string.offline_message)
     val requestFailed = stringResource(Res.string.request_failed)
-    val syncNoticeMessages=mapOf(GroupSyncNotice.CANCELLED to stringResource(Res.string.group_sync_cancelled),GroupSyncNotice.STOPPED to stringResource(Res.string.group_sync_stopped),GroupSyncNotice.EXCLUDED to stringResource(Res.string.group_sync_excluded),GroupSyncNotice.OWNER_RECOVERY to stringResource(Res.string.group_sync_owner_recovery),GroupSyncNotice.UNAVAILABLE to stringResource(Res.string.group_sync_unavailable))
+    val syncNoticeMessages=mapOf(GroupSyncNotice.FILE_FAILED to stringResource(Res.string.local_file_failed),GroupSyncNotice.FILE_SYNC_FAILED to stringResource(Res.string.local_sync_failed),GroupSyncNotice.CANCELLED to stringResource(Res.string.group_sync_cancelled),GroupSyncNotice.STOPPED to stringResource(Res.string.group_sync_stopped),GroupSyncNotice.EXCLUDED to stringResource(Res.string.group_sync_excluded),GroupSyncNotice.OWNER_RECOVERY to stringResource(Res.string.group_sync_owner_recovery),GroupSyncNotice.UNAVAILABLE to stringResource(Res.string.group_sync_unavailable))
 
     val playerHandle: VideoPlayerHandle? = if (playerContent == null) {
         rememberPlatformVideoPlayer { playerState ->
@@ -290,15 +291,24 @@ private fun RoomScreenContent(
     LaunchedEffect(state.groupSync?.phase,playerHandle) {
         if(playerHandle==null && playerContent==null && state.syncLocked) onAction(RoomAction.SyncPlayerUnavailable)
     }
-    GroupSyncDialog(state,onAction)
+    var chooseVideoOpen by remember { mutableStateOf(false) }
+    var replaceLocalFile by remember { mutableStateOf(false) }
+    val pickVideoFile = rememberPlatformVideoPicker({ onAction(RoomAction.LocalFilePicked(it,replaceLocalFile));replaceLocalFile=false;chooseVideoOpen=false }, { onAction(RoomAction.LocalFileFailed) })
+    LaunchedEffect(state.sharedFileName,state.selectedFileName) { if(state.selectedFileName.isNotEmpty())chooseVideoOpen=false }
+    if(chooseVideoOpen) LocalMediaSourceDialog(state.fileLoading||state.groupSync?.phase in setOf(top.roomio.domain.party.GroupSyncPhase.PREPARING,top.roomio.domain.party.GroupSyncPhase.SCHEDULED),{chooseVideoOpen=false},{replaceLocalFile=true;pickVideoFile()},{onAction(RoomAction.ReplaceStream(it));chooseVideoOpen=false})
+    GroupSyncDialog(state,{replaceLocalFile=false;pickVideoFile()},onAction)
     // Load the shared stream when it becomes active (owner start or a remote
     // stream.started event) and keep the local player's play/pause in sync.
     var loadedVideoUrl by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(state.videoUrl, state.playback) {
+    var loadedSourceSession by remember { mutableStateOf("") }
+    LaunchedEffect(state.videoUrl, state.playback, state.sourceSessionId) {
         val handle = playerHandle ?: return@LaunchedEffect
-        if (state.hasPlayer && state.videoUrl.isNotBlank() && loadedVideoUrl != state.videoUrl) {
+        if(state.videoUrl.isBlank() && loadedVideoUrl!=null) { handle.stop();loadedVideoUrl=null }
+        if (state.hasPlayer && state.videoUrl.isNotBlank() && (loadedVideoUrl != state.videoUrl || loadedSourceSession != state.sourceSessionId)) {
             loadedVideoUrl = state.videoUrl
+            loadedSourceSession = state.sourceSessionId
             handle.load(state.videoUrl)
+            if(state.localSource) handle.pause()
         }
         when (state.playback) {
             RoomPlaybackState.PLAYING -> if (state.hasPlayer) handle.play()
@@ -327,6 +337,7 @@ private fun RoomScreenContent(
     LaunchedEffect(effects) {
         effects.collect { effect ->
             when (effect) {
+                RoomEffect.StopPlayer -> { playerHandle?.stop(); loadedVideoUrl=null }
                 is RoomEffect.PlayerPlaying -> if(effect.playing)playerHandle?.play()else playerHandle?.pause()
                 is RoomEffect.GroupSyncNotice -> snackbarHost.showSnackbar(syncNoticeMessages.getValue(effect.notice))
                 is RoomEffect.SeekTo -> {
@@ -407,11 +418,11 @@ private fun RoomScreenContent(
                     } else {
                         null
                     },
-                    showLink = state.hasPlayer,
+                    showLink = state.hasPlayer && !state.localSource,
                     showTheme = true,
                     onInvite = { onAction(RoomAction.InviteClicked) },
                     onReportBug = { onAction(RoomAction.BugReportClicked) },
-                    onShowLink = { onAction(RoomAction.LinkClicked) },
+                    onShowLink = { if(state.localSource)chooseVideoOpen=state.isOwner else onAction(RoomAction.LinkClicked) },
                     onLeave = { onAction(RoomAction.LeaveClicked) },
                     onToggleTheme = { isDark = !isDark },
                 )
@@ -449,11 +460,10 @@ private fun RoomScreenContent(
                     player = player,
                     onVideoUrlChange = { onAction(RoomAction.VideoUrlChanged(it)) },
                     onPaste = pasteVideoLink,
-                    onStart = {
-                        onAction(RoomAction.StartPlaybackClicked)
-                        playerHandle?.load(state.videoUrl)
-                        playerHandle?.play()
-                    },
+                    onChooseFile = {replaceLocalFile=false;pickVideoFile()},
+                    localFileMissing = state.localSource && state.videoUrl.isBlank() && state.streamActive,
+                    localFileName = state.sharedFileName,
+                    onStart = { onAction(RoomAction.StartPlaybackClicked) },
                     onRetry = {
                         onAction(RoomAction.RetryPlaybackClicked)
                         playerHandle?.retry(state.videoUrl)
@@ -505,7 +515,9 @@ private fun RoomScreenContent(
                     voiceFailureCode = state.voiceFailureCode,
                     onRetryVoice = { onAction(RoomAction.RetryVoiceConnections) },
                     videoUrl = state.videoUrl,
-                    streamActive = state.hasPlayer,
+                    streamActive = state.streamActive || state.hasPlayer,
+                    localFileName = if(state.localSource)state.selectedFileName.ifEmpty { state.sharedFileName } else null,
+                    onChangeSource = if(state.isOwner)({chooseVideoOpen=true}) else if(state.localSource)pickVideoFile else null,
                     isOwner = state.isOwner,
                     ownerPresent = state.model.ownerPresent,
                     onJoinVoice = requestMicThenJoin,
@@ -723,6 +735,9 @@ private fun MaterialIconButton(
 
 @Composable
 private fun CinemaCard(
+    onChooseFile: () -> Unit,
+    localFileMissing: Boolean,
+    localFileName: String,
     playback: RoomPlaybackState,
     syncLocked: Boolean,
     syncCountdown: String?,
@@ -782,6 +797,12 @@ private fun CinemaCard(
                 GroupSyncCountdown(syncCountdown)
             }
             when {
+                localFileMissing -> Column(Modifier.fillMaxWidth().padding(24.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+                    Text(stringResource(Res.string.local_choose_copy),style=MaterialTheme.typography.titleLarge)
+                    Text(localFileName)
+                    Text(stringResource(Res.string.local_no_video))
+                    Button(onClick=onChooseFile){Text(stringResource(Res.string.local_choose_file))}
+                }
                 hasPlayer -> PlayerControls(
                     paused = playback == RoomPlaybackState.PAUSED,
                     buffering = playback == RoomPlaybackState.BUFFERING,
@@ -807,6 +828,7 @@ private fun CinemaCard(
                 playback == RoomPlaybackState.LOADING -> LoadingCinema()
                 playback == RoomPlaybackState.ERROR && videoUrl.isNotBlank() -> PlayerErrorCinema(playerError, onRetry)
                 isOwner -> OwnerCinemaEntry(
+                    onChooseFile = onChooseFile,
                     playback = playback,
                     videoUrl = videoUrl,
                     onVideoUrlChange = onVideoUrlChange,
@@ -902,6 +924,7 @@ private fun CinemaScene(modifier: Modifier, showTitle: Boolean, muted: Boolean) 
 
 @Composable
 private fun OwnerCinemaEntry(
+    onChooseFile: () -> Unit,
     playback: RoomPlaybackState,
     videoUrl: String,
     onVideoUrlChange: (String) -> Unit,
@@ -918,7 +941,7 @@ private fun OwnerCinemaEntry(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(stringResource(if (playback == RoomPlaybackState.ABORTED) Res.string.stream_aborted else Res.string.your_cinema_empty), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.inversePrimary)
-        Text(stringResource(Res.string.bring_direct_video), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Text(stringResource(Res.string.local_bring_video), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         RoomioTextField(
             value = videoUrl,
             textStyle = MaterialTheme.typography.bodyLarge.copy(textDirection = androidx.compose.ui.text.style.TextDirection.Ltr),
@@ -952,9 +975,10 @@ private fun OwnerCinemaEntry(
                 cursorColor = colors.onMedia,
             ),
         )
+        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(12.dp)) {
         Button(
             onClick = if (playback == RoomPlaybackState.ERROR) onRetry else onStart,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.weight(1f),
             enabled = playback == RoomPlaybackState.ERROR || videoUrl.isNotBlank(),
             colors = ButtonDefaults.buttonColors(
                 containerColor = MaterialTheme.colorScheme.primary,
@@ -962,6 +986,8 @@ private fun OwnerCinemaEntry(
             ),
         ) {
             Text(stringResource(if (playback == RoomPlaybackState.ERROR) Res.string.try_again else Res.string.start_stream))
+        }
+        Button(onClick=onChooseFile,modifier=Modifier.weight(1f)) { Text(stringResource(Res.string.local_choose_file)) }
         }
     }
 }
@@ -1718,6 +1744,8 @@ private fun OwnerAwayBanner(ownerName: String) {
 
 @Composable
 private fun RoomSupportPanel(
+    localFileName: String? = null,
+    onChangeSource: (() -> Unit)? = null,
     participants: List<RoomParticipant>,
     expandedRoom: Boolean,
     micMuted: Boolean,
@@ -1755,7 +1783,8 @@ private fun RoomSupportPanel(
             }
             if (streamActive) {
                 HorizontalDivider(color = DividerDefaults.color)
-                SourceRow(videoUrl, onCopyLink)
+                if(localFileName==null)SourceRow(videoUrl,onCopyLink) else Text(localFileName,style=MaterialTheme.typography.titleMedium)
+                if(onChangeSource!=null)TextButton(onClick=onChangeSource){Text(stringResource(Res.string.local_change))}
             }
             if (isOwner && ownerPresent && streamActive) {
                 Button(

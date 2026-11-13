@@ -41,7 +41,7 @@ internal class DesktopPlayer(private val changed: (VideoPlayerState) -> Unit) : 
             audioTracks=player.audio().trackDescriptions().filter{it.id()>=0}.map{AudioTrack(it.id().toString(),it.description())},
             subtitles=player.subpictures().trackDescriptions().filter{it.id()>=0}.map{SubtitleTrack(it.id().toString(),it.description(),player.subpictures().track()==it.id())}))
     }
-    override fun load(url:String) { failed=false;bufferedReady=false;loading=true;player.media().prepare(url,":network-caching=3000",":file-caching=3000");publish() }
+    override fun load(url:String) { failed=false;bufferedReady=false;loading=true;if(url.startsWith("file:"))player.media().play(url,":start-paused",":file-caching=3000")else player.media().play(url,":start-paused",":network-caching=3000",":file-caching=3000");publish() }
     override fun play() { if(!closed)player.controls().play() }
     override fun pause() { if(!closed)player.controls().setPause(true) }
     override fun togglePlayPause() { if(player.status().isPlaying)pause()else play() }

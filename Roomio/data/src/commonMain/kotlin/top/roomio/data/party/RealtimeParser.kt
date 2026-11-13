@@ -80,7 +80,7 @@ private fun parseEvent(json: Json, element: JsonObject, text: String): RealtimeE
         "member.absent" -> memberEvent(json, payload) { RealtimeEvent.MemberAbsent(it) }
         "owner.presence" -> RealtimeEvent.OwnerPresence(ownerPresence(json, payload))
         "stream.started" -> streamEvent(json, payload) {
-            RealtimeEvent.StreamStarted(it.streamSessionId, it.revision, it.url)
+            RealtimeEvent.StreamStarted(it.streamSessionId, it.revision, it.url, if(it.sourceKind=="LOCAL_FILE") top.roomio.domain.party.MediaSourceKind.LOCAL_FILE else top.roomio.domain.party.MediaSourceKind.URL, it.fileName)
         }
         "stream.aborted" -> streamEvent(json, payload) {
             RealtimeEvent.StreamAborted(it.streamSessionId, it.revision)

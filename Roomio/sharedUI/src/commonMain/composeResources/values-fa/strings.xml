@@ -329,4 +329,21 @@
     <string name="copy_video_link">کپی لینک فیلم</string>
     <string name="bug_report_offline">اینترنتت قطعه. متنت رو نگه داشتیم؛ وصل شو تا بفرستی.</string>
     <string name="group_sync_view">نمایش هماهنگی</string>
+    <string name="local_choose_video">انتخاب فیلم</string>
+    <string name="local_file">فایل محلی</string>
+    <string name="local_stream_url">لینک فیلم</string>
+    <string name="local_choose_file">انتخاب فایل</string>
+    <string name="local_bring_video">یه فیلم انتخاب کن</string>
+    <string name="local_change">تغییر</string>
+    <string name="local_choose_copy">فایل خودت رو انتخاب کن</string>
+    <string name="local_no_video">بدون فایل، فیلمی نمی‌بینی. میتونی توی گفت‌وگو بمونی.</string>
+    <string name="local_file_to_choose">فایلی که انتخاب می‌کنیم</string>
+    <string name="local_who_ready">کی آماده‌ست ببینیم؟</string>
+    <string name="local_watch_file">بیا یه فایل ببینیم</string>
+    <string name="local_ready">آماده است</string>
+    <string name="local_not_watching">فیلم نمی‌بینه</string>
+    <string name="local_sit_out">این یکی رو نمی‌بینم</string>
+    <string name="local_skip">نمیام · بدون فیلم</string>
+    <string name="local_file_failed">فایل باز نشد. دوباره انتخابش کن.</string>
+    <string name="local_sync_failed">هماهنگ نشد. برگشتیم به حالت قبلی.</string>
 </resources>

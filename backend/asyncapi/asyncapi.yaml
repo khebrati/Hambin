@@ -489,6 +489,7 @@ components:
         deadlineMs: {type: integer, format: int64}
         startAtMs: {type: integer, format: int64}
         reason: {type: string}
+        localFile: {type: boolean, default: false, description: Local files require selection consent and whole-attempt failure restoration}
         participants:
           type: array
           items:

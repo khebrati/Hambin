@@ -25,7 +25,11 @@ data class CreateRoomRequest(
 
 @Serializable
 data class StartStreamRequest(
-    val url: String,
+    val url: String = "",
+    val sourceKind: String = "URL",
+    val fileName: String = "",
+    val replace: Boolean = false,
+    val revision: Long? = null,
 )
 
 @Serializable
@@ -123,6 +127,8 @@ data class MemberSummaryDto(
 
 @Serializable
 data class StreamDto(
+    val sourceKind: String = "URL",
+    val fileName: String = "",
     val sessionId: String,
     val revision: Long,
     val state: String,
@@ -244,6 +250,8 @@ data class OwnerPresencePayload(
 
 @Serializable
 data class StreamEventPayload(
+    val sourceKind: String = "URL",
+    val fileName: String = "",
     val streamSessionId: String = "",
     val revision: Long = 0,
     val url: String = "",

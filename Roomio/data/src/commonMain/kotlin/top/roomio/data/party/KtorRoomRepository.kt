@@ -148,6 +148,13 @@ class KtorRoomRepository(
         }.bodyOrThrow<StreamResponseDto>().stream.toDomain().also { observability.track("playback_started") }
     }
 
+    override suspend fun startSource(roomId: String, url: String, fileName: String, replaceRevision: Long?): StreamInfo = authed {
+        http.post("${config.baseUrl}/v1/rooms/$roomId/stream/start") {
+            contentType(ContentType.Application.Json)
+            setBody(StartStreamRequest(url, if(fileName.isNotEmpty()) "LOCAL_FILE" else "URL", fileName, replaceRevision != null, replaceRevision))
+        }.bodyOrThrow<StreamResponseDto>().stream.toDomain().also { observability.track("playback_started") }
+    }
+
     override suspend fun abortStream(roomId: String): StreamInfo = authed {
         http.post("${config.baseUrl}/v1/rooms/$roomId/stream/abort")
             .bodyOrThrow<StreamResponseDto>().stream.toDomain()

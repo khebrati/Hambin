@@ -261,13 +261,21 @@ paths:
           application/json:
             schema:
               type: object
-              required:
-              - url
+              description: URL starts coordinate automatically; local files invite selection before explicit Start. Replacements require replace=true and the current revision. See docs/local-file-contract.md.
+              oneOf:
+              - required: [url]
+                properties:
+                  sourceKind: {const: URL}
+              - required: [sourceKind, fileName]
+                properties:
+                  sourceKind: {const: LOCAL_FILE}
+                  url: {type: string, maxLength: 0}
               properties:
-                url:
-                  type: string
-                  format: uri
-                  description: HTTPS direct-video URL
+                url: {type: string, description: HTTPS URL for URL source; empty for local files}
+                sourceKind: {type: string, enum: [URL, LOCAL_FILE], default: URL}
+                fileName: {type: string, description: Basename only, max 512 UTF-8 bytes; no file bytes or paths}
+                replace: {type: boolean, default: false}
+                revision: {type: integer, format: int64, minimum: 0}
       responses:
         '201':
           description: Started
@@ -893,6 +901,8 @@ components:
           - ABORTED
         url:
           type: string
+        sourceKind: {type: string, enum: [URL, LOCAL_FILE], default: URL}
+        fileName: {type: string, default: ""}
         startedAt:
           type: string
           format: date-time

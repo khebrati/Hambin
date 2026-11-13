@@ -19,7 +19,7 @@ test('joining retries unavailable owner telemetry then privately seeks once with
  await page.goto('/e2e/automatic-sync.html?unavailable');
  await expect.poll(()=>page.evaluate(()=>(window as any).calls.filter((c:any)=>c.action==='sync').length)).toBe(1);
  await page.evaluate(()=>(window as any).setResult({status:'APPLIED',targetPositionMs:12000,playing:false}));
- await expect.poll(()=>page.evaluate(()=>(window as any).calls.some((c:any)=>c.action==='seek'&&c.body===12000)),{timeout:6000}).toBe(true);
+ await expect.poll(()=>page.evaluate(()=>(window as any).calls.some((c:any)=>c.action==='prepare'&&c.body===12000)),{timeout:6000}).toBe(true);
  expect(await page.evaluate(()=>(window as any).info.paused)).toBe(true);
  await page.evaluate(()=>(window as any).snapshot());await page.waitForTimeout(3500);
  expect(await page.evaluate(()=>(window as any).calls.filter((c:any)=>c.action==='sync').length)).toBe(2);
@@ -28,7 +28,7 @@ test('joining during countdown waits; an included start replaces private catch-u
  await page.goto('/e2e/automatic-sync.html?waiting');await page.waitForTimeout(500);
  expect(await page.evaluate(()=>(window as any).calls.some((c:any)=>c.action==='sync'))).toBe(false);
  await page.evaluate(()=>(window as any).frame('COMPLETED',false));
- await expect.poll(()=>page.evaluate(()=>(window as any).calls.some((c:any)=>c.action==='seek'))).toBe(true);
+ await expect.poll(()=>page.evaluate(()=>(window as any).calls.some((c:any)=>c.action==='prepare'&&c.body===12000))).toBe(true);
  await page.goto('/e2e/automatic-sync.html?waiting&included');await page.waitForTimeout(500);
  expect(await page.evaluate(()=>(window as any).calls.some((c:any)=>c.action==='sync'))).toBe(false);
 });

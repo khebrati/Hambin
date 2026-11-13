@@ -29,7 +29,7 @@ import top.roomio.domain.party.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun GroupSyncDialog(state: RoomUiState, onAction: (RoomAction) -> Unit) {
+internal fun GroupSyncDialog(state: RoomUiState, chooseFile: () -> Unit = {}, onAction: (RoomAction) -> Unit) {
     if (!state.syncDialogOpen) return
     val attempt=state.groupSync?.takeIf { it.active }
     val acceptedViewerCount=attempt?.participants?.count { it.membershipId!=attempt.ownerMembershipId && it.response==GroupSyncResponse.ACCEPTED } ?: 0
@@ -37,9 +37,11 @@ internal fun GroupSyncDialog(state: RoomUiState, onAction: (RoomAction) -> Unit)
     val preparing=attempt?.phase==GroupSyncPhase.PREPARING
     val response=attempt?.participants?.find { it.membershipId==state.syncSelfId }?.response
     val title=stringResource(if(draft)Res.string.group_sync_together else if(state.isOwner)Res.string.group_sync_who else Res.string.group_sync_request)
+    val fileRequest=state.localSource && (attempt?.requestId?.startsWith("source-")==true || state.videoUrl.isEmpty())
     val content: @Composable () -> Unit = {
         Column(Modifier.padding(24.dp).heightIn(max=620.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(16.dp)) {
-            Row(verticalAlignment=Alignment.CenterVertically) { Text(title,Modifier.weight(1f),style=MaterialTheme.typography.headlineSmall);IconButton(onClick={onAction(RoomAction.SyncDismiss)}){Icon(RoomioIcons.Close,stringResource(Res.string.close))} }
+            Row(verticalAlignment=Alignment.CenterVertically) { Text(if(fileRequest)stringResource(if(state.isOwner)Res.string.local_who_ready else Res.string.local_watch_file)else title,Modifier.weight(1f),style=MaterialTheme.typography.headlineSmall);IconButton(onClick={onAction(RoomAction.SyncDismiss)}){Icon(RoomioIcons.Close,stringResource(Res.string.close))} }
+            if(state.localSource)Surface(color=MaterialTheme.colorScheme.primaryContainer,shape=MaterialTheme.shapes.large){Column(Modifier.fillMaxWidth().padding(20.dp)){Text(stringResource(Res.string.local_file_to_choose));Text(state.sharedFileName,style=MaterialTheme.typography.titleMedium);if(state.fileLoading)LinearProgressIndicator(Modifier.fillMaxWidth())}}
             if(!draft&&!state.isOwner)Row(horizontalArrangement=Arrangement.spacedBy(12.dp),verticalAlignment=Alignment.CenterVertically){Icon(RoomioIcons.Sync,null);Text(stringResource(Res.string.group_sync_inviter,state.model.ownerName),style=MaterialTheme.typography.titleMedium)}
             Surface(color=MaterialTheme.colorScheme.primaryContainer,shape=MaterialTheme.shapes.extraLarge,modifier=Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(24.dp),horizontalAlignment=Alignment.CenterHorizontally) {
@@ -60,15 +62,16 @@ internal fun GroupSyncDialog(state: RoomUiState, onAction: (RoomAction) -> Unit)
                         Image(painterResource(avatar.resource),null,Modifier.size(40.dp).clip(CircleShape))
                         Column(Modifier.weight(1f)) {
                             Text(if(person.membershipId==state.syncSelfId)stringResource(Res.string.chat_you) else member?.displayName.orEmpty(),style=MaterialTheme.typography.titleSmall)
-                            Text(stringResource(when(person.response){GroupSyncResponse.ACCEPTED->Res.string.group_sync_accepted;GroupSyncResponse.DECLINED->Res.string.group_sync_declined;GroupSyncResponse.WITHDRAWN->Res.string.group_sync_withdrawn;else->if(person.membershipId==state.syncSelfId)Res.string.group_sync_pending_you else Res.string.group_sync_pending}),style=MaterialTheme.typography.bodySmall)
+                            Text(stringResource(when(person.response){GroupSyncResponse.ACCEPTED->if(fileRequest)Res.string.local_ready else Res.string.group_sync_accepted;GroupSyncResponse.DECLINED->if(fileRequest)Res.string.local_not_watching else Res.string.group_sync_declined;GroupSyncResponse.WITHDRAWN->Res.string.group_sync_withdrawn;else->if(person.membershipId==state.syncSelfId)Res.string.group_sync_pending_you else Res.string.group_sync_pending}),style=MaterialTheme.typography.bodySmall)
                         }
                         if(accepted)Icon(RoomioIcons.Check,null)else if(declined)Icon(RoomioIcons.Close,null)
                     }
                 }
             }
             if(!preparing)FlowRow(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp,Alignment.End),verticalArrangement=Arrangement.spacedBy(8.dp)) {
-                if(draft)Button(enabled=!state.syncBusy && state.chat.connected,onClick={onAction(RoomAction.SyncAsk)}){Text(stringResource(Res.string.group_sync_ask))}
-                else if(state.isOwner){TextButton(enabled=!state.syncBusy && state.chat.connected,onClick={onAction(RoomAction.SyncCancel)}){Text(stringResource(Res.string.group_sync_cancel))};Button(enabled=!state.syncBusy && state.chat.connected && acceptedViewerCount>0,onClick={onAction(RoomAction.SyncCommit)}){Text(stringResource(Res.string.group_sync_start,acceptedViewerCount))}}
+                if(draft&&state.localSource&&state.videoUrl.isEmpty())Button(enabled=!state.fileLoading&&state.chat.connected,onClick=chooseFile){Text(stringResource(Res.string.local_choose_file))}
+                else if(draft)Button(enabled=!state.syncBusy && state.chat.connected,onClick={onAction(RoomAction.SyncAsk)}){Text(stringResource(Res.string.group_sync_ask))}
+                else if(state.isOwner){TextButton(enabled=!state.syncBusy && state.chat.connected,onClick={onAction(RoomAction.SyncCancel)}){Text(stringResource(Res.string.group_sync_cancel))};Button(enabled=!state.syncBusy && state.chat.connected && !state.fileLoading && acceptedViewerCount>0,onClick={onAction(RoomAction.SyncCommit)}){Text(stringResource(Res.string.group_sync_start,acceptedViewerCount))}}
                 else if(response==GroupSyncResponse.ACCEPTED) {
                     if(attempt?.phase==GroupSyncPhase.INVITING)Row(
                         Modifier.widthIn(max=240.dp).align(Alignment.CenterVertically).semantics { liveRegion=LiveRegionMode.Polite },
@@ -78,9 +81,9 @@ internal fun GroupSyncDialog(state: RoomUiState, onAction: (RoomAction) -> Unit)
                         CircularProgressIndicator(Modifier.size(18.dp),strokeWidth=2.dp)
                         Text(stringResource(Res.string.group_sync_waiting_owner),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    OutlinedButton(enabled=!state.syncBusy && state.chat.connected,onClick={onAction(RoomAction.SyncRespond(GroupSyncResponse.WITHDRAWN))}){Text(stringResource(Res.string.group_sync_withdraw))}
+                    OutlinedButton(enabled=!state.syncBusy && state.chat.connected,onClick={onAction(RoomAction.SyncRespond(GroupSyncResponse.WITHDRAWN))}){Text(stringResource(if(state.localSource)Res.string.local_sit_out else Res.string.group_sync_withdraw))}
                 }
-                else {TextButton(enabled=!state.syncBusy && state.chat.connected,onClick={onAction(RoomAction.SyncRespond(GroupSyncResponse.DECLINED))}){Text(stringResource(Res.string.group_sync_no))};Button(enabled=!state.syncBusy && state.chat.connected,onClick={onAction(RoomAction.SyncRespond(GroupSyncResponse.ACCEPTED))}){Text(stringResource(Res.string.group_sync_accept))}}
+                else {TextButton(enabled=!state.syncBusy && state.chat.connected,onClick={onAction(RoomAction.SyncRespond(GroupSyncResponse.DECLINED))}){Text(stringResource(if(state.localSource)Res.string.local_skip else Res.string.group_sync_no))};Button(enabled=!state.syncBusy && state.chat.connected,onClick={if(state.localSource&&state.selectedFileName.isEmpty())chooseFile()else onAction(RoomAction.SyncRespond(GroupSyncResponse.ACCEPTED))}){Text(stringResource(if(state.localSource&&state.selectedFileName.isEmpty())Res.string.local_choose_file else Res.string.group_sync_accept))}}
             }
         }
     }

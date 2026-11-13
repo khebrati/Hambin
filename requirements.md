@@ -95,3 +95,9 @@ Confirmed party/chat refinements (2026-11-12):
 1. Automatic Persian party titles use «دورهمی {name}». Preserve explicit custom titles.
 2. Empty chat uses a chat icon and a short heading, without the extra conversation-starting helper sentence in either language.
 3. Keep the party invitation/share action in the top bar and omit its duplicate below voice chat.
+
+Confirmed local video files — design preview requested (2026-11-13):
+1. The owner may choose a local video file and ask room members to choose their own copy, following the owner-requested mutual-sync flow. Share the owner's file name so members know what to select; do not upload the video.
+2. Do not enforce that members selected the same file. Different videos are allowed, and synchronization must handle unavailable timestamps, unreadable media and preparation failures with a recovery path.
+3. Members may decline file selection; they remain in the room without video. The owner sees who is ready and explicitly starts playback. The exact start quorum and late-join behavior remain review questions in `docs/open-questions.md`.
+4. The integrated browser design is approved: preserve the cinema background and equally prominent URL/file entry actions; Choose file opens the system picker directly. Owner Change opens the selected side-by-side Local file / Stream URL tiles. Implement across web, Android, iOS and desktop using device-only file access. Failed local-file group sync restores previous playback with a brief snackbar for everyone. URL starts retain automatic synchronization; local sources await selection and explicit owner Start.

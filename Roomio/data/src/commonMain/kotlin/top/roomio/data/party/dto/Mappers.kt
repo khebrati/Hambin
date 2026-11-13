@@ -45,6 +45,8 @@ internal fun StreamDto.toDomain() = StreamInfo(
     revision = revision,
     state = state.toStreamState(),
     url = url,
+    sourceKind = if(sourceKind == "LOCAL_FILE") top.roomio.domain.party.MediaSourceKind.LOCAL_FILE else top.roomio.domain.party.MediaSourceKind.URL,
+    fileName = fileName,
 )
 
 internal fun SnapshotDto.toDomain() = RoomSnapshot(

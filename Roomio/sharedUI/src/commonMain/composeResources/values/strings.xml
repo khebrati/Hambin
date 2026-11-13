@@ -329,4 +329,21 @@
     <string name="copy_video_link">Copy video link</string>
     <string name="bug_report_offline">You’re offline. Your draft is kept. Reconnect to send.</string>
     <string name="group_sync_view">View sync</string>
+    <string name="local_choose_video">Choose video</string>
+    <string name="local_file">Local file</string>
+    <string name="local_stream_url">Stream URL</string>
+    <string name="local_choose_file">Choose file</string>
+    <string name="local_bring_video">Bring in a video</string>
+    <string name="local_change">Change</string>
+    <string name="local_choose_copy">Choose your copy</string>
+    <string name="local_no_video">No file, no video. You can still hang out in voice.</string>
+    <string name="local_file_to_choose">File to choose</string>
+    <string name="local_who_ready">Who’s ready to watch?</string>
+    <string name="local_watch_file">Let’s watch a file</string>
+    <string name="local_ready">Ready</string>
+    <string name="local_not_watching">Not watching</string>
+    <string name="local_sit_out">Sit this one out</string>
+    <string name="local_skip">Skip · no video</string>
+    <string name="local_file_failed">Could not open this file. Choose it again.</string>
+    <string name="local_sync_failed">Couldn’t sync. Back to where you were.</string>
 </resources>

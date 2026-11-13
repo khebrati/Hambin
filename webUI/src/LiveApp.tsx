@@ -1,4 +1,5 @@
 import { logHandledException } from './data/sessionLog';
+import { useLocalMedia } from './components/useLocalMedia';
 import { useGroupSync } from './components/useGroupSync';
 import type { SyncStateFrame } from './data/groupSync';
 import { t, setLanguage } from './i18n';
@@ -63,7 +64,11 @@ export default function LiveApp() {
   const playback = useRef({ positionMs: 0, playing: false });
   const streamSession = useRef('');
   const notify = useCallback((message: string) => setSnackbar({ message }), []);
-  const groupSync=useGroupSync({snapshot,identityId,connected,connection:realtime,frame:syncFrame,notify});
+  const localMedia=useLocalMedia({roomId,stream:snapshot?.stream,owner:snapshot?.room.ownerIdentityId===identityId,notify,startSource:async fileName=>{
+    const result=await mutations.current.run<{stream:StreamDto}>(`/v1/rooms/${roomId}/stream/start`,{sourceKind:'LOCAL_FILE',fileName,...(snapshot?.stream.state==='ACTIVE'?{replace:true,revision:snapshot.stream.revision}:{})});
+    setSnapshot(current=>current?.room.id===roomId?{...current,stream:result.stream}:current); await realtime.current?.recover();return result.stream;
+  }});
+  const groupSync=useGroupSync({snapshot,identityId,connected,connection:realtime,frame:syncFrame,notify,localFile:snapshot?.stream.sourceKind==='LOCAL_FILE'?{fileName:snapshot.stream.fileName||'',selectedName:localMedia.name,choose:localMedia.choose,loading:localMedia.busy,readySession:localMedia.readySession,clear:localMedia.clear,cancelSource:async()=>{await mutations.current.run(`/v1/rooms/${roomId}/stream/abort`,{revision:snapshot?.stream.revision});await realtime.current?.recover();}}:undefined});
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -186,12 +191,12 @@ export default function LiveApp() {
     catch (error) { logHandledException("LiveApp.LiveApp.saveProfile.7", error);  notify(errorMessage(error)); }
     finally { setSaving(false); }
   };
-  const startStream = async (url: string) => {
+  const startStream = async (url: string, replace = false) => {
     setStreamStatus('loading');
     try {
-      await mutations.current.run<{stream: StreamDto}>(`/v1/rooms/${roomId}/stream/start`, { url });
+      await mutations.current.run<{stream: StreamDto}>(`/v1/rooms/${roomId}/stream/start`, { url,...(replace?{replace:true,revision:snapshot?.stream.revision}:{}) });
       await realtime.current?.recover();
-    } catch (error) { logHandledException("LiveApp.LiveApp.startStream.8", error);  setStreamStatus('error'); notify(errorMessage(error)); }
+    } catch (error) { logHandledException("LiveApp.LiveApp.startStream.8", error);  setStreamStatus('error'); notify(errorMessage(error)); if(replace)throw error; }
   };
   const abortStream = async () => {
     setAborting(true);
@@ -251,7 +256,7 @@ export default function LiveApp() {
       {screen === 'settings' && <SettingsScreen palette={palette} identity={identity} theme={theme} onToggleTheme={toggleTheme} onBack={() => setScreen('home')} onSave={saveProfile} saving={saving} />}
       {screen === 'party-manager' && <PartyManagerScreen initialMode={managerMode} joinStatus={joinStatus} errorMessage={joinError} codeDraft={codeDraft} onCodeChange={setCodeDraft} theme={theme} onToggleTheme={toggleTheme} onBack={() => setScreen('home')} onCreate={() => void enterRoom('/v1/rooms')} onPreview={loadPreview} onResetError={() => {setJoinStatus('idle');setJoinError('');}} live />}
       {screen === 'room-preview' && roomPreview && <><RoomPreviewScreen preview={roomPreview} joinStatus={joinStatus} theme={theme} onToggleTheme={toggleTheme} onBack={() => {setScreen(previewBackScreen);setManagerMode('join');setJoinStatus('idle');}} onJoin={() => void enterRoom(`/v1/rooms/${roomPreview.id}/join`)} errorMessage={joinError} /></>}
-      {screen === 'party' && party && <><PartyScreen key={roomId} party={party} streamStatus={streamStatus} theme={theme} aborting={aborting} onToggleTheme={toggleTheme} onStartStream={startStream} onSetStreamStatus={setStreamStatus} onAbort={abortStream} onLeave={leave} onNotify={notify} live={{ connected, leaving, chat: {
+      {screen === 'party' && party && <>{localMedia.input}<PartyScreen mediaSource={{local:snapshot?.stream.sourceKind==='LOCAL_FILE',active:snapshot?.stream.state==='ACTIVE',url:localMedia.url,file:localMedia.file,fileName:snapshot?.stream.fileName||'',name:localMedia.name,busy:localMedia.busy,choose:localMedia.choose,replaceFile:localMedia.replaceFile,replace:url=>startStream(url,true),state:localMedia.onState}} key={roomId} party={party} streamStatus={streamStatus} theme={theme} aborting={aborting} onToggleTheme={toggleTheme} onStartStream={startStream} onSetStreamStatus={setStreamStatus} onAbort={abortStream} onLeave={leave} onNotify={notify} live={{ connected, leaving, chat: {
         identityId, history: snapshot?.chat,
         send: async (messageId, text) => (await request<{ message: ChatMessage }>(`/v1/rooms/${roomId}/chat/messages`, { messageId, text })).message,
         loadEarlier: async () => { if (!realtime.current) throw new ApiError('NETWORK'); await realtime.current.loadEarlierChat(); },

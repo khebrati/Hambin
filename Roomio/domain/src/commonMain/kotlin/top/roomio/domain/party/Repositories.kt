@@ -69,6 +69,9 @@ interface RoomRepository {
 
     suspend fun startStream(roomId: String, url: String): StreamInfo
 
+    /** Only public source metadata; never device paths. */
+    suspend fun startSource(roomId: String, url: String = "", fileName: String = "", replaceRevision: Long? = null): StreamInfo
+
     suspend fun abortStream(roomId: String): StreamInfo
 
     suspend fun voiceConfiguration(roomId: String, voiceSessionId: String? = null): VoiceConfiguration

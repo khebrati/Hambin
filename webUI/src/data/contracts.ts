@@ -4,13 +4,13 @@ import { avatarOptions, avatarName } from './avatarCatalog';
 export interface IdentityDto { id: string; name: string; avatar: string; language: string }
 export interface RoomDto { id: string; code: string; title: string; ownerIdentityId: string; endedAt?: string }
 export interface MemberDto { membershipId: string; identityId: string; displayName: string; avatar: string; isOwner: boolean; present: boolean }
-export interface StreamDto { sessionId: string; revision: number; state: 'EMPTY' | 'ACTIVE' | 'ABORTED'; url: string }
+export interface StreamDto { sessionId: string; revision: number; state: 'EMPTY' | 'ACTIVE' | 'ABORTED'; url: string; sourceKind?: 'URL'|'LOCAL_FILE'; fileName?: string }
 export interface ChatMessage { id: string; roomId: string; identityId: string; membershipId: string; displayName: string; avatar: string; text: string; createdAt: string; sequence: number }
 export interface ChatPage { messages: ChatMessage[]; hasMore: boolean }
 export interface Snapshot { chat?: ChatPage; ownerName?: string; room: RoomDto; members: MemberDto[]; stream: StreamDto; sequence: number }
 export interface Admission { room: RoomDto; membership: { id: string; identityId: string; isOwner: boolean } }
 export interface PreviewDto { code: string; title: string; ownerName: string; ownerPresent: boolean; participantCount: number; availability: 'OPEN' | 'FULL' | 'ENDED'; streamState: string }
-export interface RoomEvent { topic: string; eventId: string; sequence: number; payload: { message?: ChatMessage; member?: MemberDto; present?: boolean; ownerName?: string; streamSessionId?: string; revision?: number; url?: string } }
+export interface RoomEvent { topic: string; eventId: string; sequence: number; payload: { message?: ChatMessage; member?: MemberDto; present?: boolean; ownerName?: string; streamSessionId?: string; revision?: number; url?: string; sourceKind?: 'URL'|'LOCAL_FILE'; fileName?:string } }
 export interface SyncResult { requestId: string; status: 'APPLIED' | 'UNAVAILABLE'; targetPositionMs: number; serverTimeMs?: number; playing?: boolean }
 
 export const avatarId = (value: string): AvatarId => avatarOptions.some(a => a.id === value.toLowerCase()) ? value.toLowerCase() as AvatarId : 'comet';
@@ -40,7 +40,7 @@ export function reduceEvent(snapshot: Snapshot, event: RoomEvent): Snapshot | nu
   if (p.ownerName) next.ownerName = p.ownerName;
   if (event.topic === 'owner.presence') next.members = next.members.map(m => m.isOwner ? { ...m, present: !!p.present, displayName: p.ownerName ?? m.displayName } : m);
   if (event.topic === 'stream.started' || event.topic === 'stream.aborted') {
-    if (typeof p.revision === 'number' && p.revision > snapshot.stream.revision) next.stream = { sessionId: p.streamSessionId || '', revision: p.revision, state: event.topic === 'stream.started' ? 'ACTIVE' : 'ABORTED', url: p.url || '' };
+    if (typeof p.revision === 'number' && p.revision > snapshot.stream.revision) next.stream = { sessionId: p.streamSessionId || '', revision: p.revision, state: event.topic === 'stream.started' ? 'ACTIVE' : 'ABORTED', url: p.url || '', sourceKind:p.sourceKind ?? 'URL', fileName:p.fileName ?? '' };
   }
   if (event.topic === 'room.closed') next.room = { ...next.room, endedAt: new Date().toISOString() };
   return next;

@@ -19,6 +19,7 @@ type TrackChoice = { id: string; name: string };
 
 export interface VideoPlayerProps {
   url: string;
+  localFile?: File;
   sessionId: string;
   syncBridge?: MutableRefObject<PlayerSyncBridge | null>;
   syncLocked?: boolean;
@@ -71,12 +72,12 @@ export function VideoPlayer(props: VideoPlayerProps) {
   return <MediaPlayer key={`${props.sessionId}:${props.url}`} {...props} syncTarget={props.syncTarget?.requestId === previous.current.blocked ? undefined : props.syncTarget} />;
 }
 
-function MediaPlayer({ url, sessionId, syncBridge, syncLocked, syncOverlay, onReport, onNotify, onState, syncTarget, onSync, syncDisabled, onToggleMic, micMuted = true, micLabel, micDisabled }: VideoPlayerProps) {
+function MediaPlayer({ url, localFile, sessionId, syncBridge, syncLocked, syncOverlay, onReport, onNotify, onState, syncTarget, onSync, syncDisabled, onToggleMic, micMuted = true, micLabel, micDisabled }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const engineSurfaceRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<AvMedia | null>(null);
   const [browserPlayback, setBrowserPlayback] = useState(false);
-  const integrated = usesIntegratedPlayer(url) && !browserPlayback;
+  const integrated = (localFile ? !/\.(mp4|m4v|webm|mov)$/i.test(localFile.name) : usesIntegratedPlayer(url)) && !browserPlayback;
   const media = (): PlayerMedia | null => engineRef.current ?? videoRef.current;
   const containerRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -227,6 +228,7 @@ function MediaPlayer({ url, sessionId, syncBridge, syncLocked, syncOverlay, onRe
       setBuffered(current.buffered.length ? current.buffered.end(current.buffered.length - 1) : 0);
     };
     const autoplay = () => {
+      if (localFile) return;
       if (handoff.current && !handoff.current.playing) return;
       void media()!.play().catch((reason: unknown) => {
         logHandledException("VideoPlayer.MediaPlayer.autoplay.1", reason);
@@ -277,7 +279,7 @@ function MediaPlayer({ url, sessionId, syncBridge, syncLocked, syncOverlay, onRe
           else pause();
         },
         update, error: fail,
-      });
+      }, localFile);
       engineRef.current = engine;
       void engine.ready.then(() => { if (active && !failed) autoplay(); }).catch((handledError) => {
         logHandledException("VideoPlayer.MediaPlayer.2", handledError);

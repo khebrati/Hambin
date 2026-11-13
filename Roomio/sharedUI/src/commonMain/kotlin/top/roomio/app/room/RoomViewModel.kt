@@ -63,6 +63,12 @@ internal data class RoomUiState(
     val chat: RoomChatState = RoomChatState(),
     val playback: RoomPlaybackState = model.playback,
     val videoUrl: String = "",
+    val localSource: Boolean = false,
+    val sharedFileName: String = "",
+    val selectedFileName: String = "",
+    val streamActive: Boolean = false,
+    val sourceSessionId: String = "",
+    val fileLoading: Boolean = false,
     val positionMs: Long = 0L,
     val durationMs: Long = 0L,
     val bufferedMs: Long = 0L,
@@ -103,6 +109,9 @@ internal data class RoomUiState(
 }
 
 internal sealed interface RoomAction {
+    data class LocalFilePicked(val file: top.roomio.app.room.player.LocalVideoFile, val replace: Boolean = false) : RoomAction
+    data class ReplaceStream(val url: String) : RoomAction
+    data object LocalFileFailed : RoomAction
     data class ChatDraftChanged(val text: String) : RoomAction
     data object ChatSend : RoomAction
     data class ChatRetry(val messageId: String) : RoomAction
@@ -155,6 +164,7 @@ internal sealed interface RoomAction {
 }
 
 internal sealed interface RoomEffect {
+    data object StopPlayer : RoomEffect
     data class PlayerPlaying(val playing: Boolean) : RoomEffect
     data class GroupSyncNotice(val notice: top.roomio.app.room.GroupSyncNotice) : RoomEffect
     data class SeekTo(val positionMs: Long) : RoomEffect
@@ -193,6 +203,11 @@ internal class RoomViewModel(
     private var joinSyncStream: String? = null
     private var joinSyncTicks = 0
     private var playerReady = false
+    private var localFile: top.roomio.app.room.player.LocalVideoFile? = null
+    private var localAcceptPending = false
+    private var sourceMutation = 0L
+    private var sourceMutationInFlight = false
+    private var localFileDeadline: Job? = null
     private var syncTimeoutJob: Job? = null
     private var members: List<Member> = emptyList()
     private var speakingMembershipIds: Set<String> = emptySet()
@@ -240,10 +255,21 @@ internal class RoomViewModel(
     fun onAction(action: RoomAction) {
         if (state.value.syncLocked && (action == RoomAction.TogglePlaybackClicked || action is RoomAction.PlaybackPositionChanged || action is RoomAction.PlaybackSkipped)) return
         when (action) {
+            is RoomAction.LocalFilePicked -> chooseLocalFile(action.file,action.replace)
+            is RoomAction.ReplaceStream -> replaceSource(url=action.url)
+            RoomAction.LocalFileFailed -> mutableEffects.tryEmit(RoomEffect.GroupSyncNotice(GroupSyncNotice.FILE_FAILED))
             RoomAction.SyncAsk -> groupSync.ask()
-            is RoomAction.SyncRespond -> groupSync.respond(action.response)
+            is RoomAction.SyncRespond -> {
+                if(state.value.localSource && action.response in setOf(GroupSyncResponse.DECLINED,GroupSyncResponse.WITHDRAWN)) {
+                    localAcceptPending=false
+                    localFile?.release();localFile=null
+                    mutableState.update { it.copy(videoUrl="",selectedFileName="",playback=RoomPlaybackState.WAITING_FOR_OWNER,fileLoading=false) }
+                    mutableEffects.tryEmit(RoomEffect.StopPlayer)
+                }
+                groupSync.respond(action.response)
+            }
             RoomAction.SyncCommit -> groupSync.commit()
-            RoomAction.SyncCancel -> groupSync.cancel()
+            RoomAction.SyncCancel -> if(state.value.localSource && state.value.groupSync?.requestId?.startsWith("source-")==true)groupSync.cancel { abortStream() } else groupSync.cancel()
             RoomAction.SyncDismiss -> groupSync.dismiss()
             RoomAction.SyncPlayerUnavailable -> groupSync.playerUnavailable()
             is RoomAction.ChatDraftChanged -> if (action.text.length <= 500) mutableState.update { it.copy(chat = it.chat.copy(draft = action.text)) }
@@ -287,6 +313,8 @@ internal class RoomViewModel(
                 )
             }
             is RoomAction.PlayerStateChanged -> {
+                if(state.value.localSource && state.value.videoUrl.isEmpty()) return
+
                 playerReady = action.state.durationMs > 0 && !action.state.isLive &&
                     action.state.status in setOf(VideoPlayerStatus.READY, VideoPlayerStatus.PAUSED, VideoPlayerStatus.PLAYING)
                 groupSync.player(action.state)
@@ -294,7 +322,7 @@ internal class RoomViewModel(
                 val playerState = action.state
                 if (playerState.status == VideoPlayerStatus.ERROR &&
                     (current.playback != RoomPlaybackState.ERROR || current.playerError != playerState.error)) {
-                    log.e("player error: ${playerState.error}")
+                    log.e("player error: ${if(current.localSource) "LOCAL_MEDIA_FAILED" else playerState.error}")
                 }
                 current.copy(
                     playback = if(current.syncLocked) RoomPlaybackState.PAUSED else playerState.status.toRoomPlaybackState(current.playback),
@@ -309,6 +337,19 @@ internal class RoomViewModel(
                     audioTrackSelectionId = playerState.audioTrackSelectionId,
                 )
             }
+                if(action.state.status==VideoPlayerStatus.ERROR && state.value.localSource && !sourceMutationInFlight) {
+                    localAcceptPending=false;localFileDeadline?.cancel()
+                    mutableState.update { it.copy(fileLoading=false) }
+                }
+                if(playerReady && !sourceMutationInFlight && state.value.localSource && state.value.selectedFileName.isNotEmpty()) {
+                    localFileDeadline?.cancel()
+                    mutableState.update { it.copy(fileLoading=false) }
+                    if(localAcceptPending && !asOwner) {
+                        localAcceptPending=false
+                        if(state.value.groupSync?.phase==GroupSyncPhase.INVITING) groupSync.respond(GroupSyncResponse.ACCEPTED)
+                        else { joinSyncStream=streamSessionId;joinSyncTicks=0 }
+                    }
+                }
             }
             RoomAction.InviteCopyFailed -> {
                 mutableState.update { it.copy(inviteCopyState = InviteCopyState.ERROR) }
@@ -425,6 +466,7 @@ internal class RoomViewModel(
     }
 
     override fun onCleared() {
+        sourceMutation++;localFileDeadline?.cancel();localFile?.release();localFile=null
         val session = realtime
         realtime = null
         viewModelScope.launch { loggedRunCatching("RoomViewModel.run13") { session?.close() } }
@@ -506,6 +548,7 @@ internal class RoomViewModel(
                     log.w("stream.started ignored: stale revision=${event.revision} current=$streamRevision")
                     return
                 }
+                localFile?.release();localFile=null;localAcceptPending=false
                 groupSync.reset()
                 joinSyncStream = null
                 pendingSyncRequestId = null
@@ -516,8 +559,13 @@ internal class RoomViewModel(
                 log.i("stream.started session=${event.sessionId} revision=${event.revision}")
                 mutableState.update {
                     it.copy(
+                        localSource = event.sourceKind == top.roomio.domain.party.MediaSourceKind.LOCAL_FILE,
+                        sharedFileName = event.fileName,
+                        selectedFileName = "",
+                        streamActive = true,
+                        sourceSessionId = event.sessionId,
                         videoUrl = event.url,
-                        playback = RoomPlaybackState.PLAYING,
+                        playback = if(event.sourceKind == top.roomio.domain.party.MediaSourceKind.LOCAL_FILE) RoomPlaybackState.WAITING_FOR_OWNER else RoomPlaybackState.PLAYING,
                     )
                 }
             }
@@ -526,6 +574,7 @@ internal class RoomViewModel(
                     log.w("stream.aborted ignored: stale revision=${event.revision} current=$streamRevision")
                     return
                 }
+                localFile?.release();localFile=null;localAcceptPending=false
                 groupSync.reset()
                 joinSyncStream = null
                 pendingSyncRequestId = null
@@ -535,7 +584,7 @@ internal class RoomViewModel(
                 // The aborted session must never be a sync or report target.
                 streamSessionId = null
                 log.i("stream.aborted session=${event.sessionId} revision=${event.revision}")
-                mutableState.update { it.copy(playback = RoomPlaybackState.ABORTED) }
+                mutableState.update { it.copy(playback = RoomPlaybackState.ABORTED,videoUrl="",selectedFileName="",sharedFileName="",localSource=false,streamActive=false,fileLoading=false) }
             }
             is RealtimeEvent.ChatMessageReceived -> if (event.message.roomId == roomId) {
                 mutableState.update { it.copy(chat = it.chat.receive(event.message)) }
@@ -555,6 +604,11 @@ internal class RoomViewModel(
                 }
                 pendingSyncRequestId = null
                 syncTimeoutJob?.cancel()
+                if(state.value.localSource && event.status==SyncStatus.APPLIED && (event.targetPositionMs<0 || event.targetPositionMs>=state.value.durationMs)) {
+                    joinSyncStream=null
+                    mutableEffects.tryEmit(RoomEffect.GroupSyncNotice(GroupSyncNotice.FILE_SYNC_FAILED))
+                    return
+                }
                 when (event.status) {
                     SyncStatus.APPLIED -> {
                         if (automaticSyncRequest && (joinSyncStream != streamSessionId || mutableState.value.syncLocked || mutableState.value.groupSync?.phase in setOf(GroupSyncPhase.PREPARING, GroupSyncPhase.SCHEDULED))) return
@@ -591,6 +645,7 @@ internal class RoomViewModel(
         }
         val sameActiveStream = incomingSessionId != null && incomingSessionId == streamSessionId
         if (!sameActiveStream) {
+            localFile?.release();localFile=null;localAcceptPending=false
             groupSync.reset()
             pendingSyncRequestId = null
             syncTimeoutJob?.cancel()
@@ -608,7 +663,7 @@ internal class RoomViewModel(
         mutableState.update { it.copy(syncMembers=members,syncSelfId=members.find { member -> member.identityId==identityId }?.membershipId.orEmpty()) }
         val owner = members.firstOrNull { it.isOwner }
         val playback = when (snapshot.stream.state) {
-            StreamState.ACTIVE -> RoomPlaybackState.PLAYING
+            StreamState.ACTIVE -> if(snapshot.stream.sourceKind == top.roomio.domain.party.MediaSourceKind.LOCAL_FILE) RoomPlaybackState.WAITING_FOR_OWNER else RoomPlaybackState.PLAYING
             StreamState.ABORTED -> RoomPlaybackState.ABORTED
             StreamState.EMPTY -> if (asOwner) RoomPlaybackState.OWNER_EMPTY else RoomPlaybackState.WAITING_FOR_OWNER
         }
@@ -637,6 +692,11 @@ internal class RoomViewModel(
                 // A reconnect snapshot describes the same shared stream. Keep
                 // viewer-local playback, position and track selections intact.
                 videoUrl = if (sameActiveStream) current.videoUrl else snapshot.stream.url,
+                localSource = snapshot.stream.state==StreamState.ACTIVE && snapshot.stream.sourceKind == top.roomio.domain.party.MediaSourceKind.LOCAL_FILE,
+                sharedFileName = snapshot.stream.fileName,
+                selectedFileName = if(sameActiveStream) current.selectedFileName else "",
+                streamActive = snapshot.stream.state == StreamState.ACTIVE,
+                sourceSessionId = snapshot.stream.sessionId,
             )
         }
     }
@@ -688,6 +748,49 @@ internal class RoomViewModel(
         voiceStatus = mutableState.value.voicePeers[membershipId],
     )
 
+    private fun watchLocalFile(uri: String) {
+        localFileDeadline?.cancel()
+        localFileDeadline=viewModelScope.launch {
+            delay(15000)
+            if(state.value.fileLoading && state.value.videoUrl==uri) {
+                localAcceptPending=false
+                mutableState.update { it.copy(fileLoading=false,playback=RoomPlaybackState.ERROR) }
+                mutableEffects.tryEmit(RoomEffect.GroupSyncNotice(GroupSyncNotice.FILE_FAILED))
+            }
+        }
+    }
+
+    private fun chooseLocalFile(file: top.roomio.app.room.player.LocalVideoFile,replace:Boolean) {
+        if(state.value.groupSync?.phase in setOf(GroupSyncPhase.PREPARING,GroupSyncPhase.SCHEDULED) || state.value.fileLoading) {file.release();return}
+        if(asOwner && (replace || state.value.selectedFileName.isNotEmpty() || !state.value.localSource || !state.value.streamActive)) replaceSource(file=file)
+        else if(state.value.localSource && streamSessionId!=null) {
+            localFile?.release();localFile=file;localAcceptPending=!asOwner
+            watchLocalFile(file.uri)
+            mutableState.update { it.copy(videoUrl=file.uri,selectedFileName=file.name,playback=RoomPlaybackState.PAUSED,fileLoading=true) }
+        } else file.release()
+    }
+
+    private fun replaceSource(url: String = "", file: top.roomio.app.room.player.LocalVideoFile? = null) {
+        if(!asOwner || state.value.groupSync?.phase in setOf(GroupSyncPhase.PREPARING,GroupSyncPhase.SCHEDULED) || state.value.fileLoading) { file?.release();return }
+        val operation=++sourceMutation
+        sourceMutationInFlight=true
+        val revision=streamRevision.takeIf { state.value.streamActive }
+        mutableState.update { it.copy(fileLoading=true) }
+        viewModelScope.launch {
+            try {
+                val source=roomRepository.startSource(roomId,url,file?.name.orEmpty(),revision)
+                if(operation!=sourceMutation || source.revision<streamRevision) {file?.release();return@launch}
+                if(source.sessionId!=streamSessionId) groupSync.reset()
+                streamRevision=source.revision;streamSessionId=source.sessionId;playerReady=false;joinSyncStream=null
+                localFile?.release();localFile=file;sourceMutationInFlight=false
+                if(file!=null) watchLocalFile(file.uri)
+                mutableState.update { it.copy(videoUrl=file?.uri ?: source.url,localSource=file!=null,sharedFileName=source.fileName,selectedFileName=file?.name.orEmpty(),streamActive=true,sourceSessionId=source.sessionId,positionMs=0,playback=if(file!=null)RoomPlaybackState.PAUSED else if(it.syncLocked)RoomPlaybackState.PAUSED else RoomPlaybackState.PLAYING,fileLoading=file!=null) }
+            } catch(cancelled: CancellationException) {file?.release();throw cancelled}
+            catch(error: Throwable) {file?.release();mutableState.update { it.copy(fileLoading=false) };mutableEffects.tryEmit(RoomEffect.GroupSyncNotice(GroupSyncNotice.FILE_FAILED))}
+            finally { if(operation==sourceMutation)sourceMutationInFlight=false }
+        }
+    }
+
     private fun startStream() {
         val url = mutableState.value.videoUrl
         if (url.isBlank()) {
@@ -717,7 +820,7 @@ internal class RoomViewModel(
     private fun abortStream() {
         mutableState.update { it.copy(abortOpen = false) }
         viewModelScope.launch {
-            loggedRunCatching("RoomViewModel.run15") { roomRepository.abortStream(roomId) }
+            loggedRunCatching("RoomViewModel.run15") { roomRepository.abortStream(roomId) }.onFailure { mutableEffects.tryEmit(RoomEffect.Error(it is PartyException && it.isConnectivity())) }
         }
     }
 

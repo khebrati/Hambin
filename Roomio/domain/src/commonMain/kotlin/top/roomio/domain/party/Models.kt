@@ -27,6 +27,8 @@ data class Room(
 /** Availability of a room before joining. */
 enum class RoomAvailability { OPEN, FULL, ENDED }
 
+enum class MediaSourceKind { URL, LOCAL_FILE }
+
 /** Authoritative shared stream state. */
 enum class StreamState { EMPTY, ACTIVE, ABORTED }
 
@@ -57,6 +59,8 @@ data class StreamInfo(
     val revision: Long,
     val state: StreamState,
     val url: String,
+    val sourceKind: MediaSourceKind = MediaSourceKind.URL,
+    val fileName: String = "",
 )
 
 /** A room's full state: the room, its members, and the shared stream. */
