@@ -41,8 +41,8 @@ android {
         targetSdk = 36
 
         applicationId = "top.watchparty.app"
-        versionCode = 16
-        versionName = "1.4.0"
+        versionCode = 17
+        versionName = "1.4.1"
     }
 
     signingConfigs {
